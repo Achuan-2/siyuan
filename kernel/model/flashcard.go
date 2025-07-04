@@ -29,6 +29,7 @@ import (
 	"github.com/88250/gulu"
 	"github.com/88250/lute/ast"
 	"github.com/88250/lute/parse"
+	"github.com/open-spaced-repetition/go-fsrs/v3"
 	"github.com/siyuan-note/filelock"
 	"github.com/siyuan-note/logging"
 	"github.com/siyuan-note/riff"
@@ -386,6 +387,12 @@ func getCardsBlocks(cards []riff.Card, page, pageSize int) (blocks []*Block, tot
 	sort.Slice(cards, func(i, j int) bool {
 		due1 := cards[i].(*riff.FSRSCard).C.Due
 		due2 := cards[j].(*riff.FSRSCard).C.Due
+		if due1.IsZero() || due2.IsZero() {
+			// Improve flashcard management sorting https://github.com/siyuan-note/siyuan/issues/14686
+			cid1 := cards[i].ID()
+			cid2 := cards[j].ID()
+			return cid1 < cid2
+		}
 		return due1.Before(due2)
 	})
 
@@ -432,6 +439,21 @@ func getCardsBlocks(cards []riff.Card, page, pageSize int) (blocks []*Block, tot
 		b.RiffCard = getRiffCard(cards[i].(*riff.FSRSCard).C)
 	}
 	return
+}
+
+func getRiffCard(card *fsrs.Card) *RiffCard {
+	due := card.Due
+	if due.IsZero() {
+		due = time.Now()
+	}
+
+	return &RiffCard{
+		Due:        due,
+		Reps:       card.Reps,
+		Lapses:     card.Lapses,
+		State:      card.State,
+		LastReview: card.LastReview,
+	}
 }
 
 var (
@@ -920,8 +942,7 @@ func (tx *Transaction) doAddFlashcards(operation *Operation) (ret *TxErr) {
 			continue
 		}
 
-		cardID := ast.NewNodeID()
-		deck.AddCard(cardID, blockID)
+		deck.AddCard(ast.NewNodeID(), blockID)
 	}
 
 	if err := deck.Save(); err != nil {

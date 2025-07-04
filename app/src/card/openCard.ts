@@ -94,61 +94,135 @@ export const genCardHTML = (options: {
     /// #endif
     return `<div class="card__main">
     ${iconsHTML}
-    <div class="card__block fn__flex-1 ${options.cardsData.cards.length === 0 ? "fn__none" : ""} 
-${window.siyuan.config.flashcard.mark ? "card__block--hidemark" : ""} 
-${window.siyuan.config.flashcard.superBlock ? "card__block--hidesb" : ""} 
-${window.siyuan.config.flashcard.heading ? "card__block--hideh" : ""} 
-${window.siyuan.config.flashcard.list ? "card__block--hideli" : ""}" data-type="render"></div>
+    <div class="card__block fn__flex-1 ${options.cardsData.cards.length === 0 ? "fn__none" : ""}" data-type="render"></div>
     <div class="card__empty card__empty--space${options.cardsData.cards.length === 0 ? "" : " fn__none"}" data-type="empty">
         <div>🔮</div>
         ${window.siyuan.languages.noDueCard}
     </div>
-    <div class="fn__flex card__action${options.cardsData.cards.length === 0 ? " fn__none" : ""}">
+    <div class="fn__flex card__action fn__none">
         <button class="b3-button b3-button--cancel" disabled="disabled" data-type="-2" style="width: 25%;min-width: 86px;display: flex">
             <svg><use xlink:href="#iconLeft"></use></svg>
-            (p / q)
+            ${!isMobile() ? "(p / q)" : ""}
         </button>
         <span class="fn__space"></span>
-        <button data-type="-1" class="b3-button fn__flex-1">${window.siyuan.languages.cardShowAnswer} (${window.siyuan.languages.space} / ${window.siyuan.languages.enterKey})</button>
+        <button data-type="-1" class="b3-button fn__flex-1">${window.siyuan.languages.cardShowAnswer}${!isMobile() ? " (" + window.siyuan.languages.space + " / " + window.siyuan.languages.enterKey + ")" : ""}</button>
     </div>
     <div class="fn__flex card__action fn__none">
         <div>
-            <span>${window.siyuan.languages.nextRound}</span>
+            <button class="b3-button b3-button--cancel" disabled="disabled" style="display: flex;margin-bottom: 8px;height: 28px;padding: 0;" data-type="-2"><svg><use xlink:href="#iconLeft"></use></svg>${!isMobile() ? "(p / q)" : ""}</button>
             <button data-type="-3" aria-label="0 / x" class="b3-button b3-button--cancel b3-tooltips__n b3-tooltips">
                 <div class="card__icon">💤</div>
-                ${window.siyuan.languages.skip} (0)
+                ${window.siyuan.languages.skip}${!isMobile() ? " (0)" : ""}
             </button>
         </div>
         <div>
             <span></span>
             <button data-type="1" aria-label="1 / j / a" class="b3-button b3-button--error b3-tooltips__n b3-tooltips">
                 <div class="card__icon">🙈</div>
-                ${window.siyuan.languages.cardRatingAgain} (1)
+                ${window.siyuan.languages.cardRatingAgain}${!isMobile() ? " (1)" : ""}
             </button>
         </div>
         <div>
             <span></span>
             <button data-type="2" aria-label="2 / k / s" class="b3-button b3-button--warning b3-tooltips__n b3-tooltips">
                 <div class="card__icon">😬</div>
-                ${window.siyuan.languages.cardRatingHard} (2)
+                ${window.siyuan.languages.cardRatingHard}${!isMobile() ? " (2)" : ""}
             </button>
         </div>
         <div>
             <span></span>
             <button data-type="3" aria-label="3 / l / d / ${window.siyuan.languages.space} / ${window.siyuan.languages.enterKey}" class="b3-button b3-button--info b3-tooltips__n b3-tooltips">
                 <div class="card__icon">😊</div>
-                ${window.siyuan.languages.cardRatingGood} (3)
+                ${window.siyuan.languages.cardRatingGood}${!isMobile() ? " (3)" : ""}
             </button>
         </div>
         <div>
             <span></span>
             <button data-type="4" aria-label="4 / ; / f" class="b3-button b3-button--success b3-tooltips__n b3-tooltips">
                 <div class="card__icon">🌈</div>
-                ${window.siyuan.languages.cardRatingEasy} (4)
+                ${window.siyuan.languages.cardRatingEasy}${!isMobile() ? " (4)" : ""}
             </button>
         </div>
     </div>
 </div>`;
+};
+
+const getEditor = (id: string, protyle: IProtyle, element: Element, currentCard: ICard) => {
+    fetchPost("/api/block/getDocInfo", {
+        id,
+    }, (response) => {
+        protyle.wysiwyg.renderCustom(response.data.ial);
+        fetchPost("/api/filetree/getDoc", {
+            id,
+            mode: 0,
+            size: Constants.SIZE_GET_MAX
+        }, (response) => {
+            onGet({
+                updateReadonly: true,
+                data: response,
+                protyle,
+                action: response.data.rootID === response.data.id ? [Constants.CB_GET_HTML] : [Constants.CB_GET_ALL, Constants.CB_GET_HTML],
+                afterCB: () => {
+                    let hasHide = false;
+                    if (!window.siyuan.config.flashcard.superBlock &&
+                        !window.siyuan.config.flashcard.heading &&
+                        !window.siyuan.config.flashcard.list &&
+                        !window.siyuan.config.flashcard.mark) {
+                        hasHide = false;
+                    } else {
+                        if (window.siyuan.config.flashcard.superBlock) {
+                            if (protyle.wysiwyg.element.querySelector(":scope > .sb")) {
+                                hasHide = true;
+                            }
+                        }
+                        if (window.siyuan.config.flashcard.heading) {
+                            if (protyle.wysiwyg.element.querySelector(':scope > [data-type="NodeHeading"]')) {
+                                hasHide = true;
+                            }
+                        }
+                        if (window.siyuan.config.flashcard.list) {
+                            if (protyle.wysiwyg.element.querySelector(".list, .li")) {
+                                hasHide = true;
+                            }
+                        }
+                        if (window.siyuan.config.flashcard.mark) {
+                            if (protyle.wysiwyg.element.querySelector('span[data-type~="mark"]')) {
+                                hasHide = true;
+                            }
+                        }
+                    }
+                    const actionElements = element.querySelectorAll(".card__action");
+                    if (!hasHide) {
+                        protyle.element.classList.remove("card__block--hidemark", "card__block--hideli", "card__block--hidesb", "card__block--hideh");
+                        actionElements[0].classList.add("fn__none");
+                        actionElements[1].querySelectorAll("button.b3-button").forEach((element, btnIndex) => {
+                            if (btnIndex < 2) {
+                                return;
+                            }
+                            element.previousElementSibling.textContent = currentCard.nextDues[btnIndex-1];
+                        });
+                        actionElements[1].classList.remove("fn__none");
+                    } else {
+                        if (window.siyuan.config.flashcard.superBlock) {
+                            protyle.element.classList.add("card__block--hidesb");
+                        }
+                        if (window.siyuan.config.flashcard.heading) {
+                            protyle.element.classList.add("card__block--hideh");
+                        }
+                        if (window.siyuan.config.flashcard.list) {
+                            protyle.element.classList.add("card__block--hideli");
+                        }
+                        if (window.siyuan.config.flashcard.mark) {
+                            protyle.element.classList.add("card__block--hidemark");
+                        }
+                        actionElements[0].classList.remove("fn__none");
+                        actionElements[1].classList.add("fn__none");
+                    }
+                }
+            });
+        });
+    });
+
 };
 
 export const bindCardEvent = async (options: {
@@ -183,30 +257,16 @@ export const bindCardEvent = async (options: {
         window.siyuan.mobile.popEditor = editor;
     }
     if (options.cardsData.cards.length > 0) {
-        fetchPost("/api/block/getDocInfo", {
-            id: options.cardsData.cards[index].blockID,
-        }, (response) => {
-            editor.protyle.wysiwyg.renderCustom(response.data.ial);
-            fetchPost("/api/filetree/getDoc", {
-                id: options.cardsData.cards[index].blockID,
-                mode: 0,
-                size: Constants.SIZE_GET_MAX
-            }, (response) => {
-                onGet({
-                    updateReadonly: true,
-                    data: response,
-                    protyle: editor.protyle,
-                    action: response.data.rootID === response.data.id ? [Constants.CB_GET_HTML] : [Constants.CB_GET_ALL, Constants.CB_GET_HTML],
-                });
-            });
-        });
+        getEditor(options.cardsData.cards[index].blockID, editor.protyle, options.element, options.cardsData.cards[index]);
     }
     options.element.setAttribute("data-key", Constants.DIALOG_OPENCARD);
     const actionElements = options.element.querySelectorAll(".card__action");
-    if (options.index === 0) {
+    if (options.index === 0 || typeof options.index === "undefined") {
         actionElements[0].firstElementChild.setAttribute("disabled", "disabled");
+        actionElements[1].querySelector(".b3-button").setAttribute("disabled", "disabled");
     } else {
         actionElements[0].firstElementChild.removeAttribute("disabled");
+        actionElements[1].querySelector(".b3-button").removeAttribute("disabled");
     }
     const countElement = options.element.querySelector('[data-type="count"]');
     const filterElement = options.element.querySelector('[data-type="filter"]');
@@ -282,6 +342,7 @@ export const bindCardEvent = async (options: {
                 }
                 const menu = new Menu();
                 menu.addItem({
+                    id: "setDueTime",
                     icon: "iconClock",
                     label: window.siyuan.languages.setDueTime,
                     click() {
@@ -332,6 +393,7 @@ export const bindCardEvent = async (options: {
                 });
                 if (currentCard.state !== 0) {
                     menu.addItem({
+                        id: "reset",
                         icon: "iconRefresh",
                         label: window.siyuan.languages.reset,
                         click() {
@@ -352,8 +414,11 @@ export const bindCardEvent = async (options: {
                                     3: minLang.replace("1", "10"),
                                     4: window.siyuan.languages._time["1d"].replace("%s", "").replace("1", "6")
                                 };
-                                actionElements[1].querySelectorAll(".b3-button").forEach((element, btnIndex) => {
-                                    element.previousElementSibling.textContent = currentCard.nextDues[btnIndex];
+                                actionElements[1].querySelectorAll("button.b3-button").forEach((element, btnIndex) => {
+                                    if (btnIndex < 2) {
+                                        return;
+                                    }
+                                    element.previousElementSibling.textContent = currentCard.nextDues[btnIndex-1];
                                 });
                                 options.cardsData.unreviewedOldCardCount--;
                                 options.cardsData.unreviewedNewCardCount++;
@@ -363,6 +428,7 @@ export const bindCardEvent = async (options: {
                     });
                 }
                 menu.addItem({
+                    id: "removeRiffCard",
                     icon: "iconTrashcan",
                     label: `${window.siyuan.languages.remove} <b>${window.siyuan.languages.riffCard}</b>`,
                     click() {
@@ -385,6 +451,7 @@ export const bindCardEvent = async (options: {
                 });
                 menu.addSeparator();
                 menu.addItem({
+                    id: "forgetCountAndRevisionCountAndCardStatusAndLastReviewTime",
                     iconHTML: "",
                     type: "readonly",
                     label: `<div class="fn__flex">
@@ -421,6 +488,7 @@ export const bindCardEvent = async (options: {
             if (sticktabElement) {
                 const stickMenu = new Menu();
                 stickMenu.addItem({
+                    id: "insertRight",
                     icon: "iconLayoutRight",
                     label: window.siyuan.languages.insertRight,
                     click() {
@@ -445,6 +513,7 @@ export const bindCardEvent = async (options: {
                 });
                 /// #if !BROWSER
                 stickMenu.addItem({
+                    id: "openByNewWindow",
                     icon: "iconOpenWindow",
                     label: window.siyuan.languages.openByNewWindow,
                     click() {
@@ -494,6 +563,7 @@ export const bindCardEvent = async (options: {
                 fetchPost("/api/riff/getRiffDecks", {}, (response) => {
                     window.siyuan.menus.menu.remove();
                     window.siyuan.menus.menu.append(new MenuItem({
+                        id: "all",
                         iconHTML: "",
                         label: window.siyuan.languages.all,
                         click() {
@@ -503,6 +573,7 @@ export const bindCardEvent = async (options: {
                         },
                     }).element);
                     window.siyuan.menus.menu.append(new MenuItem({
+                        id: "fileTree",
                         iconHTML: "",
                         label: window.siyuan.languages.fileTree,
                         click() {
@@ -575,17 +646,17 @@ export const bindCardEvent = async (options: {
             } else {
                 editor.protyle.element.classList.remove("card__block--hidemark", "card__block--hideli", "card__block--hidesb", "card__block--hideh");
                 actionElements[0].classList.add("fn__none");
-                actionElements[1].querySelectorAll(".b3-button").forEach((element, btnIndex) => {
-                    element.previousElementSibling.textContent = currentCard.nextDues[btnIndex];
+                actionElements[1].querySelectorAll("button.b3-button").forEach((element, btnIndex) => {
+                    if (btnIndex < 2) {
+                        return;
+                    }
+                    element.previousElementSibling.textContent = currentCard.nextDues[btnIndex-1];
                 });
                 actionElements[1].classList.remove("fn__none");
                 emitEvent(options.app, currentCard, type);
                 return;
             }
         } else if (type === "-2") {    // 上一步
-            if (actionElements[0].classList.contains("fn__none")) {
-                return;
-            }
             if (index > 0) {
                 index--;
                 nextCard({
@@ -719,7 +790,7 @@ export const openCardByData = async (app: App, cardsData: ICardData, cardType: T
             }
         }
     });
-    (dialog.element.querySelector(".b3-dialog__scrim") as HTMLElement).style.backgroundColor = "var(--b3-theme-background)";
+    (dialog.element.querySelector(".b3-dialog__scrim") as HTMLElement).style.backgroundColor = "var(--b3-theme-surface)";
     (dialog.element.querySelector(".b3-dialog__container") as HTMLElement).style.maxWidth = "1024px";
     const editor = await bindCardEvent({
         app,
@@ -752,47 +823,20 @@ const nextCard = (options: {
     index: number,
     cardsData: ICardData
 }) => {
-    options.editor.protyle.element.classList.add("card__block--hide");
-    if (window.siyuan.config.flashcard.superBlock) {
-        options.editor.protyle.element.classList.add("card__block--hidesb");
-    }
-    if (window.siyuan.config.flashcard.heading) {
-        options.editor.protyle.element.classList.add("card__block--hideh");
-    }
-    if (window.siyuan.config.flashcard.list) {
-        options.editor.protyle.element.classList.add("card__block--hideli");
-    }
-    if (window.siyuan.config.flashcard.mark) {
-        options.editor.protyle.element.classList.add("card__block--hidemark");
-    }
-    options.actionElements[0].classList.remove("fn__none");
-    options.actionElements[1].classList.add("fn__none");
     options.editor.protyle.element.classList.remove("fn__none");
     options.editor.protyle.element.nextElementSibling.classList.add("fn__none");
     options.countElement.innerHTML = genCardCount(options.cardsData, options.index);
     options.countElement.classList.remove("fn__none");
     if (options.index === 0) {
         options.actionElements[0].firstElementChild.setAttribute("disabled", "disabled");
+        options.actionElements[1].querySelector(".b3-button").setAttribute("disabled", "disabled");
     } else {
         options.actionElements[0].firstElementChild.removeAttribute("disabled");
+        options.actionElements[1].querySelector(".b3-button").removeAttribute("disabled");
     }
-    fetchPost("/api/block/getDocInfo", {
-        id: options.cardsData.cards[options.index].blockID,
-    }, (response) => {
-        options.editor.protyle.wysiwyg.renderCustom(response.data.ial);
-        fetchPost("/api/filetree/getDoc", {
-            id: options.cardsData.cards[options.index].blockID,
-            mode: 0,
-            size: Constants.SIZE_GET_MAX
-        }, (response) => {
-            onGet({
-                updateReadonly: true,
-                data: response,
-                protyle: options.editor.protyle,
-                action: response.data.rootID === response.data.id ? [Constants.CB_GET_HTML] : [Constants.CB_GET_ALL, Constants.CB_GET_HTML],
-            });
-        });
-    });
+    getEditor(options.cardsData.cards[options.index].blockID, options.editor.protyle,
+        hasClosestByAttribute(options.countElement, "data-key", Constants.DIALOG_OPENCARD) as HTMLElement,
+        options.cardsData.cards[options.index]);
 };
 
 const allDone = (countElement: Element, editor: Protyle, actionElements: NodeListOf<Element>) => {

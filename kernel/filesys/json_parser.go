@@ -25,6 +25,7 @@ import (
 	"github.com/88250/lute/editor"
 	"github.com/88250/lute/parse"
 	"github.com/siyuan-note/siyuan/kernel/treenode"
+	"github.com/siyuan-note/siyuan/kernel/util"
 )
 
 func ParseJSONWithoutFix(jsonData []byte, options *parse.Options) (ret *parse.Tree, err error) {
@@ -57,6 +58,14 @@ func ParseJSON(jsonData []byte, options *parse.Options) (ret *parse.Tree, needFi
 	}
 
 	ret = &parse.Tree{Name: "", ID: root.ID, Root: &ast.Node{Type: ast.NodeDocument, ID: root.ID, Spec: root.Spec}, Context: &parse.Context{ParseOption: options}}
+	if icon := root.Properties["icon"]; "" != icon {
+		// XSS through emoji name https://github.com/siyuan-note/siyuan/issues/15034
+		if newIcon := util.FilterUploadEmojiFileName(icon); newIcon != icon {
+			root.Properties["icon"] = newIcon
+			needFix = true
+		}
+	}
+
 	ret.Root.KramdownIAL = parse.Map2IAL(root.Properties)
 	ret.Root.SetIALAttr("type", "doc")
 	for _, kv := range ret.Root.KramdownIAL {
@@ -72,6 +81,7 @@ func ParseJSON(jsonData []byte, options *parse.Options) (ret *parse.Tree, needFi
 	if nil == root.Children {
 		newPara := &ast.Node{Type: ast.NodeParagraph, ID: ast.NewNodeID()}
 		newPara.SetIALAttr("id", newPara.ID)
+		newPara.SetIALAttr("updated", newPara.ID[:14])
 		ret.Root.AppendChild(newPara)
 		needFix = true
 		return
@@ -85,7 +95,7 @@ func ParseJSON(jsonData []byte, options *parse.Options) (ret *parse.Tree, needFi
 
 	if nil == ret.Root.FirstChild {
 		// 如果是空文档的话挂一个空段落上去
-		newP := treenode.NewParagraph()
+		newP := treenode.NewParagraph("")
 		ret.Root.AppendChild(newP)
 		ret.Root.SetIALAttr("updated", newP.ID[:14])
 	}

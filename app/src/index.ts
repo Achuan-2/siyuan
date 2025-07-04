@@ -31,15 +31,20 @@ import {hideAllElements} from "./protyle/ui/hideElements";
 import {loadPlugins, reloadPlugin} from "./plugin/loader";
 import "./assets/scss/base.scss";
 import {reloadEmoji} from "./emoji";
+import {processIOSPurchaseResponse} from "./util/iOSPurchase";
+/// #if BROWSER
+import {setLocalShorthandCount} from "./util/noRelyPCFunction";
+/// #endif
+import {getDockByType} from "./layout/tabUtil";
+import {Tag} from "./layout/dock/Tag";
+import {updateControlAlt} from "./protyle/util/hotKey";
 
 export class App {
     public plugins: import("./plugin").Plugin[] = [];
     public appId: string;
 
     constructor() {
-        /// #if BROWSER
         registerServiceWorker(`${Constants.SERVICE_WORKER_PATH}?v=${Constants.SIYUAN_VERSION}`);
-        /// #endif
         addBaseURL();
 
         this.appId = Constants.SIYUAN_APPID;
@@ -66,6 +71,16 @@ export class App {
                             case "setDefRefCount":
                                 setDefRefCount(data.data);
                                 break;
+                            case "reloadTag":
+                                if (getDockByType("tag")?.data.tag instanceof Tag) {
+                                    (getDockByType("tag").data.tag as Tag).update();
+                                }
+                                break;
+                            /// #if BROWSER
+                            case "setLocalShorthandCount":
+                                setLocalShorthandCount();
+                                break;
+                            /// #endif
                             case "setRefDynamicText":
                                 setRefDynamicText(data.data);
                                 break;
@@ -87,6 +102,7 @@ export class App {
                                 break;
                             case "setConf":
                                 window.siyuan.config = data.data;
+                                updateControlAlt();
                                 break;
                             case "progress":
                                 progressLoading(data);
@@ -168,6 +184,7 @@ export class App {
             addScriptSync(`${Constants.PROTYLE_CDN}/js/lute/lute.min.js?v=${Constants.SIYUAN_VERSION}`, "protyleLuteScript");
             addScript(`${Constants.PROTYLE_CDN}/js/protyle-html.js?v=${Constants.SIYUAN_VERSION}`, "protyleWcHtmlScript");
             window.siyuan.config = response.data.conf;
+            updateControlAlt();
             window.siyuan.isPublish = response.data.isPublish;
             await loadPlugins(this);
             getLocalStorage(() => {
@@ -210,4 +227,5 @@ window.openFileByURL = (openURL) => {
 window.showKeyboardToolbar = () => {
     // 防止 Pad 端报错
 };
+window.processIOSPurchaseResponse = processIOSPurchaseResponse;
 /// #endif

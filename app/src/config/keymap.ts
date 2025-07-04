@@ -7,6 +7,7 @@ import {confirmDialog} from "../dialog/confirmDialog";
 import {App} from "../index";
 /// #if !BROWSER
 import {ipcRenderer} from "electron";
+import {sendUnregisterGlobalShortcut} from "../boot/globalEvent/keydown";
 /// #endif
 import {sendGlobalShortcut} from "../boot/globalEvent/keydown";
 
@@ -52,6 +53,24 @@ export const keymap = {
     </span>
     <span data-type="update" class="config-keymap__key">${keyValue}</span>
     <input data-key="plugin${Constants.ZWSP}${item.name}${Constants.ZWSP}${command.langKey}" data-value="${command.customHotkey}" data-default="${command.hotkey}" class="b3-text-field fn__none" value="${keyValue}" spellcheck="false">
+</label>`;
+            });
+            item.updateProtyleToolbar([]).forEach(toolbarItem => {
+                if (typeof toolbarItem === "string" || Constants.INLINE_TYPE.concat("|").includes(toolbarItem.name) || !toolbarItem.hotkey) {
+                    return;
+                }
+                const dockKeymap = window.siyuan.config.keymap.plugin[item.name][toolbarItem.name];
+                const keyValue = updateHotkeyTip(dockKeymap.custom);
+                commandHTML += `<label class="b3-list-item b3-list-item--narrow b3-list-item--hide-action">
+    <span class="b3-list-item__text">${toolbarItem.tip || window.siyuan.languages[toolbarItem.lang]}</span>
+    <span data-type="reset" class="b3-list-item__action b3-tooltips b3-tooltips__w" aria-label="${window.siyuan.languages.reset}">
+        <svg><use xlink:href="#iconUndo"></use></svg>
+    </span>
+    <span data-type="clear" class="b3-list-item__action b3-tooltips b3-tooltips__w" aria-label="${window.siyuan.languages.remove}">
+        <svg><use xlink:href="#iconTrashcan"></use></svg>
+    </span>
+    <span data-type="update" class="config-keymap__key">${keyValue}</span>
+    <input data-key="plugin${Constants.ZWSP}${item.name}${Constants.ZWSP}${toolbarItem.name}" data-value="${dockKeymap.custom}" data-default="${dockKeymap.default}" class="b3-text-field fn__none" value="${keyValue}" spellcheck="false">
 </label>`;
             });
             Object.keys(item.docks).forEach(key => {
@@ -201,6 +220,14 @@ export const keymap = {
                     if (plugin.name === keys[1]) {
                         plugin.commands.forEach(command => {
                             if (command.langKey === keys[2]) {
+                                /// #if !BROWSER
+                                if (command.globalCallback && command.customHotkey && command.customHotkey !== newHotkey) {
+                                    ipcRenderer.send(Constants.SIYUAN_CMD, {
+                                        cmd: "unregisterGlobalShortcut",
+                                        accelerator: command.customHotkey
+                                    });
+                                }
+                                /// #endif
                                 command.customHotkey = newHotkey;
                             }
                         });
@@ -216,6 +243,7 @@ export const keymap = {
         fetchPost("/api/setting/setKeymap", {
             data
         }, () => {
+            /// #if !BROWSER
             ipcRenderer.send(Constants.SIYUAN_CMD, {
                 cmd: "writeLog",
                 msg: "user update keymap:" + JSON.stringify(window.siyuan.config.keymap)
@@ -227,6 +255,7 @@ export const keymap = {
                 });
             }
             sendGlobalShortcut(app);
+            /// #endif
         });
     },
     search(value: string, keymapString: string) {
@@ -318,10 +347,7 @@ export const keymap = {
         });
         /// #if !BROWSER
         searchKeymapElement.addEventListener("focus", () => {
-            ipcRenderer.send(Constants.SIYUAN_CMD, {
-                cmd: "unregisterGlobalShortcut",
-                accelerator: window.siyuan.config.keymap.general.toggleWin.custom
-            });
+            sendUnregisterGlobalShortcut(app);
         });
         /// #endif
         searchKeymapElement.addEventListener("blur", () => {
@@ -348,6 +374,7 @@ export const keymap = {
                 fetchPost("/api/setting/setKeymap", {
                     data: Constants.SIYUAN_KEYMAP,
                 }, () => {
+                    /// #if !BROWSER
                     ipcRenderer.send(Constants.SIYUAN_CMD, {
                         cmd: "writeLog",
                         msg: "user reset keymap"
@@ -358,8 +385,9 @@ export const keymap = {
                             accelerator: window.siyuan.config.keymap.general.toggleWin.custom
                         });
                     }
-                    window.location.reload();
                     sendGlobalShortcut(app);
+                    /// #endif
+                    window.location.reload();
                 });
             });
         });
@@ -436,7 +464,8 @@ export const keymap = {
                     let hasConflict = false;
                     const isAssistKey = ["⌘", "⇧", "⌥", "⌃"].includes(keymapStr.substr(keymapStr.length - 1, 1));
                     if (isAssistKey ||
-                        ["⌘A", "⌘X", "⌘C", "⌘V", "⌘-", "⌘=", "⌘0", "⇧⌘V", "⌘/", "⇧↑", "⇧↓", "⇧→", "⇧←", "⇧⇥", "⌃D", "⇧⌘→", "⇧⌘←", "⌘Home", "⌘End", "⇧↩", "↩", "PageUp", "PageDown", "⌫", "⌦", "Escape"].includes(keymapStr) ||
+                        ["⌘A", "⌘X", "⌘C", "⌘V", "⌘-", "⌘=", "⌘0", "⇧⌘V", "⌘/", "⇧↑", "⇧↓", "⇧→", "⇧←", "⇧⇥", "⌃D", "⇧⌘→",
+                            "⇧⌘←", "⌘Home", "⌘End", "⇧↩", "↩", "PageUp", "PageDown", "⌫", "⌦", "Escape"].includes(keymapStr) ||
                         // 跳转到下/上一个编辑页签不能包含 ctrl， 否则不能监听到 keyup
                         (isMac() && keys[0] === "general" && ["goToEditTabNext", "goToEditTabPrev"].includes(keys[1]) && keymapStr.includes("⌘"))
                     ) {
@@ -479,10 +508,7 @@ export const keymap = {
             });
             /// #if !BROWSER
             item.addEventListener("focus", () => {
-                ipcRenderer.send(Constants.SIYUAN_CMD, {
-                    cmd: "unregisterGlobalShortcut",
-                    accelerator: window.siyuan.config.keymap.general.toggleWin.custom
-                });
+                sendUnregisterGlobalShortcut(app);
             });
             /// #endif
         });

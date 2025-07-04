@@ -20,7 +20,6 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io/fs"
-	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -45,9 +44,14 @@ func NodeHash(node *ast.Node, tree *parse.Tree, luteEngine *lute.Lute) string {
 	}
 	hpath := tree.HPath
 	data := tree.Box + tree.Path + hpath + string(ial) + md
+	var parentID string
 	if nil != node.Parent {
-		data += node.Parent.ID
+		parentID = node.Parent.ID
 	}
+	if h := HeadingParent(node); nil != h {
+		parentID = h.ID
+	}
+	data += parentID
 	return fmt.Sprintf("%x", sha256.Sum256(gulu.Str.ToBytes(data)))[:7]
 }
 
@@ -61,7 +65,7 @@ func TreeRoot(node *ast.Node) *ast.Node {
 }
 
 func NewTree(boxID, p, hp, title string) *parse.Tree {
-	id := strings.TrimSuffix(path.Base(p), ".sy")
+	id := util.GetTreeID(p)
 	root := &ast.Node{Type: ast.NodeDocument, ID: id, Spec: "1", Box: boxID, Path: p}
 	root.SetIALAttr("title", title)
 	root.SetIALAttr("id", id)
@@ -96,7 +100,7 @@ func RootChildIDs(rootID string) (ret []string) {
 	if !gulu.File.IsDir(subFolder) {
 		return
 	}
-	filelock.Walk(subFolder, func(path string, info fs.FileInfo, err error) error {
+	filelock.Walk(subFolder, func(path string, d fs.DirEntry, err error) error {
 		if strings.HasSuffix(path, ".sy") {
 			name := filepath.Base(path)
 			id := strings.TrimSuffix(name, ".sy")
@@ -107,10 +111,17 @@ func RootChildIDs(rootID string) (ret []string) {
 	return
 }
 
-func NewParagraph() (ret *ast.Node) {
-	newID := ast.NewNodeID()
+func NewParagraph(id string) (ret *ast.Node) {
+	newID := id
+	if "" == newID {
+		newID = ast.NewNodeID()
+	}
 	ret = &ast.Node{ID: newID, Type: ast.NodeParagraph}
 	ret.SetIALAttr("id", newID)
 	ret.SetIALAttr("updated", newID[:14])
 	return
+}
+
+func NewSpanAnchor(id string) (ret *ast.Node) {
+	return &ast.Node{Type: ast.NodeInlineHTML, Tokens: []byte("<span id=\"" + id + "\" style=\"display: none;\"></span>")}
 }

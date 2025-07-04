@@ -11,6 +11,7 @@ import {openMenuPanel} from "./openMenuPanel";
 import {fetchSyncPost} from "../../../util/fetch";
 import {showMessage} from "../../../dialog/message";
 import {upDownHint} from "../../../util/upDownHint";
+import {getFieldsByData} from "./view";
 
 export const getDefaultOperatorByType = (type: TAVCol) => {
     if (["select", "number", "date", "created", "updated"].includes(type)) {
@@ -190,7 +191,7 @@ export const setFilter = async (options: {
         }]);
         const menuElement = hasClosestByClassName(options.target, "b3-menu");
         if (menuElement) {
-            menuElement.innerHTML = getFiltersHTML(options.data.view);
+            menuElement.innerHTML = getFiltersHTML(options.data);
         }
     });
     if (menu.isOpen) {
@@ -198,7 +199,8 @@ export const setFilter = async (options: {
     }
     let selectHTML = "";
     let colData: IAVColumn;
-    options.data.view.columns.find((column) => {
+    const fields = getFieldsByData(options.data);
+    fields.find((column) => {
         if (column.id === options.filter.column) {
             colData = column;
             return true;
@@ -217,16 +219,29 @@ export const setFilter = async (options: {
             return;
         }
         let targetAVId = "";
-        options.data.view.columns.find((column) => {
+        fields.find((column) => {
             if (column.id === colData.rollup.relationKeyID) {
                 targetAVId = column.relation.avID;
                 return true;
             }
         });
         const response = await fetchSyncPost("/api/av/getAttributeView", {id: targetAVId});
-        response.data.av.keyValues.find((item: { key: { id: string, name: string, type: TAVCol } }) => {
+        response.data.av.keyValues.find((item: {
+            key: {
+                id: string,
+                name: string,
+                type: TAVCol,
+                options: {
+                    name: string,
+                    color: string,
+                }[]
+            }
+        }) => {
             if (item.key.id === colData.rollup.keyID) {
                 filterValue.type = item.key.type;
+                if (item.key.type === "select") {
+                    colData.options = item.key.options;
+                }
                 return true;
             }
         });
@@ -330,7 +345,7 @@ export const setFilter = async (options: {
             menu.addItem({
                 iconHTML: "",
                 type: "readonly",
-                label: `<input class="b3-text-field fn__block" style="margin: 4px 0" placeholder="${window.siyuan.languages.search}">`,
+                label: `<input class="b3-text-field fn__size200" style="margin: 4px 0" placeholder="${window.siyuan.languages.search}">`,
                 bind(element) {
                     const selectSearchElement = element.querySelector("input");
                     selectSearchElement.addEventListener("keydown", (event: KeyboardEvent) => {
@@ -366,7 +381,7 @@ export const setFilter = async (options: {
             });
             menu.addItem({
                 icon,
-                label: `<span class="b3-chip b3-chip--middle" data-name="${option.name}" data-color="${option.color}" style="margin:3px 0;background-color:var(--b3-font-background${option.color});color:var(--b3-font-color${option.color})">
+                label: `<span class="b3-chip b3-chip--middle" data-name="${option.name}" data-color="${option.color}" style="max-width: 178px;margin:3px 0;background-color:var(--b3-font-background${option.color});color:var(--b3-font-color${option.color})">
     <span class="fn__ellipsis">${option.name}</span>
 </span>`,
                 bind(element) {
@@ -426,7 +441,7 @@ export const setFilter = async (options: {
             <option value="0"${showToday ? " selected" : ""}>${window.siyuan.languages.current}</option>
         </select>
         <span class="fn__space"></span>
-        <input type="number" min="1" step="1" value="${options.filter.relativeDate?.count || 1}" class="b3-text-field fn__flex-1${showToday ? " fn__none" : ""}"/>
+        <input type="number" min="1" oninput="this.value = Math.max(this.value, 1)" step="1" value="${options.filter.relativeDate?.count || 1}" class="b3-text-field fn__flex-1${showToday ? " fn__none" : ""}"/>
         <span class="fn__space${showToday ? " fn__none" : ""}"></span>
         <select class="b3-select fn__flex-1">
             <option value="0"${options.filter.relativeDate?.unit === 0 ? " selected" : ""}>${window.siyuan.languages.day}</option>
@@ -449,7 +464,7 @@ export const setFilter = async (options: {
             <option value="0"${showToday2 ? " selected" : ""}>${window.siyuan.languages.current}</option>
         </select>
         <span class="fn__space"></span>
-        <input type="number" min="1" step="1" value="${options.filter.relativeDate2?.count || 1}" class="b3-text-field fn__flex-1${showToday2 ? " fn__none" : ""}"/>
+        <input type="number" min="1" step="1" oninput="this.value = Math.max(this.value, 1)" value="${options.filter.relativeDate2?.count || 1}" class="b3-text-field fn__flex-1${showToday2 ? " fn__none" : ""}"/>
         <span class="fn__space${showToday2 ? " fn__none" : ""}"></span>
         <select class="b3-select fn__flex-1">
             <option value="0"${options.filter.relativeDate2?.unit === 0 ? " selected" : ""}>${window.siyuan.languages.day}</option>
@@ -486,7 +501,7 @@ export const setFilter = async (options: {
             }]);
             const menuElement = hasClosestByClassName(options.target, "b3-menu");
             if (menuElement) {
-                menuElement.innerHTML = getFiltersHTML(options.data.view);
+                menuElement.innerHTML = getFiltersHTML(options.data);
             }
         }
     });
@@ -558,7 +573,7 @@ export const addFilter = (options: {
     blockElement: Element
 }) => {
     const menu = new Menu("av-add-filter");
-    options.data.view.columns.forEach((column) => {
+    getFieldsByData(options.data).forEach((column) => {
         let filter: IAVFilter;
         options.data.view.filters.find((item) => {
             if (item.column === column.id && item.value.type === column.type) {
@@ -579,7 +594,7 @@ export const addFilter = (options: {
                         value: cellValue,
                     };
                     options.data.view.filters.push(filter);
-                    options.menuElement.innerHTML = getFiltersHTML(options.data.view);
+                    options.menuElement.innerHTML = getFiltersHTML(options.data);
                     setPosition(options.menuElement, options.tabRect.right - options.menuElement.clientWidth, options.tabRect.bottom, options.tabRect.height);
                     const filterElement = options.menuElement.querySelector(`[data-id="${column.id}"] .b3-chip`) as HTMLElement;
                     setFilter({
@@ -600,11 +615,12 @@ export const addFilter = (options: {
     });
 };
 
-export const getFiltersHTML = (data: IAVTable) => {
+export const getFiltersHTML = (data: IAV) => {
     let html = "";
+    const fields = getFieldsByData(data);
     const genFilterItem = (filter: IAVFilter) => {
         let filterHTML = "";
-        data.columns.find((item) => {
+        fields.find((item) => {
             if (item.id === filter.column && item.type === filter.value.type) {
                 let filterText = "";
                 const filterValue = item.type === "rollup" ? (filter.value.rollup?.contents?.length > 0 ? filter.value.rollup.contents[0] : {type: "rollup"} as IAVCellValue) : filter.value;
@@ -704,8 +720,7 @@ export const getFiltersHTML = (data: IAVTable) => {
         });
         return filterHTML;
     };
-
-    data.filters.forEach((item: IAVFilter) => {
+    data.view.filters.forEach((item: IAVFilter) => {
         const filterHTML = genFilterItem(item);
         if (filterHTML) {
             html += `<button class="b3-menu__item" draggable="true" data-id="${item.column}" data-filter-type="${item.value.type}">
@@ -724,7 +739,7 @@ export const getFiltersHTML = (data: IAVTable) => {
 </button>
 <button class="b3-menu__separator"></button>
 ${html}
-<button class="b3-menu__item${data.filters.length === data.columns.length ? " fn__none" : ""}" data-type="addFilter">
+<button class="b3-menu__item${data.view.filters.length === fields.length ? " fn__none" : ""}" data-type="addFilter">
     <svg class="b3-menu__icon"><use xlink:href="#iconAdd"></use></svg>
     <span class="b3-menu__label">${window.siyuan.languages.addFilter}</span>
 </button>

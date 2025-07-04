@@ -14,7 +14,6 @@
 @import "business/graph";
 @import "business/layout";
 @import "business/block";
-@import "business/drag";
 @import "util/reset";
 @import "util/function";
 @import "business/history";
@@ -28,6 +27,7 @@
 @import "business/av";
 @import "business/search";
 @import "business/emojis";
+@import "component/svg";
 
 .block__popover {
   width: 80vw;
@@ -138,6 +138,15 @@
     &:not(.toolbar__icon-deactivate):hover {
       background-color: var(--b3-list-hover);
     }
+
+    &--history {
+      height: 36px;
+      width: 36px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 0;
+    }
   }
 
   &__title {
@@ -150,10 +159,6 @@
     border: 0;
     background-color: transparent;
     color: var(--b3-theme-on-background);
-  }
-
-  &__search {
-    margin: 8px;
   }
 
   &__text {
@@ -247,6 +252,30 @@
     &__name {
       width: 100%;
       text-align: center;
+    }
+  }
+
+  .config-assets {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    box-sizing: border-box;
+    position: relative;
+
+    &__list {
+      overflow: auto;
+      flex: 1;
+    }
+
+    &__preview {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: center;
+      overflow: auto;
+      flex: 1;
+      margin-top: 8px;
+      padding: 0 8px;
     }
   }
 }
@@ -395,6 +424,7 @@
   stroke: currentColor;
   width: 14px;
   height: 14px;
+  flex-shrink: 0;
 
   &--mid {
     width: 16px;
@@ -404,6 +434,11 @@
   &--small {
     width: 12px;
     height: 12px;
+  }
+
+  &--smaller {
+    width: 10px;
+    height: 10px;
   }
 }
 
@@ -479,10 +514,11 @@
   &-scroll {
     right: 0;
   }
-}
 
-.av__views .block__icon {
-  opacity: 1;
+  &-hint {
+    min-width: 100vw;
+    max-height: 70vh;
+  }
 }
 
 .b3-dialog__container {

@@ -27,11 +27,17 @@ import (
 	"time"
 
 	"github.com/88250/gulu"
+	ginSessions "github.com/gin-contrib/sessions"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/siyuan-note/logging"
 	"github.com/siyuan-note/siyuan/kernel/util"
 	"github.com/steambap/captcha"
+)
+
+var (
+	BasicAuthHeaderKey   = "WWW-Authenticate"
+	BasicAuthHeaderValue = "Basic realm=\"SiYuan Authorization Require\", charset=\"UTF-8\""
 )
 
 func LogoutAuth(c *gin.Context) {
@@ -86,11 +92,21 @@ func LoginAuth(c *gin.Context) {
 			ret.Code = 1
 			ret.Msg = Conf.Language(22)
 			logging.LogWarnf("invalid captcha")
+
+			workspaceSession.Captcha = gulu.Rand.String(7) // https://github.com/siyuan-note/siyuan/issues/13147
+			if err := session.Save(c); err != nil {
+				logging.LogErrorf("save session failed: " + err.Error())
+				c.Status(http.StatusInternalServerError)
+				return
+			}
 			return
 		}
 	}
 
 	authCode := arg["authCode"].(string)
+	authCode = strings.TrimSpace(authCode)
+	authCode = util.RemoveInvalid(authCode)
+
 	if Conf.AccessAuthCode != authCode {
 		ret.Code = -1
 		ret.Msg = Conf.Language(83)
@@ -113,7 +129,20 @@ func LoginAuth(c *gin.Context) {
 	workspaceSession.AccessAuthCode = authCode
 	util.WrongAuthCount = 0
 	workspaceSession.Captcha = gulu.Rand.String(7)
-	logging.LogInfof("auth success [ip=%s]", util.GetRemoteAddr(c.Request))
+
+	maxAge := 0 // Default session expiration (browser session)
+	if rememberMe, ok := arg["rememberMe"].(bool); ok && rememberMe {
+		// Add a 'Remember me' checkbox when logging in to save a session https://github.com/siyuan-note/siyuan/pull/14964
+		maxAge = 60 * 60 * 24 * 30 // 30 days
+	}
+	ginSessions.Default(c).Options(ginSessions.Options{
+		Path:     "/",
+		Secure:   util.SSL,
+		MaxAge:   maxAge,
+		HttpOnly: true,
+	})
+
+	logging.LogInfof("auth success [ip=%s, maxAge=%d]", util.GetRemoteAddr(c.Request), maxAge)
 	if err := session.Save(c); err != nil {
 		logging.LogErrorf("save session failed: " + err.Error())
 		c.Status(http.StatusInternalServerError)
@@ -174,92 +203,6 @@ func CheckAuth(c *gin.Context) {
 		return
 	}
 
-	//logging.LogInfof("check auth for [%s]", c.Request.RequestURI)
-	localhost := util.IsLocalHost(c.Request.RemoteAddr)
-
-	// 未设置访问授权码
-	if "" == Conf.AccessAuthCode {
-		// Skip the empty access authorization code check https://github.com/siyuan-note/siyuan/issues/9709
-		if util.SiyuanAccessAuthCodeBypass {
-			c.Set(RoleContextKey, RoleAdministrator)
-			c.Next()
-			return
-		}
-
-		// Authenticate requests with the Origin header other than 127.0.0.1 https://github.com/siyuan-note/siyuan/issues/9180
-		clientIP := c.ClientIP()
-		host := c.GetHeader("Host")
-		origin := c.GetHeader("Origin")
-		forwardedHost := c.GetHeader("X-Forwarded-Host")
-		if !localhost ||
-			("" != clientIP && !util.IsLocalHostname(clientIP)) ||
-			("" != host && !util.IsLocalHost(host)) ||
-			("" != origin && !util.IsLocalOrigin(origin) && !strings.HasPrefix(origin, "chrome-extension://")) ||
-			("" != forwardedHost && !util.IsLocalHost(forwardedHost)) {
-			c.JSON(http.StatusUnauthorized, map[string]interface{}{"code": -1, "msg": "Auth failed: for security reasons, please set [Access authorization code] when using non-127.0.0.1 access\n\n为安全起见，使用非 127.0.0.1 访问时请设置 [访问授权码]"})
-			c.Abort()
-			return
-		}
-
-		c.Set(RoleContextKey, RoleAdministrator)
-		c.Next()
-		return
-	}
-
-	// 放过 /appearance/
-	if strings.HasPrefix(c.Request.RequestURI, "/appearance/") ||
-		strings.HasPrefix(c.Request.RequestURI, "/stage/build/export/") ||
-		strings.HasPrefix(c.Request.RequestURI, "/stage/build/fonts/") ||
-		strings.HasPrefix(c.Request.RequestURI, "/stage/protyle/") {
-		c.Next()
-		return
-	}
-
-	// 放过来自本机的某些请求
-	if localhost {
-		if strings.HasPrefix(c.Request.RequestURI, "/assets/") || strings.HasPrefix(c.Request.RequestURI, "/export/") {
-			c.Set(RoleContextKey, RoleAdministrator)
-			c.Next()
-			return
-		}
-		if strings.HasPrefix(c.Request.RequestURI, "/api/system/exit") {
-			c.Set(RoleContextKey, RoleAdministrator)
-			c.Next()
-			return
-		}
-		if strings.HasPrefix(c.Request.RequestURI, "/api/system/getNetwork") {
-			c.Set(RoleContextKey, RoleAdministrator)
-			c.Next()
-			return
-		}
-		if strings.HasPrefix(c.Request.RequestURI, "/api/sync/performSync") {
-			if util.ContainerIOS == util.Container || util.ContainerAndroid == util.Container {
-				c.Set(RoleContextKey, RoleAdministrator)
-				c.Next()
-				return
-			}
-		}
-	}
-
-	// 通过 Cookie
-	session := util.GetSession(c)
-	workspaceSession := util.GetWorkspaceSession(session)
-	if workspaceSession.AccessAuthCode == Conf.AccessAuthCode {
-		c.Set(RoleContextKey, RoleAdministrator)
-		c.Next()
-		return
-	}
-
-	// 通过 BasicAuth (header: Authorization)
-	if username, password, ok := c.Request.BasicAuth(); ok {
-		// 使用访问授权码作为密码
-		if util.WorkspaceName == username && Conf.AccessAuthCode == password {
-			c.Set(RoleContextKey, RoleAdministrator)
-			c.Next()
-			return
-		}
-	}
-
 	// 通过 API token (header: Authorization)
 	if authHeader := c.GetHeader("Authorization"); "" != authHeader {
 		var token string
@@ -299,9 +242,96 @@ func CheckAuth(c *gin.Context) {
 		return
 	}
 
+	//logging.LogInfof("check auth for [%s]", c.Request.RequestURI)
+	localhost := util.IsLocalHost(c.Request.RemoteAddr)
+
+	// 未设置访问授权码
+	if "" == Conf.AccessAuthCode {
+		// Skip the empty access authorization code check https://github.com/siyuan-note/siyuan/issues/9709
+		if util.SiyuanAccessAuthCodeBypass {
+			c.Set(RoleContextKey, RoleAdministrator)
+			c.Next()
+			return
+		}
+
+		// Authenticate requests with the Origin header other than 127.0.0.1 https://github.com/siyuan-note/siyuan/issues/9180
+		clientIP := c.ClientIP()
+		host := c.GetHeader("Host")
+		origin := c.GetHeader("Origin")
+		forwardedHost := c.GetHeader("X-Forwarded-Host")
+		if !localhost ||
+			("" != clientIP && !util.IsLocalHostname(clientIP)) ||
+			("" != host && !util.IsLocalHost(host)) ||
+			("" != origin && !util.IsLocalOrigin(origin) && !strings.HasPrefix(origin, "chrome-extension://")) ||
+			("" != forwardedHost && !util.IsLocalHost(forwardedHost)) {
+			c.JSON(http.StatusUnauthorized, map[string]interface{}{"code": -1, "msg": "Auth failed: for security reasons, please set [Access authorization code] when using non-127.0.0.1 access\n\n为安全起见，使用非 127.0.0.1 访问时请设置 [访问授权码]"})
+			c.Abort()
+			return
+		}
+
+		c.Set(RoleContextKey, RoleAdministrator)
+		c.Next()
+		return
+	}
+
+	// 放过 /appearance/
+	if strings.HasPrefix(c.Request.RequestURI, "/appearance/") ||
+		strings.HasPrefix(c.Request.RequestURI, "/stage/build/export/") ||
+		strings.HasPrefix(c.Request.RequestURI, "/stage/protyle/") {
+		c.Next()
+		return
+	}
+
+	// 放过来自本机的某些请求
+	if localhost {
+		if strings.HasPrefix(c.Request.RequestURI, "/assets/") || strings.HasPrefix(c.Request.RequestURI, "/export/") {
+			c.Set(RoleContextKey, RoleAdministrator)
+			c.Next()
+			return
+		}
+		if strings.HasPrefix(c.Request.RequestURI, "/api/system/exit") {
+			c.Set(RoleContextKey, RoleAdministrator)
+			c.Next()
+			return
+		}
+		if strings.HasPrefix(c.Request.RequestURI, "/api/system/getNetwork") || strings.HasPrefix(c.Request.RequestURI, "/api/system/getWorkspaceInfo") {
+			c.Set(RoleContextKey, RoleAdministrator)
+			c.Next()
+			return
+		}
+		if strings.HasPrefix(c.Request.RequestURI, "/api/sync/performSync") {
+			if util.ContainerIOS == util.Container || util.ContainerAndroid == util.Container || util.ContainerHarmony == util.Container {
+				c.Set(RoleContextKey, RoleAdministrator)
+				c.Next()
+				return
+			}
+		}
+	}
+
+	// 通过 Cookie
+	session := util.GetSession(c)
+	workspaceSession := util.GetWorkspaceSession(session)
+	if workspaceSession.AccessAuthCode == Conf.AccessAuthCode {
+		c.Set(RoleContextKey, RoleAdministrator)
+		c.Next()
+		return
+	}
+
+	// 通过 BasicAuth (header: Authorization)
+	if username, password, ok := c.Request.BasicAuth(); ok {
+		// 使用访问授权码作为密码
+		if util.WorkspaceName == username && Conf.AccessAuthCode == password {
+			c.Set(RoleContextKey, RoleAdministrator)
+			c.Next()
+			return
+		}
+	}
+
 	// WebDAV BasicAuth Authenticate
-	if strings.HasPrefix(c.Request.RequestURI, "/webdav") {
-		c.Header("WWW-Authenticate", "Basic realm=Authorization Required")
+	if strings.HasPrefix(c.Request.RequestURI, "/webdav") ||
+		strings.HasPrefix(c.Request.RequestURI, "/caldav") ||
+		strings.HasPrefix(c.Request.RequestURI, "/carddav") {
+		c.Header(BasicAuthHeaderKey, BasicAuthHeaderValue)
 		c.AbortWithStatus(http.StatusUnauthorized)
 		return
 	}
@@ -420,19 +450,33 @@ func ControlConcurrency(c *gin.Context) {
 	reqPath := c.Request.URL.Path
 
 	// Improve the concurrency of the kernel data reading interfaces https://github.com/siyuan-note/siyuan/issues/10149
-	if strings.HasPrefix(reqPath, "/stage/") || strings.HasPrefix(reqPath, "/assets/") || strings.HasPrefix(reqPath, "/appearance/") {
+	if strings.HasPrefix(reqPath, "/stage/") ||
+		strings.HasPrefix(reqPath, "/assets/") ||
+		strings.HasPrefix(reqPath, "/emojis/") ||
+		strings.HasPrefix(reqPath, "/plugins/") ||
+		strings.HasPrefix(reqPath, "/public/") ||
+		strings.HasPrefix(reqPath, "/snippets/") ||
+		strings.HasPrefix(reqPath, "/templates/") ||
+		strings.HasPrefix(reqPath, "/widgets/") ||
+		strings.HasPrefix(reqPath, "/appearance/") ||
+		strings.HasPrefix(reqPath, "/export/") ||
+		strings.HasPrefix(reqPath, "/history/") ||
+		strings.HasPrefix(reqPath, "/api/query/") ||
+		strings.HasPrefix(reqPath, "/api/search/") ||
+		strings.HasPrefix(reqPath, "/api/network/") ||
+		strings.HasPrefix(reqPath, "/api/broadcast/") ||
+		strings.HasPrefix(reqPath, "/es/") {
 		c.Next()
 		return
 	}
 
 	parts := strings.Split(reqPath, "/")
 	function := parts[len(parts)-1]
-	if strings.HasPrefix(function, "get") || strings.HasPrefix(function, "list") ||
-		strings.HasPrefix(function, "search") || strings.HasPrefix(function, "render") || strings.HasPrefix(function, "ls") {
-		c.Next()
-		return
-	}
-	if strings.HasPrefix(function, "/api/query/") || strings.HasPrefix(function, "/api/search/") {
+	if strings.HasPrefix(function, "get") ||
+		strings.HasPrefix(function, "list") ||
+		strings.HasPrefix(function, "search") ||
+		strings.HasPrefix(function, "render") ||
+		strings.HasPrefix(function, "ls") {
 		c.Next()
 		return
 	}

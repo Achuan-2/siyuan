@@ -18,10 +18,12 @@ package model
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"math"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -146,7 +148,14 @@ func ClearWorkspaceHistory() (err error) {
 	return
 }
 
-func GetDocHistoryContent(historyPath, keyword string) (id, rootID, content string, isLargeDoc bool, err error) {
+func GetDocHistoryContent(historyPath, keyword string, highlight bool) (id, rootID, content string, isLargeDoc bool, err error) {
+	if !util.IsAbsPathInWorkspace(historyPath) {
+		msg := "Path [" + historyPath + "] is not in workspace"
+		logging.LogErrorf(msg)
+		err = errors.New(msg)
+		return
+	}
+
 	if !gulu.File.IsExist(historyPath) {
 		logging.LogWarnf("doc history [%s] not exist", historyPath)
 		return
@@ -162,8 +171,7 @@ func GetDocHistoryContent(historyPath, keyword string) (id, rootID, content stri
 	luteEngine := NewLute()
 	historyTree, err := filesys.ParseJSONWithoutFix(data, luteEngine.ParseOptions)
 	if err != nil {
-		logging.LogErrorf("parse tree from file [%s] failed, remove it", historyPath)
-		os.RemoveAll(historyPath)
+		logging.LogErrorf("parse tree from file [%s] failed: %s", historyPath, err)
 		return
 	}
 	id = historyTree.Root.ID
@@ -184,7 +192,7 @@ func GetDocHistoryContent(historyPath, keyword string) (id, rootID, content stri
 			n.RemoveIALAttr("heading-fold")
 			n.RemoveIALAttr("fold")
 
-			if 0 < len(keywords) {
+			if highlight && 0 < len(keywords) {
 				if markReplaceSpan(n, &unlinks, keywords, search.MarkDataType, luteEngine) {
 					return ast.WalkContinue
 				}
@@ -229,22 +237,16 @@ func RollbackDocHistory(boxID, historyPath string) (err error) {
 
 	srcPath := historyPath
 	var destPath, parentHPath string
-	baseName := filepath.Base(historyPath)
-	id := strings.TrimSuffix(baseName, ".sy")
-
-	workingDoc := treenode.GetBlockTree(id)
-	if nil != workingDoc {
+	rootID := util.GetTreeID(historyPath)
+	workingDoc := treenode.GetBlockTree(rootID)
+	if nil != workingDoc && "d" == workingDoc.Type {
 		if err = filelock.Remove(filepath.Join(util.DataDir, boxID, workingDoc.Path)); err != nil {
 			return
 		}
 	}
 
-	destPath, parentHPath, err = getRollbackDockPath(boxID, historyPath)
+	destPath, parentHPath, err = getRollbackDockPath(boxID, historyPath, workingDoc)
 	if err != nil {
-		return
-	}
-
-	if err = filelock.CopyNewtimes(srcPath, destPath); err != nil {
 		return
 	}
 
@@ -277,14 +279,47 @@ func RollbackDocHistory(boxID, historyPath string) (err error) {
 	tree.Path = filepath.ToSlash(strings.TrimPrefix(destPath, util.DataDir+string(os.PathSeparator)+boxID))
 	tree.HPath = parentHPath + "/" + tree.Root.IALAttr("title")
 
+	// 重置重复的块 ID https://github.com/siyuan-note/siyuan/issues/14358
+	if nil != workingDoc {
+		treenode.RemoveBlockTreesByRootID(rootID)
+	}
+	nodes := map[string]*ast.Node{}
+	ast.Walk(tree.Root, func(n *ast.Node, entering bool) ast.WalkStatus {
+		if !entering || !n.IsBlock() {
+			return ast.WalkContinue
+		}
+
+		nodes[n.ID] = n
+		return ast.WalkContinue
+	})
+	var ids []string
+	for nodeID, _ := range nodes {
+		ids = append(ids, nodeID)
+	}
+	idMap := treenode.ExistBlockTrees(ids)
+	var duplicatedIDs []string
+	for nodeID, exist := range idMap {
+		if exist {
+			duplicatedIDs = append(duplicatedIDs, nodeID)
+		}
+	}
+	for _, nodeID := range duplicatedIDs {
+		node := nodes[nodeID]
+		treenode.ResetNodeID(node)
+		if ast.NodeDocument == node.Type {
+			tree.ID = node.ID
+			tree.Path = tree.Path[:strings.LastIndex(tree.Path, "/")] + "/" + node.ID + ".sy"
+		}
+	}
+
 	// 仅重新索引该文档，不进行全量索引
 	// Reindex only the current document after rolling back the document https://github.com/siyuan-note/siyuan/issues/12320
-	treenode.RemoveBlockTree(id)
-	treenode.IndexBlockTree(tree)
-	sql.RemoveTreeQueue(id)
-	sql.IndexTreeQueue(tree)
-	util.PushReloadFiletree()
-	util.PushReloadProtyle(id)
+	sql.RemoveTreeQueue(rootID)
+	if writeErr := indexWriteTreeIndexQueue(tree); nil != writeErr {
+		return
+	}
+	ReloadFiletree()
+	ReloadProtyle(rootID)
 	util.PushMsg(Conf.Language(102), 3000)
 
 	IncSync()
@@ -297,12 +332,12 @@ func RollbackDocHistory(boxID, historyPath string) (err error) {
 	go func() {
 		sql.FlushQueue()
 
-		tree, _ = LoadTreeByBlockID(id)
+		tree, _ = LoadTreeByBlockID(rootID)
 		if nil == tree {
 			return
 		}
 
-		refreshProtyle(id)
+		ReloadProtyle(rootID)
 
 		// 刷新页签名
 		refText := getNodeRefText(tree.Root)
@@ -324,7 +359,7 @@ func RollbackDocHistory(boxID, historyPath string) (err error) {
 			if nil != defTree {
 				defNode := treenode.GetNodeInTree(defTree, defID)
 				if nil != defNode {
-					task.AppendAsyncTaskWithDelay(task.SetDefRefCount, 1*time.Second, refreshRefCount, defTree.ID, defNode.ID)
+					task.AppendAsyncTaskWithDelay(task.SetDefRefCount, util.SQLFlushInterval, refreshRefCount, defTree.ID, defNode.ID)
 				}
 			}
 		}
@@ -332,10 +367,18 @@ func RollbackDocHistory(boxID, historyPath string) (err error) {
 	return nil
 }
 
-func getRollbackDockPath(boxID, historyPath string) (destPath, parentHPath string, err error) {
+func getRollbackDockPath(boxID, historyPath string, workingDoc *treenode.BlockTree) (destPath, parentHPath string, err error) {
+	var parentID string
 	baseName := filepath.Base(historyPath)
-	parentID := strings.TrimSuffix(filepath.Base(filepath.Dir(historyPath)), ".sy")
-	parentWorkingDoc := treenode.GetBlockTree(parentID)
+	var parentWorkingDoc *treenode.BlockTree
+	if nil != workingDoc {
+		parentID = path.Base(path.Dir(workingDoc.Path))
+		parentWorkingDoc = treenode.GetBlockTree(parentID)
+	} else {
+		parentID = filepath.Base(filepath.Dir(historyPath))
+		parentWorkingDoc = treenode.GetBlockTree(parentID)
+	}
+
 	if nil != parentWorkingDoc {
 		// 父路径如果是文档，则恢复到父路径下
 		parentDir := strings.TrimSuffix(parentWorkingDoc.Path, ".sy")
@@ -405,7 +448,7 @@ type HistoryItem struct {
 const fileHistoryPageSize = 32
 
 func FullTextSearchHistory(query, box, op string, typ, page int) (ret []string, pageCount, totalCount int) {
-	query = gulu.Str.RemoveInvisible(query)
+	query = util.RemoveInvalid(query)
 	if "" != query && HistoryTypeDocID != typ {
 		query = stringQuery(query)
 	}
@@ -440,7 +483,7 @@ func FullTextSearchHistory(query, box, op string, typ, page int) (ret []string, 
 }
 
 func FullTextSearchHistoryItems(created, query, box, op string, typ int) (ret []*HistoryItem) {
-	query = gulu.Str.RemoveInvisible(query)
+	query = util.RemoveInvalid(query)
 	if "" != query && HistoryTypeDocID != typ {
 		query = stringQuery(query)
 	}
@@ -673,19 +716,24 @@ var boxLatestHistoryTime = map[string]time.Time{}
 
 func (box *Box) recentModifiedDocs() (ret []string) {
 	latestHistoryTime := boxLatestHistoryTime[box.ID]
-	filelock.Walk(filepath.Join(util.DataDir, box.ID), func(path string, info fs.FileInfo, err error) error {
-		if nil == info {
+	filelock.Walk(filepath.Join(util.DataDir, box.ID), func(path string, d fs.DirEntry, err error) error {
+		if nil != err || nil == d {
 			return nil
 		}
-		if isSkipFile(info.Name()) {
-			if info.IsDir() {
+		if isSkipFile(d.Name()) {
+			if d.IsDir() {
 				return filepath.SkipDir
 			}
 			return nil
 		}
 
-		if info.IsDir() {
+		if d.IsDir() {
 			return nil
+		}
+
+		info, err := d.Info()
+		if nil != err {
+			return err
 		}
 
 		if info.ModTime().After(latestHistoryTime) {
@@ -817,8 +865,8 @@ func indexHistoryDir(name string, luteEngine *lute.Lute) {
 
 	entryPath := filepath.Join(util.HistoryDir, name)
 	var docs, assets []string
-	filelock.Walk(entryPath, func(path string, info os.FileInfo, err error) error {
-		if strings.HasSuffix(info.Name(), ".sy") {
+	filelock.Walk(entryPath, func(path string, d fs.DirEntry, err error) error {
+		if strings.HasSuffix(d.Name(), ".sy") {
 			docs = append(docs, path)
 		} else if strings.Contains(path, "assets"+string(os.PathSeparator)) {
 			assets = append(assets, path)

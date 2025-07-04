@@ -20,7 +20,13 @@ import {openMobileFileById} from "../mobile/editor";
 import {lockScreen, exitSiYuan} from "../dialog/processSystem";
 import {Model} from "../layout/Model";
 import {getDockByType} from "../layout/tabUtil";
+/// #if !MOBILE
+import {getAllModels} from "../layout/getAll";
+/// #endif
 import {getAllEditor} from "../layout/getAll";
+import {openSetting} from "../config";
+import {openAttr, openFileAttr} from "../menus/commonMenuItem";
+import {globalCommand} from "../boot/globalEvent/command/global";
 
 let openTab;
 let openWindow;
@@ -176,6 +182,19 @@ const getModelByDockType = (type: TDock | string) => {
     /// #endif
 };
 
+const openAttributePanel = (options: {
+    data?: IObject  // 块属性值
+    nodeElement?: HTMLElement,  // 块元素
+    focusName: "bookmark" | "name" | "alias" | "memo" | "av" | "custom",    // av 为数据库页签，custom 为自定义页签，其余为内置输入框
+    protyle?: IProtyle, // 有数据库时需要传入 protyle
+}) => {
+    if (options.data) {
+        openFileAttr(options.data, options.focusName, options.protyle);
+    } else {
+        openAttr(options.nodeElement, options.focusName, options.protyle);
+    }
+};
+
 export const API = {
     adaptHotkey: updateHotkeyTip,
     confirm: confirmDialog,
@@ -198,5 +217,11 @@ export const API = {
     Menu,
     Setting,
     getAllEditor,
-    platformUtils
+    /// #if !MOBILE
+    getAllModels,
+    /// #endif
+    platformUtils,
+    openSetting,
+    openAttributePanel,
+    globalCommand,
 };

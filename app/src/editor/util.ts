@@ -5,7 +5,7 @@ import {getInstanceById, getWndByLayout, pdfIsLoading, setPanelFocus} from "../l
 import {getDockByType} from "../layout/tabUtil";
 import {getAllModels, getAllTabs} from "../layout/getAll";
 import {highlightById, scrollCenter} from "../util/highlightById";
-import {getDisplayName, pathPosix, showFileInFolder} from "../util/pathName";
+import {getDisplayName, useShell, pathPosix} from "../util/pathName";
 import {Constants} from "../constants";
 import {setEditMode} from "../protyle/util/setEditMode";
 import {Files} from "../layout/dock/Files";
@@ -13,7 +13,7 @@ import {fetchPost, fetchSyncPost} from "../util/fetch";
 import {focusBlock, focusByRange} from "../protyle/util/selection";
 import {onGet} from "../protyle/util/onGet";
 /// #if !BROWSER
-import {ipcRenderer, shell} from "electron";
+import {ipcRenderer} from "electron";
 /// #endif
 import {pushBack} from "../util/backForward";
 import {Asset} from "../asset";
@@ -45,6 +45,7 @@ export const openFileById = async (options: {
     keepCursor?: boolean
     zoomIn?: boolean
     removeCurrentTab?: boolean
+    openNewTab?: boolean
     afterOpen?: (model: Model) => void
 }) => {
     const response = await fetchSyncPost("/api/block/getBlockInfo", {id: options.id});
@@ -67,12 +68,13 @@ export const openFileById = async (options: {
         zoomIn: options.zoomIn,
         keepCursor: options.keepCursor,
         removeCurrentTab: options.removeCurrentTab,
-        afterOpen: options.afterOpen
+        afterOpen: options.afterOpen,
+        openNewTab: options.openNewTab
     });
 };
 
 export const openAsset = (app: App, assetPath: string, page: number | string, position?: string) => {
-    const suffix = pathPosix().extname(assetPath.split("?page")[0]);
+    const suffix = pathPosix().extname(assetPath).split("?")[0];
     if (!Constants.SIYUAN_ASSETS_EXTS.includes(suffix)) {
         return;
     }
@@ -155,7 +157,7 @@ export const openFile = async (options: IOpenFileOptions) => {
         if (search) {
             return search.parent;
         }
-    } else if (!options.position) {
+    } else if (!options.position && !options.openNewTab) {
         let editor: Editor;
         let activeEditor: Editor;
         allModels.editor.find((item) => {
@@ -196,7 +198,7 @@ export const openFile = async (options: IOpenFileOptions) => {
 
     /// #if !BROWSER
     // https://github.com/siyuan-note/siyuan/issues/7491
-    if (!options.position) {
+    if (!options.position || (options.position === "right" && options.assetPath)) {
         let hasMatch = false;
         const optionsClone: IObject = {};
         Object.keys(options).forEach((key: keyof IOpenFileOptions) => {
@@ -276,7 +278,7 @@ export const openFile = async (options: IOpenFileOptions) => {
             }
             wnd.showHeading();
             if (options.afterOpen) {
-                options.afterOpen(createdTab.model);
+                options.afterOpen(createdTab ? createdTab.model : undefined);
             }
             return createdTab;
         }
@@ -380,16 +382,25 @@ const switchEditor = (editor: Editor, options: IOpenFileOptions, allModels: IMod
     } else {
         // 点击大纲产生滚动时会动态加载内容，最终导致定位不准确
         preventScroll(editor.editor.protyle);
+        editor.editor.protyle.observerLoad?.disconnect();
         if (options.action?.includes(Constants.CB_GET_HL)) {
             highlightById(editor.editor.protyle, options.id, true);
         } else if (options.action?.includes(Constants.CB_GET_FOCUS)) {
             if (nodeElement) {
-                const newRange = focusBlock(nodeElement);
+                const newRange = focusBlock(nodeElement, undefined, options.action?.includes(Constants.CB_GET_OUTLINE) ? false : true);
                 if (newRange) {
-                    // 需要更新 range，否则文档大纲点击导致切换页签时因为 resize 中 `保持光标位置不变` 会导致光标跳动
                     editor.editor.protyle.toolbar.range = newRange;
                 }
                 scrollCenter(editor.editor.protyle, nodeElement, true);
+                editor.editor.protyle.observerLoad = new ResizeObserver(() => {
+                    if (document.contains(nodeElement)) {
+                        scrollCenter(editor.editor.protyle, nodeElement, true);
+                    }
+                });
+                setTimeout(() => {
+                    editor.editor.protyle.observerLoad.disconnect();
+                }, 1000 * 3);
+                editor.editor.protyle.observerLoad.observe(editor.editor.protyle.wysiwyg.element);
             } else if (editor.editor.protyle.block.rootID === options.id) {
                 // 由于 https://github.com/siyuan-note/siyuan/issues/5420，移除定位
             } else if (editor.editor.protyle.toolbar.range) {
@@ -410,7 +421,7 @@ const switchEditor = (editor: Editor, options: IOpenFileOptions, allModels: IMod
 const newTab = (options: IOpenFileOptions) => {
     let tab: Tab;
     if (options.assetPath) {
-        const suffix = pathPosix().extname(options.assetPath.split("?page")[0]);
+        const suffix = pathPosix().extname(options.assetPath).split("?")[0];
         if (Constants.SIYUAN_ASSETS_EXTS.includes(suffix)) {
             let icon = "iconPDF";
             if (Constants.SIYUAN_ASSETS_IMAGE.includes(suffix)) {
@@ -684,9 +695,9 @@ export const openBy = (url: string, type: "folder" | "app") => {
     if (url.startsWith("assets/")) {
         fetchPost("/api/asset/resolveAssetPath", {path: url.replace(/\.pdf\?page=\d{1,}$/, ".pdf")}, (response) => {
             if (type === "app") {
-                shell.openPath(response.data);
+                useShell("openPath", response.data);
             } else if (type === "folder") {
-                showFileInFolder(response.data);
+                useShell("showItemInFolder", response.data);
             }
         });
         return;
@@ -698,10 +709,11 @@ export const openBy = (url: string, type: "folder" | "app") => {
     } else {
         address = url.replace("file://", "");
     }
+
     // 拖入文件名包含 `)` 、`(` 的文件以 `file://` 插入后链接解析错误 https://github.com/siyuan-note/siyuan/issues/5786
     address = address.replace(/\\\)/g, ")").replace(/\\\(/g, "(");
     if (type === "app") {
-        shell.openPath(address);
+        useShell("openPath", address);
     } else if (type === "folder") {
         if ("windows" === window.siyuan.config.system.os) {
             if (!address.startsWith("\\\\")) { // \\ 开头的路径是 Windows 网络共享路径 https://github.com/siyuan-note/siyuan/issues/5980
@@ -709,7 +721,7 @@ export const openBy = (url: string, type: "folder" | "app") => {
                 address = address.replace(/\\\\/g, "\\");
             }
         }
-        showFileInFolder(address);
+        useShell("showItemInFolder", address);
     }
     /// #endif
 };

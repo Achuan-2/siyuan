@@ -6,7 +6,7 @@ import {getDockByType} from "../tabUtil";
 import {fetchPost} from "../../util/fetch";
 import {getAllModels} from "../getAll";
 import {hasClosestBlock, hasClosestByClassName, hasTopClosestByClassName} from "../../protyle/util/hasClosest";
-import {setStorageVal, updateHotkeyTip} from "../../protyle/util/compatibility";
+import {setStorageVal, updateHotkeyAfterTip} from "../../protyle/util/compatibility";
 import {openFileById} from "../../editor/util";
 import {Constants} from "../../constants";
 import {escapeHtml} from "../../util/escape";
@@ -89,15 +89,15 @@ export class Outline extends Model {
         <svg class="block__logoicon"><use xlink:href="#iconAlignCenter"></use></svg>${window.siyuan.languages.outline}
     </div>
     <span class="fn__flex-1 fn__space"></span>
-    <span data-type="expand" class="block__icon b3-tooltips b3-tooltips__sw${window.siyuan.storage[Constants.LOCAL_OUTLINE].keepExpand ? " block__icon--active" : ""}" aria-label="${window.siyuan.languages.stickOpen} ${updateHotkeyTip(window.siyuan.config.keymap.editor.general.expand.custom)}">
+    <span data-type="expand" class="block__icon b3-tooltips b3-tooltips__sw${window.siyuan.storage[Constants.LOCAL_OUTLINE].keepExpand ? " block__icon--active" : ""}" aria-label="${window.siyuan.languages.stickOpen}${updateHotkeyAfterTip(window.siyuan.config.keymap.editor.general.expand.custom)}">
         <svg><use xlink:href="#iconExpand"></use></svg>
     </span>
     <span class="fn__space"></span>
-    <span data-type="collapse" class="block__icon b3-tooltips b3-tooltips__sw" aria-label="${window.siyuan.languages.collapse} ${updateHotkeyTip(window.siyuan.config.keymap.editor.general.collapse.custom)}">
+    <span data-type="collapse" class="block__icon b3-tooltips b3-tooltips__sw" aria-label="${window.siyuan.languages.collapse}${updateHotkeyAfterTip(window.siyuan.config.keymap.editor.general.collapse.custom)}">
         <svg><use xlink:href="#iconContract"></use></svg>
     </span>
     <span class="${this.type === "local" ? "fn__none " : ""}fn__space"></span>
-    <span data-type="min" class="${this.type === "local" ? "fn__none " : ""}block__icon b3-tooltips b3-tooltips__sw" aria-label="${window.siyuan.languages.min} ${updateHotkeyTip(window.siyuan.config.keymap.general.closeTab.custom)}"><svg><use xlink:href='#iconMin'></use></svg></span>
+    <span data-type="min" class="${this.type === "local" ? "fn__none " : ""}block__icon b3-tooltips b3-tooltips__sw" aria-label="${window.siyuan.languages.min}${updateHotkeyAfterTip(window.siyuan.config.keymap.general.closeTab.custom)}"><svg><use xlink:href='#iconMin'></use></svg></span>
 </div>
 <div class="b3-list-item fn__none"></div>
 <div class="fn__flex-1" style="padding: 3px 0 8px"></div>`;
@@ -129,7 +129,7 @@ export class Outline extends Model {
                         openFileById({
                             app: options.app,
                             id,
-                            action: zoomIn ? [Constants.CB_GET_FOCUS, Constants.CB_GET_ALL, Constants.CB_GET_HTML] : [Constants.CB_GET_FOCUS, Constants.CB_GET_SETID, Constants.CB_GET_CONTEXT, Constants.CB_GET_HTML],
+                            action: zoomIn ? [Constants.CB_GET_FOCUS, Constants.CB_GET_ALL, Constants.CB_GET_HTML, Constants.CB_GET_OUTLINE] : [Constants.CB_GET_FOCUS, Constants.CB_GET_OUTLINE, Constants.CB_GET_SETID, Constants.CB_GET_CONTEXT, Constants.CB_GET_HTML],
                         });
                     });
                 }
@@ -174,11 +174,11 @@ export class Outline extends Model {
                     const type = target.getAttribute("data-type");
                     switch (type) {
                         case "min":
-                            getDockByType("outline").toggleModel("outline");
+                            getDockByType("outline").toggleModel("outline", false, true);
                             break;
                     }
                     break;
-                } else if (target.isSameNode(this.headerElement.nextElementSibling) || target.classList.contains("block__icons")) {
+                } else if (this.blockId && (target.isSameNode(this.headerElement.nextElementSibling) || target.classList.contains("block__icons"))) {
                     openFileById({
                         app: options.app,
                         id: this.blockId,
@@ -232,6 +232,7 @@ export class Outline extends Model {
                     return true;
                 }
             });
+            const contentRect = this.element.getBoundingClientRect();
             documentSelf.onmousemove = (moveEvent: MouseEvent) => {
                 if (!editor || editor.disabled || Math.abs(moveEvent.clientY - event.clientY) < 3 &&
                     Math.abs(moveEvent.clientX - event.clientX) < 3) {
@@ -249,17 +250,34 @@ export class Outline extends Model {
                 }
                 ghostElement.style.top = moveEvent.clientY + "px";
                 ghostElement.style.left = moveEvent.clientX + "px";
-                selectItem = hasClosestByClassName(moveEvent.target as HTMLElement, "b3-list-item") as HTMLElement;
-                if (!selectItem || selectItem.tagName !== "LI" || selectItem.isSameNode(item) || selectItem.style.position === "fixed" || !this.element.contains(selectItem)) {
+                if (!this.element.contains(moveEvent.target as Element)) {
+                    this.element.querySelectorAll(".dragover__top, .dragover__bottom, .dragover, .dragover__current").forEach(item => {
+                        item.classList.remove("dragover__top", "dragover__bottom", "dragover", "dragover__current");
+                    });
                     return;
                 }
-                this.element.querySelectorAll(".dragover__top, .dragover__bottom, .dragover").forEach(item => {
-                    item.classList.remove("dragover__top", "dragover__bottom", "dragover");
+                if (moveEvent.clientY < contentRect.top + Constants.SIZE_SCROLL_TB || moveEvent.clientY > contentRect.bottom - Constants.SIZE_SCROLL_TB) {
+                    this.element.scroll({
+                        top: this.element.scrollTop + (moveEvent.clientY < contentRect.top + Constants.SIZE_SCROLL_TB ? -Constants.SIZE_SCROLL_STEP : Constants.SIZE_SCROLL_STEP),
+                        behavior: "smooth"
+                    });
+                }
+                selectItem = hasClosestByClassName(moveEvent.target as HTMLElement, "b3-list-item") as HTMLElement;
+                if (!selectItem || selectItem.tagName !== "LI" || selectItem.style.position === "fixed") {
+                    return;
+                }
+                this.element.querySelectorAll(".dragover__top, .dragover__bottom, .dragover, .dragover__current").forEach(item => {
+                    item.classList.remove("dragover__top", "dragover__bottom", "dragover", "dragover__current");
                 });
+                if (selectItem.isSameNode(item)) {
+                    selectItem.classList.add("dragover__current");
+                    return;
+                }
                 const selectRect = selectItem.getBoundingClientRect();
-                if (moveEvent.clientY > selectRect.bottom - 10) {
+                const dragHeight = selectRect.height * .2;
+                if (moveEvent.clientY > selectRect.bottom - dragHeight) {
                     selectItem.classList.add("dragover__bottom");
-                } else if (moveEvent.clientY < selectRect.top + 10) {
+                } else if (moveEvent.clientY < selectRect.top + dragHeight) {
                     selectItem.classList.add("dragover__top");
                 } else {
                     selectItem.classList.add("dragover");
@@ -278,7 +296,8 @@ export class Outline extends Model {
                     selectItem = this.element.querySelector(".dragover__top, .dragover__bottom, .dragover");
                 }
                 let hasChange = true;
-                if (selectItem && selectItem.className.indexOf("dragover") > -1 && editor) {
+                if (selectItem && editor &&
+                    (selectItem.classList.contains("dragover__top") || selectItem.classList.contains("dragover__bottom") || selectItem.classList.contains("dragover"))) {
                     let previousID;
                     let parentID;
                     const undoPreviousID = (item.previousElementSibling && item.previousElementSibling.tagName === "UL") ? item.previousElementSibling.previousElementSibling.getAttribute("data-node-id") : item.previousElementSibling?.getAttribute("data-node-id");
@@ -331,8 +350,8 @@ export class Outline extends Model {
                         return true;
                     }
                 }
-                this.element.querySelectorAll(".dragover__top, .dragover__bottom, .dragover").forEach(item => {
-                    item.classList.remove("dragover__top", "dragover__bottom", "dragover");
+                this.element.querySelectorAll(".dragover__top, .dragover__bottom, .dragover, .dragover__current").forEach(item => {
+                    item.classList.remove("dragover__top", "dragover__bottom", "dragover", "dragover__current");
                 });
             };
         });
@@ -379,7 +398,7 @@ export class Outline extends Model {
         });
         if (!needReload && ops.undoOperations) {
             ops.undoOperations.find((item: IOperation) => {
-                if (item.action === "update" && item.data.indexOf('data-type="NodeHeading"') > -1) {
+                if (item.action === "update" && item.data?.indexOf('data-type="NodeHeading"') > -1) {
                     needReload = true;
                     return true;
                 }
@@ -390,6 +409,10 @@ export class Outline extends Model {
                 id: this.blockId,
                 preview: this.isPreview
             }, response => {
+                // 文档切换后不再更新原有推送 https://github.com/siyuan-note/siyuan/issues/13409
+                if (data.data.rootID !== this.blockId) {
+                    return;
+                }
                 this.update(response);
                 // https://github.com/siyuan-note/siyuan/issues/8372
                 if (getSelection().rangeCount > 0) {
@@ -462,7 +485,8 @@ export class Outline extends Model {
         }
         if (currentElement) {
             currentElement.classList.add("b3-list-item--focus");
-            this.element.scrollTop = currentElement.offsetTop - this.element.clientHeight / 2 - 30;
+            const elementRect = this.element.getBoundingClientRect();
+            this.element.scrollTop = this.element.scrollTop + (currentElement.getBoundingClientRect().top - (elementRect.top + elementRect.height / 2));
         }
     }
 

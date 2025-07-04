@@ -6,7 +6,7 @@ import * as path from "path";
 /// #endif
 import {isBrowser} from "../util/functions";
 import {showMessage} from "../dialog/message";
-import {showFileInFolder} from "../util/pathName";
+import {useShell} from "../util/pathName";
 import {Constants} from "../constants";
 import {openByMobile} from "../protyle/util/compatibility";
 import {exportLayout} from "../layout/util";
@@ -39,6 +39,14 @@ export const exportConfig = {
     <span class="fn__space"></span>
     <input class="b3-switch fn__flex-center" id="markdownYFM" type="checkbox"${window.siyuan.config.export.markdownYFM ? " checked" : ""}/>
 </label>
+<label class="fn__flex b3-label">
+    <div class="fn__flex-1">
+        ${window.siyuan.languages.export31}
+        <div class="b3-label__text">${window.siyuan.languages.export32}</div>
+    </div>
+    <span class="fn__space"></span>
+    <input class="b3-switch fn__flex-center" id="inlineMemo" type="checkbox"${window.siyuan.config.export.inlineMemo ? " checked" : ""}/>
+</label>
 <div class="fn__flex b3-label config__item">
     <div class="fn__flex-1">
         ${window.siyuan.languages.ref}
@@ -49,7 +57,6 @@ export const exportConfig = {
         <option value="2" ${window.siyuan.config.export.blockRefMode === 2 ? "selected" : ""}>${window.siyuan.languages.export2}</option>
         <option value="3" ${window.siyuan.config.export.blockRefMode === 3 ? "selected" : ""}>${window.siyuan.languages.export3}</option>
         <option value="4" ${window.siyuan.config.export.blockRefMode === 4 ? "selected" : ""}>${window.siyuan.languages.export4}</option>
-        <option value="5" ${window.siyuan.config.export.blockRefMode === 5 ? "selected" : ""}>${window.siyuan.languages.export9}</option>
     </select>
 </div>
 <div class="fn__flex b3-label config__item">
@@ -201,6 +208,7 @@ export const exportConfig = {
                 paragraphBeginningSpace: (exportConfig.element.querySelector("#paragraphBeginningSpace") as HTMLInputElement).checked,
                 addTitle: (exportConfig.element.querySelector("#addTitle") as HTMLInputElement).checked,
                 markdownYFM: (exportConfig.element.querySelector("#markdownYFM") as HTMLInputElement).checked,
+                inlineMemo: (exportConfig.element.querySelector("#inlineMemo") as HTMLInputElement).checked,
                 blockRefMode: parseInt((exportConfig.element.querySelector("#blockRefMode") as HTMLSelectElement).value, 10),
                 blockEmbedMode: parseInt((exportConfig.element.querySelector("#blockEmbedMode") as HTMLSelectElement).value, 10),
                 fileAnnotationRefMode: parseInt((exportConfig.element.querySelector("#fileAnnotationRefMode") as HTMLSelectElement).value, 10),
@@ -258,7 +266,7 @@ export const exportConfig = {
         exportConfig.element.querySelector("#exportData").addEventListener("click", async () => {
             /// #if BROWSER
             fetchPost("/api/export/exportData", {}, response => {
-                window.location.href = response.data.zip;
+                openByMobile(response.data.zip);
             });
             /// #else
             const result = await ipcRenderer.invoke(Constants.SIYUAN_GET, {
@@ -285,7 +293,7 @@ export const exportConfig = {
         /// #if !BROWSER
         pandocBinPathElement.addEventListener("click", () => {
             if (window.siyuan.config.export.pandocBin) {
-                showFileInFolder(window.siyuan.config.export.pandocBin);
+                useShell("showItemInFolder", window.siyuan.config.export.pandocBin);
             }
         });
         const pandocBinElement = exportConfig.element.querySelector("#pandocBin") as HTMLInputElement;

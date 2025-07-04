@@ -18,19 +18,11 @@ export const chartRender = (element: Element, cdn = Constants.PROTYLE_CDN) => {
     if (echartsElements.length > 0) {
         addScript(`${cdn}/js/echarts/echarts.min.js?v=5.3.2`, "protyleEchartsScript").then(() => {
             addScript(`${cdn}/js/echarts/echarts-gl.min.js?v=2.0.9`, "protyleEchartsGLScript").then(() => {
-                let width: number = undefined;
-                if (echartsElements[0].firstElementChild.clientWidth === 0) {
-                    const tabElement = hasClosestByClassName(echartsElements[0], "layout-tab-container", true);
-                    if (tabElement) {
-                        Array.from(tabElement.children).find(item => {
-                            if (item.classList.contains("protyle") && !item.classList.contains("fn__none")) {
-                                width = item.querySelector(".protyle-wysiwyg").firstElementChild.clientWidth;
-                                return true;
-                            }
-                        });
-                    }
-                }
                 const wysiswgElement = hasClosestByClassName(element, "protyle-wysiwyg", true);
+                let width: number = undefined;
+                if (wysiswgElement && wysiswgElement.clientWidth > 0 && echartsElements[0].firstElementChild.clientWidth === 0 && wysiswgElement.firstElementChild) {
+                    width = wysiswgElement.firstElementChild.clientWidth;
+                }
                 echartsElements.forEach(async (e: HTMLDivElement) => {
                     if (e.getAttribute("data-render") === "true") {
                         return;
@@ -40,11 +32,15 @@ export const chartRender = (element: Element, cdn = Constants.PROTYLE_CDN) => {
                     }
                     const renderElement = e.firstElementChild.nextElementSibling as HTMLElement;
                     try {
-                        renderElement.style.height = e.style.height;
+                        const chartInstance = window.echarts.getInstanceById(renderElement.getAttribute("_echarts_instance_"));
                         const option = await looseJsonParse(Lute.UnEscapeHTMLStr(e.getAttribute("data-content")));
+                        if (chartInstance && chartInstance.getOption().series[0]?.type !== option.series[0]?.type) {
+                            chartInstance.clear();
+                        }
+                        renderElement.classList.remove("ft__error");
+                        renderElement.style.height = e.style.height;
                         window.echarts.init(renderElement, window.siyuan.config.appearance.mode === 1 ? "dark" : undefined, {width}).setOption(option);
                         e.setAttribute("data-render", "true");
-                        renderElement.classList.remove("ft__error");
                         if (!renderElement.textContent.endsWith(Constants.ZWSP)) {
                             renderElement.firstElementChild.insertAdjacentText("beforeend", Constants.ZWSP);
                         }

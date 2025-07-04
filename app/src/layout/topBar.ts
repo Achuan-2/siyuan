@@ -1,5 +1,5 @@
 import {getWorkspaceName} from "../util/noRelyPCFunction";
-import {isInAndroid, isInIOS, setStorageVal, updateHotkeyTip} from "../protyle/util/compatibility";
+import {isInAndroid, isInHarmony, isInIOS, setStorageVal, updateHotkeyTip} from "../protyle/util/compatibility";
 import {exitSiYuan, processSync} from "../dialog/processSystem";
 import {goBack, goForward} from "../util/backForward";
 import {syncGuide} from "../sync/syncGuide";
@@ -10,7 +10,7 @@ import {openSetting} from "../config";
 import {openSearch} from "../search/spread";
 import {App} from "../index";
 /// #if !BROWSER
-import {webFrame} from "electron";
+import {ipcRenderer, webFrame} from "electron";
 /// #endif
 import {Constants} from "../constants";
 import {isBrowser, isWindow} from "../util/functions";
@@ -54,7 +54,7 @@ export const initBar = (app: App) => {
 <div id="barMode" class="toolbar__item ariaLabel${window.siyuan.config.readonly ? " fn__none" : ""}" aria-label="${window.siyuan.languages.appearanceMode}">
     <svg><use xlink:href="#icon${window.siyuan.config.appearance.modeOS ? "Mode" : (window.siyuan.config.appearance.mode === 0 ? "Light" : "Dark")}"></use></svg>
 </div>
-<div id="barExit" class="ft__error toolbar__item ariaLabel${(isInIOS() || isInAndroid()) ? "" : " fn__none"}" aria-label="${window.siyuan.languages.safeQuit}">
+<div id="barExit" class="ft__error toolbar__item ariaLabel${(isInIOS() || isInAndroid() || isInHarmony()) ? "" : " fn__none"}" aria-label="${window.siyuan.languages.safeQuit}">
     <svg><use xlink:href="#iconQuit"></use></svg>
 </div>
 <div id="barMore" class="toolbar__item ariaLabel" aria-label="${window.siyuan.languages.more}">
@@ -262,39 +262,43 @@ export const initBar = (app: App) => {
 
 export const setZoom = (type: "zoomIn" | "zoomOut" | "restore") => {
     /// #if !BROWSER
-    const isTabWindow = isWindow();
     let zoom = 1;
     if (type === "zoomIn") {
         Constants.SIZE_ZOOM.find((item, index) => {
-            if (item === window.siyuan.storage[Constants.LOCAL_ZOOM]) {
-                zoom = Constants.SIZE_ZOOM[index + 1] || 3;
+            if (item.zoom === window.siyuan.storage[Constants.LOCAL_ZOOM]) {
+                zoom = Constants.SIZE_ZOOM[index + 1]?.zoom || 3;
                 return true;
             }
         });
     } else if (type === "zoomOut") {
         Constants.SIZE_ZOOM.find((item, index) => {
-            if (item === window.siyuan.storage[Constants.LOCAL_ZOOM]) {
-                zoom = Constants.SIZE_ZOOM[index - 1] || 0.25;
+            if (item.zoom === window.siyuan.storage[Constants.LOCAL_ZOOM]) {
+                zoom = Constants.SIZE_ZOOM[index - 1]?.zoom || 0.67;
                 return true;
             }
         });
     }
 
     webFrame.setZoomFactor(zoom);
+    ipcRenderer.send(Constants.SIYUAN_CMD, {
+        cmd: "setTrafficLightPosition",
+        zoom,
+        position: Constants.SIZE_ZOOM.find((item) => item.zoom === zoom).position
+    });
     window.siyuan.storage[Constants.LOCAL_ZOOM] = zoom;
-    if (!isTabWindow) {
-        setStorageVal(Constants.LOCAL_ZOOM, zoom);
-    }
-    const barZoomElement = document.getElementById("barZoom");
-    if (zoom === 1) {
-        barZoomElement.classList.add("fn__none");
-    } else {
-        if (zoom > 1) {
-            barZoomElement.querySelector("use").setAttribute("xlink:href", "#iconZoomIn");
+    setStorageVal(Constants.LOCAL_ZOOM, zoom);
+    if (!isWindow()) {
+        const barZoomElement = document.getElementById("barZoom");
+        if (zoom === 1) {
+            barZoomElement.classList.add("fn__none");
         } else {
-            barZoomElement.querySelector("use").setAttribute("xlink:href", "#iconZoomOut");
+            if (zoom > 1) {
+                barZoomElement.querySelector("use").setAttribute("xlink:href", "#iconZoomIn");
+            } else {
+                barZoomElement.querySelector("use").setAttribute("xlink:href", "#iconZoomOut");
+            }
+            barZoomElement.classList.remove("fn__none");
         }
-        barZoomElement.classList.remove("fn__none");
     }
     /// #endif
 };

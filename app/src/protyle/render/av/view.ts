@@ -3,9 +3,8 @@ import {unicode2Emoji} from "../../../emoji";
 import {transaction} from "../../wysiwyg/transaction";
 import {openMenuPanel} from "./openMenuPanel";
 import {focusBlock} from "../../util/selection";
-import {Constants} from "../../../constants";
 import {upDownHint} from "../../../util/upDownHint";
-import {avRender} from "./render";
+import {escapeAriaLabel, escapeAttr, escapeHtml} from "../../../util/escape";
 
 export const openViewMenu = (options: { protyle: IProtyle, blockElement: HTMLElement, element: HTMLElement }) => {
     if (options.protyle.disabled) {
@@ -16,6 +15,7 @@ export const openViewMenu = (options: { protyle: IProtyle, blockElement: HTMLEle
         return;
     }
     menu.addItem({
+        id: "rename",
         icon: "iconEdit",
         label: window.siyuan.languages.rename,
         click() {
@@ -31,6 +31,7 @@ export const openViewMenu = (options: { protyle: IProtyle, blockElement: HTMLEle
         }
     });
     menu.addItem({
+        id: "config",
         icon: "iconSettings",
         label: window.siyuan.languages.config,
         click() {
@@ -44,6 +45,7 @@ export const openViewMenu = (options: { protyle: IProtyle, blockElement: HTMLEle
     });
     menu.addSeparator();
     menu.addItem({
+        id: "duplicate",
         icon: "iconCopy",
         label: window.siyuan.languages.duplicate,
         click() {
@@ -61,11 +63,11 @@ export const openViewMenu = (options: { protyle: IProtyle, blockElement: HTMLEle
                 id,
                 blockID: options.blockElement.dataset.nodeId
             }]);
-            options.blockElement.setAttribute(Constants.CUSTOM_SY_AV_VIEW, id);
         }
     });
     if (options.blockElement.querySelectorAll(".layout-tab-bar .item").length > 1) {
         menu.addItem({
+            id: "delete",
             icon: "iconTrashcan",
             label: window.siyuan.languages.delete,
             click() {
@@ -120,57 +122,86 @@ export const bindViewEvent = (options: {
         }
     });
     inputElement.select();
-    const toggleTitleElement = options.menuElement.querySelector('.b3-switch[data-type="toggle-view-title"]') as HTMLInputElement;
-    toggleTitleElement.addEventListener("change", () => {
-        const avID = options.blockElement.getAttribute("data-av-id");
-        const blockID = options.blockElement.getAttribute("data-node-id");
-        if (!toggleTitleElement.checked) {
-            // hide
-            transaction(options.protyle, [{
-                action: "hideAttrViewName",
-                avID,
-                blockID,
-                data: true
-            }], [{
-                action: "hideAttrViewName",
-                avID,
-                blockID,
-                data: false
-            }]);
-            options.blockElement.querySelector(".av__title").classList.add("fn__none");
-        } else {
-            transaction(options.protyle, [{
-                action: "hideAttrViewName",
-                avID,
-                blockID,
-                data: false
-            }], [{
-                action: "hideAttrViewName",
-                avID,
-                blockID,
-                data: true
-            }]);
-            options.blockElement.querySelector(".av__title").classList.remove("fn__none");
+    inputElement.value = inputElement.dataset.value;
+    const descElement = options.menuElement.querySelector('.b3-text-field[data-type="desc"]') as HTMLTextAreaElement;
+    inputElement.nextElementSibling.addEventListener("click", () => {
+        const descPanelElement = descElement.parentElement;
+        descPanelElement.classList.toggle("fn__none");
+        if (!descPanelElement.classList.contains("fn__none")) {
+            descElement.focus();
         }
+    });
+    descElement.addEventListener("blur", () => {
+        if (descElement.value !== descElement.dataset.value) {
+            transaction(options.protyle, [{
+                action: "setAttrViewViewDesc",
+                avID: options.data.id,
+                id: options.data.viewID,
+                data: descElement.value
+            }], [{
+                action: "setAttrViewViewDesc",
+                avID: options.data.id,
+                id: options.data.viewID,
+                data: descElement.dataset.value
+            }]);
+            descElement.dataset.value = descElement.value;
+        }
+    });
+    descElement.addEventListener("keydown", (event) => {
+        if (event.isComposing) {
+            return;
+        }
+        if (event.key === "Enter") {
+            event.preventDefault();
+            descElement.blur();
+            options.menuElement.parentElement.remove();
+        }
+    });
+    descElement.addEventListener("input", () => {
+        inputElement.nextElementSibling.setAttribute("aria-label", descElement.value ? escapeHtml(descElement.value) : window.siyuan.languages.addDesc);
     });
 };
 
 export const getViewHTML = (data: IAV) => {
     const view = data.view;
+    let fields: IAVColumn[];
+    if (data.viewType === "table") {
+        fields = (view as IAVTable).columns;
+    } else if (data.viewType === "gallery") {
+        fields = (view as IAVGallery).fields;
+    }
     return `<div class="b3-menu__items">
 <button class="b3-menu__item" data-type="nobg">
     <span class="b3-menu__label ft__center">${window.siyuan.languages.config}</span>
 </button>
 <button class="b3-menu__separator"></button>
 <button class="b3-menu__item" data-type="nobg">
-    <span class="b3-menu__avemoji" data-icon="${view.icon}" data-type="update-view-icon">${view.icon ? unicode2Emoji(view.icon) : '<svg style="height: 14px;width: 14px"><use xlink:href="#iconTable"></use></svg>'}</span>
-    <input data-type="name" class="b3-text-field fn__block" type="text" value="${view.name}" data-value="${view.name}" style="margin: 4px 0">
+    <div class="fn__block">
+        <div class="fn__flex">
+            <span class="b3-menu__avemoji" data-type="update-view-icon">${view.icon ? unicode2Emoji(view.icon) : `<svg style="height: 14px;width: 14px"><use xlink:href="#${getViewIcon(data.viewType)}"></use></svg>`}</span>
+            <div class="b3-form__icona fn__block">
+                <input data-type="name" class="b3-text-field b3-form__icona-input" type="text" data-value="${escapeAttr(view.name)}">
+                <svg data-position="north" class="b3-form__icona-icon ariaLabel" aria-label="${view.desc ? escapeAriaLabel(view.desc) : window.siyuan.languages.addDesc}"><use xlink:href="#iconInfo"></use></svg>
+            </div>
+        </div>
+        <div class="fn__none">
+            <div class="fn__hr"></div>
+            <textarea placeholder="${window.siyuan.languages.addDesc}" rows="1" data-type="desc" class="b3-text-field fn__block" type="text" data-value="${escapeAttr(view.desc)}">${view.desc}</textarea>
+        </div>
+        <div class="fn__hr"></div>
+    </div>
+</button>
+<button class="b3-menu__item" data-type="go-layout">
+    <svg class="b3-menu__icon"><use xlink:href="#${getViewIcon(data.viewType)}"></use></svg>
+    <span class="b3-menu__label">${window.siyuan.languages.layout}</span>
+    <span class="b3-menu__accelerator">${getViewName(data.viewType)}</span>
+    <svg class="b3-menu__icon b3-menu__icon--small"><use xlink:href="#iconRight"></use></svg>
 </button>
 <button class="b3-menu__separator"></button>
 <button class="b3-menu__item" data-type="go-properties">
     <svg class="b3-menu__icon"></svg>
-    <span class="b3-menu__label">${window.siyuan.languages.attr}</span>
-    <span class="b3-menu__accelerator">${view.columns.filter((item: IAVColumn) => !item.hidden).length}/${view.columns.length}</span>
+    <span class="b3-menu__label">${window.siyuan.languages.fields}</span>
+    <span class="b3-menu__accelerator">${fields.filter((item: IAVColumn) => !item.hidden).length}/${fields.length}</span>
     <svg class="b3-menu__icon b3-menu__icon--small"><use xlink:href="#iconRight"></use></svg>
 </button>
 <button class="b3-menu__item" data-type="goFilters">
@@ -185,18 +216,6 @@ export const getViewHTML = (data: IAV) => {
     <span class="b3-menu__accelerator">${view.sorts.length}</span>
     <svg class="b3-menu__icon b3-menu__icon--small"><use xlink:href="#iconRight"></use></svg>
 </button>
-<button class="b3-menu__item" data-type="set-page-size" data-size="${view.pageSize}">
-    <svg class="b3-menu__icon"></svg>
-    <span class="b3-menu__label">${window.siyuan.languages.entryNum}</span>
-    <span class="b3-menu__accelerator">${view.pageSize === Constants.SIZE_DATABASE_MAZ_SIZE ? window.siyuan.languages.all : view.pageSize}</span>
-    <svg class="b3-menu__icon b3-menu__icon--small"><use xlink:href="#iconRight"></use></svg>
-</button>
-<label class="b3-menu__item">
-    <svg class="b3-menu__icon"></svg>
-    <span class="fn__flex-center">${window.siyuan.languages.showTitle}</span>
-    <span class="fn__space fn__flex-1"></span>
-    <input data-type="toggle-view-title" type="checkbox" class="b3-switch b3-switch--menu" ${view.hideAttrViewName ? "" : "checked"}>
-</label>
 <button class="b3-menu__separator"></button>
 <button class="b3-menu__item" data-type="duplicate-view">
     <svg class="b3-menu__icon">
@@ -223,8 +242,12 @@ export const bindSwitcherEvent = (options: { protyle: IProtyle, menuElement: Ele
         if (event.key === "Enter") {
             const currentElement = options.menuElement.querySelector(".b3-menu__item--current") as HTMLElement;
             if (currentElement) {
-                options.blockElement.removeAttribute("data-render");
-                avRender(options.blockElement, options.protyle, undefined, currentElement.dataset.id);
+                transaction(options.protyle, [{
+                    action: "setAttrViewBlockView",
+                    blockID: options.blockElement.getAttribute("data-node-id"),
+                    id: currentElement.dataset.id,
+                    avID: options.blockElement.getAttribute("data-av-id"),
+                }]);
                 options.menuElement.remove();
                 focusBlock(options.blockElement);
             }
@@ -267,9 +290,9 @@ export const getSwitcherHTML = (views: IAVView[], viewId: string) => {
     views.forEach((item) => {
         html += `<button draggable="true" class="b3-menu__item${item.id === viewId ? " b3-menu__item--current" : ""}" data-id="${item.id}">
     <svg class="b3-menu__icon fn__grab"><use xlink:href="#iconDrag"></use></svg>
-    <div class="b3-menu__label fn__flex" data-type="av-view-switch">
-        ${item.icon ? unicode2Emoji(item.icon, "b3-menu__icon", true) : '<svg class="b3-menu__icon"><use xlink:href="#iconTable"></use></svg>'}
-        ${item.name}
+    <div class="b3-menu__label fn__flex" data-type="av-view-switch" data-av-type="${item.type}">
+        ${item.icon ? unicode2Emoji(item.icon, "b3-menu__icon", true) : `<svg class="b3-menu__icon"><use xlink:href="#${getViewIcon(item.type)}"></use></svg>`}
+        <span class="fn__ellipsis">${item.name}</span>
     </div>
     <svg class="b3-menu__action" data-type="av-view-edit"><use xlink:href="#iconEdit"></use></svg>
 </button>`;
@@ -280,7 +303,7 @@ export const getSwitcherHTML = (views: IAVView[], viewId: string) => {
     <span class="b3-menu__label">${window.siyuan.languages.newView}</span>
 </button>
 <button class="b3-menu__separator"></button>
-<div class="b3-menu__item b3-menu__item--readonly fn__flex-shrink" data-type="nobg">
+<div class="b3-menu__item fn__flex-shrink" data-type="nobg">
     <input class="b3-text-field fn__block" type="text" style="margin: 4px 0" placeholder="${window.siyuan.languages.search}">
 </div>
 <div class="fn__flex-1" style="overflow: auto">
@@ -292,16 +315,72 @@ export const getSwitcherHTML = (views: IAVView[], viewId: string) => {
 export const addView = (protyle: IProtyle, blockElement: Element) => {
     const id = Lute.NewNodeID();
     const avID = blockElement.getAttribute("data-av-id");
-    transaction(protyle, [{
-        action: "addAttrViewView",
-        avID,
-        id,
-        blockID: blockElement.getAttribute("data-node-id")
-    }], [{
-        action: "removeAttrViewView",
-        avID,
-        id,
-        blockID: blockElement.getAttribute("data-node-id")
-    }]);
-    blockElement.setAttribute(Constants.CUSTOM_SY_AV_VIEW, id);
+    const viewElement = blockElement.querySelector(".av__views");
+    const addMenu = new Menu(undefined, () => {
+        viewElement.classList.remove("av__views--show");
+    });
+    addMenu.addItem({
+        icon: "iconTable",
+        label: window.siyuan.languages.table,
+        click() {
+            transaction(protyle, [{
+                action: "addAttrViewView",
+                avID,
+                id,
+                blockID: blockElement.getAttribute("data-node-id")
+            }], [{
+                action: "removeAttrViewView",
+                avID,
+                id,
+                blockID: blockElement.getAttribute("data-node-id")
+            }]);
+        }
+    });
+    addMenu.addItem({
+        icon: "iconGallery",
+        label: window.siyuan.languages.gallery,
+        click() {
+            transaction(protyle, [{
+                action: "addAttrViewView",
+                avID,
+                layout: "gallery",
+                id,
+                blockID: blockElement.getAttribute("data-node-id")
+            }], [{
+                action: "removeAttrViewView",
+                layout: "gallery",
+                avID,
+                id,
+                blockID: blockElement.getAttribute("data-node-id")
+            }]);
+        }
+    });
+    viewElement.classList.add("av__views--show");
+    const addRect = viewElement.querySelector('.block__icon[data-type="av-add"]')?.getBoundingClientRect();
+    addMenu.open({
+        x: addRect.left,
+        y: addRect.bottom + 8
+    });
+};
+
+export const getViewIcon = (type: string) => {
+    switch (type) {
+        case "table":
+            return "iconTable";
+        case "gallery":
+            return "iconGallery";
+    }
+};
+
+export const getViewName = (type: string) => {
+    switch (type) {
+        case "table":
+            return window.siyuan.languages.table;
+        case "gallery":
+            return window.siyuan.languages.gallery;
+    }
+};
+
+export const getFieldsByData = (data: IAV) => {
+    return data.viewType === "table" ? (data.view as IAVTable).columns : (data.view as IAVGallery).fields;
 };

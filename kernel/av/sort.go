@@ -24,12 +24,9 @@ import (
 	"github.com/siyuan-note/siyuan/kernel/util"
 )
 
-type Sortable interface {
-	SortRows(attrView *AttributeView)
-}
-
+// ViewSort 描述了视图排序规则的结构。
 type ViewSort struct {
-	Column string    `json:"column"` // 列 ID
+	Column string    `json:"column"` // 列（字段）ID
 	Order  SortOrder `json:"order"`  // 排序顺序
 }
 
@@ -68,7 +65,7 @@ func (value *Value) Compare(other *Value, attrView *AttributeView) int {
 				return 0
 			}
 
-			if util.PinYinCompare(value.Text.Content, other.Text.Content) {
+			if util.EmojiPinYinCompare(value.Text.Content, other.Text.Content) {
 				return -1
 			}
 			return 1
@@ -243,7 +240,7 @@ func (value *Value) Compare(other *Value, attrView *AttributeView) int {
 				return 0
 			}
 
-			if util.PinYinCompare(v1, v2) {
+			if util.EmojiPinYinCompare(v1, v2) {
 				return -1
 			}
 			return 1
@@ -266,7 +263,7 @@ func (value *Value) Compare(other *Value, attrView *AttributeView) int {
 				return 0
 			}
 
-			if util.PinYinCompare(value.Template.Content, other.Template.Content) {
+			if util.EmojiPinYinCompare(value.Template.Content, other.Template.Content) {
 				return -1
 			}
 			return 1
@@ -314,7 +311,7 @@ func (value *Value) Compare(other *Value, attrView *AttributeView) int {
 				return 0
 			}
 
-			if util.PinYinCompare(vContent, oContent) {
+			if util.EmojiPinYinCompare(vContent, oContent) {
 				return -1
 			}
 			return 1
@@ -352,7 +349,7 @@ func (value *Value) Compare(other *Value, attrView *AttributeView) int {
 				return 0
 			}
 
-			if util.PinYinCompare(vContent, oContent) {
+			if util.EmojiPinYinCompare(vContent, oContent) {
 				return -1
 			}
 			return 1

@@ -1,7 +1,7 @@
 @import "util/mixin";
 @import "component/tooltips";
-@import "component/typography";
 @import "protyle/wysiwyg";
+@import "component/typography";
 @import "protyle/attr";
 @import "util/function";
 @import "business/history";
@@ -34,6 +34,21 @@ svg {
   }
 }
 
+.protyle-wysiwyg .table[data-node-id] {
+  &[style*="text-align: left"][style*="direction: rtl"] {
+    direction: ltr !important;
+  }
+
+  &[style*="text-align: center"] {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  &[style*="text-align: right"] {
+    margin-left: auto;
+  }
+}
+
 @media print {
   // 尽量避免块内分页
   .protyle-wysiwyg [data-node-id] {
@@ -42,7 +57,7 @@ svg {
     &[data-type=NodeHeading],
     &[data-type=NodeIFrame],
     &[data-type=NodeMathBlock],
-    &[data-type=NodeParagraph],
+    // 移除段落块元素 https://github.com/siyuan-note/siyuan/issues/14702 &[data-type=NodeParagraph],
     &[data-type=NodeThematicBreak],
     &[data-type=NodeVideo],
     &[data-type=NodeWidget],

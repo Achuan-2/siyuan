@@ -1,5 +1,6 @@
 import {popSearch} from "./search";
 import {initAppearance} from "../settings/appearance";
+import {initAssets} from "../settings/assets";
 import {closePanel} from "../util/closePanel";
 import {mountHelp, newDailyNote, newNotebook} from "../../util/mount";
 import {repos} from "../../config/repos";
@@ -7,7 +8,7 @@ import {exitSiYuan, lockScreen, processSync} from "../../dialog/processSystem";
 import {openHistory} from "../../history/history";
 import {syncGuide} from "../../sync/syncGuide";
 import {openCard} from "../../card/openCard";
-import {activeBlur, hideKeyboardToolbar} from "../util/keyboardToolbar";
+import {activeBlur} from "../util/keyboardToolbar";
 import {initAI} from "../settings/ai";
 import {initRiffCard} from "../settings/riffCard";
 import {login, showAccountInfo} from "../settings/account";
@@ -16,15 +17,22 @@ import {initAbout} from "../settings/about";
 import {getRecentDocs} from "./getRecentDocs";
 import {initEditor} from "../settings/editor";
 import {App} from "../../index";
-import {isDisabledFeature, isHuawei, isInAndroid, isInIOS, isIPhone} from "../../protyle/util/compatibility";
+import {
+    isDisabledFeature,
+    isHuawei,
+    isInAndroid,
+    isInHarmony,
+    isInIOS,
+    isIPhone
+} from "../../protyle/util/compatibility";
 import {newFile} from "../../util/newFile";
 import {afterLoadPlugin} from "../../plugin/loader";
 import {commandPanel} from "../../boot/globalEvent/command/panel";
 import {openTopBarMenu} from "../../plugin/openTopBarMenu";
+import {initFileTree} from "../settings/fileTree";
 
 export const popMenu = () => {
     activeBlur();
-    hideKeyboardToolbar();
     document.getElementById("menu").style.transform = "translateX(0px)";
 };
 
@@ -88,18 +96,24 @@ export const initRightMenu = (app: App) => {
     <div class="b3-menu__item${window.siyuan.config.readonly ? " fn__none" : ""}" id="menuHistory">
         <svg class="b3-menu__icon"><use xlink:href="#iconHistory"></use></svg><span class="b3-menu__label">${window.siyuan.languages.dataHistory}</span>
     </div>
-    <div class="b3-menu__separator${(isInAndroid() || isInIOS()) ? "" : " fn__none"}"></div>
-    <div class="b3-menu__item b3-menu__item--warning${(isInAndroid() || isInIOS()) ? "" : " fn__none"}" id="menuSafeQuit">
+    <div class="b3-menu__separator${(isInAndroid() || isInIOS() || isInHarmony()) ? "" : " fn__none"}"></div>
+    <div class="b3-menu__item b3-menu__item--warning${(isInAndroid() || isInIOS() || isInHarmony()) ? "" : " fn__none"}" id="menuSafeQuit">
         <svg class="b3-menu__icon"><use xlink:href="#iconQuit"></use></svg><span class="b3-menu__label">${window.siyuan.languages.safeQuit}</span>
     </div>
     <div class="b3-menu__separator"></div>
     <div class="b3-menu__item${window.siyuan.config.readonly ? " fn__none" : ""}" id="menuEditor">
         <svg class="b3-menu__icon"><use xlink:href="#iconEdit"></use></svg><span class="b3-menu__label">${window.siyuan.languages.editor}</span>
     </div>
+    <div class="b3-menu__item${window.siyuan.config.readonly ? " fn__none" : ""}" id="menuFileTree">
+        <svg class="b3-menu__icon"><use xlink:href="#iconFiles"></use></svg><span class="b3-menu__label">${window.siyuan.languages.fileTree}</span>
+    </div>
     <div class="b3-menu__item${window.siyuan.config.readonly ? " fn__none" : ""}" id="menuRiffCard">
         <svg class="b3-menu__icon"><use xlink:href="#iconRiffCard"></use></svg><span class="b3-menu__label">${window.siyuan.languages.riffCard}</span>
     </div>
     ${aiHTML}
+    <div class="b3-menu__item${window.siyuan.config.readonly ? " fn__none" : ""}" id="menuAssets">
+        <svg class="b3-menu__icon"><use xlink:href="#iconImage"></use></svg><span class="b3-menu__label">${window.siyuan.languages.assets}</span>
+    </div>
     <div class="b3-menu__item${window.siyuan.config.readonly ? " fn__none" : ""}" id="menuAppearance">
         <svg class="b3-menu__icon"><use xlink:href="#iconTheme"></use></svg><span class="b3-menu__label">${window.siyuan.languages.appearance}</span>
     </div>
@@ -155,6 +169,11 @@ export const initRightMenu = (app: App) => {
                 event.preventDefault();
                 event.stopPropagation();
                 break;
+            } else if (target.id === "menuAssets") {
+                initAssets();
+                event.preventDefault();
+                event.stopPropagation();
+                break;
             } else if (target.id === "menuAI") {
                 initAI();
                 event.preventDefault();
@@ -167,6 +186,11 @@ export const initRightMenu = (app: App) => {
                 break;
             } else if (target.id === "menuEditor") {
                 initEditor();
+                event.preventDefault();
+                event.stopPropagation();
+                break;
+            } else if (target.id === "menuFileTree") {
+                initFileTree();
                 event.preventDefault();
                 event.stopPropagation();
                 break;

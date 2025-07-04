@@ -37,6 +37,7 @@ func refreshBacklink(c *gin.Context) {
 
 	id := arg["id"].(string)
 	model.RefreshBacklink(id)
+	model.FlushTxQueue()
 }
 
 func getBackmentionDoc(c *gin.Context) {
@@ -55,9 +56,14 @@ func getBackmentionDoc(c *gin.Context) {
 	if val, ok := arg["containChildren"]; ok {
 		containChildren = val.(bool)
 	}
-	backlinks := model.GetBackmentionDoc(defID, refTreeID, keyword, containChildren)
+	highlight := true
+	if val, ok := arg["highlight"]; ok {
+		highlight = val.(bool)
+	}
+	backlinks, keywords := model.GetBackmentionDoc(defID, refTreeID, keyword, containChildren, highlight)
 	ret.Data = map[string]interface{}{
 		"backmentions": backlinks,
+		"keywords":     keywords,
 	}
 }
 
@@ -77,9 +83,14 @@ func getBacklinkDoc(c *gin.Context) {
 	if val, ok := arg["containChildren"]; ok {
 		containChildren = val.(bool)
 	}
-	backlinks := model.GetBacklinkDoc(defID, refTreeID, keyword, containChildren)
+	highlight := true
+	if val, ok := arg["highlight"]; ok {
+		highlight = val.(bool)
+	}
+	backlinks, keywords := model.GetBacklinkDoc(defID, refTreeID, keyword, containChildren, highlight)
 	ret.Data = map[string]interface{}{
 		"backlinks": backlinks,
+		"keywords":  keywords,
 	}
 }
 

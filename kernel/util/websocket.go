@@ -182,12 +182,17 @@ func PushReloadFiletree() {
 	BroadcastByType("filetree", "reloadFiletree", 0, "", nil)
 }
 
+func PushReloadTag() {
+	BroadcastByType("main", "reloadTag", 0, "", nil)
+}
+
 type BlockStatResult struct {
 	RuneCount  int `json:"runeCount"`
 	WordCount  int `json:"wordCount"`
 	LinkCount  int `json:"linkCount"`
 	ImageCount int `json:"imageCount"`
 	RefCount   int `json:"refCount"`
+	BlockCount int `json:"blockCount"`
 }
 
 func ContextPushMsg(context map[string]interface{}, msg string) {
@@ -240,6 +245,10 @@ func PushClearProgress() {
 	BroadcastByType("main", "cprogress", 0, "", nil)
 }
 
+func PushUpdateIDs(ids map[string]string) {
+	BroadcastByType("main", "updateids", 0, "", ids)
+}
+
 func PushReloadDoc(rootID string) {
 	BroadcastByType("main", "reloaddoc", 0, "", rootID)
 }
@@ -266,8 +275,12 @@ func PushSetRefDynamicText(rootID, blockID, defBlockID, refText string) {
 	BroadcastByType("main", "setRefDynamicText", 0, "", map[string]interface{}{"rootID": rootID, "blockID": blockID, "defBlockID": defBlockID, "refText": refText})
 }
 
-func PushSetDefRefCount(rootID, blockID string, refIDs []string, refCount, rootRefCount int) {
-	BroadcastByType("main", "setDefRefCount", 0, "", map[string]interface{}{"rootID": rootID, "blockID": blockID, "refCount": refCount, "rootRefCount": rootRefCount, "refIDs": refIDs})
+func PushSetDefRefCount(rootID, blockID string, defIDs []string, refCount, rootRefCount int) {
+	BroadcastByType("main", "setDefRefCount", 0, "", map[string]interface{}{"rootID": rootID, "blockID": blockID, "refCount": refCount, "rootRefCount": rootRefCount, "defIDs": defIDs})
+}
+
+func PushLocalShorthandCount(count int) {
+	BroadcastByType("main", "setLocalShorthandCount", 0, "", map[string]interface{}{"count": count})
 }
 
 func PushProtyleLoading(rootID, msg string) {

@@ -119,6 +119,7 @@ func getCurrentTasks() (ret []*Task) {
 
 const (
 	RepoCheckout                    = "task.repo.checkout"                 // 从快照中检出
+	RepoAutoPurge                   = "task.repo.autoPurge"                // 自动清理数据仓库
 	DatabaseIndexFull               = "task.database.index.full"           // 重建索引
 	DatabaseIndex                   = "task.database.index"                // 数据库索引
 	DatabaseIndexCommit             = "task.database.index.commit"         // 数据库索引提交
@@ -135,14 +136,18 @@ const (
 	CacheVirtualBlockRef            = "task.cache.virtualBlockRef"         // 缓存虚拟块引用
 	ReloadAttributeView             = "task.reload.attributeView"          // 重新加载属性视图
 	ReloadProtyle                   = "task.reload.protyle"                // 重新加载编辑器
+	ReloadTag                       = "task.reload.tag"                    // 重新加载标签面板
+	ReloadFiletree                  = "task.reload.filetree"               // 重新加载文档树面板
 	SetRefDynamicText               = "task.ref.setDynamicText"            // 设置引用的动态锚文本
 	SetDefRefCount                  = "task.def.setRefCount"               // 设置定义的引用计数
+	UpdateIDs                       = "task.update.ids"                    // 更新 ID
 	PushMsg                         = "task.push.msg"                      // 推送消息
 )
 
 // uniqueActions 描述了唯一的任务，即队列中只能存在一个在执行的任务。
 var uniqueActions = []string{
 	RepoCheckout,
+	RepoAutoPurge,
 	DatabaseIndexFull,
 	DatabaseIndexCommit,
 	OCRImage,
@@ -153,8 +158,11 @@ var uniqueActions = []string{
 	AssetContentDatabaseIndexCommit,
 	ReloadAttributeView,
 	ReloadProtyle,
+	ReloadTag,
+	ReloadFiletree,
 	SetRefDynamicText,
 	SetDefRefCount,
+	UpdateIDs,
 }
 
 func ContainIndexTask() bool {
@@ -175,7 +183,7 @@ func StatusJob() {
 	queueLock.Lock()
 	for _, task := range taskQueue {
 		action := task.Action
-		if c := count[action]; 2 < c {
+		if c := count[action]; 7 < c {
 			logging.LogWarnf("too many tasks [%s], ignore show its status", action)
 			continue
 		}

@@ -3,7 +3,6 @@ import {fetchPost} from "../../util/fetch";
 import {isMac, writeText} from "../util/compatibility";
 import {focusBlock, getSelectionOffset, setFirstNodeRange, setLastNodeRange,} from "../util/selection";
 import {getContenteditableElement, getNextBlock} from "./getBlock";
-import {hasClosestByMatchTag} from "../util/hasClosest";
 import {hideElements} from "../ui/hideElements";
 import {countBlockWord} from "../../layout/status";
 import {scrollCenter} from "../../util/highlightById";
@@ -13,19 +12,10 @@ import {Constants} from "../../constants";
 import * as dayjs from "dayjs";
 import {net2LocalAssets} from "../breadcrumb/action";
 import {processClonePHElement} from "../render/util";
+import {copyTextByType} from "../toolbar/util";
+import {hasClosestByTag} from "../util/hasClosest";
 
 export const commonHotkey = (protyle: IProtyle, event: KeyboardEvent, nodeElement?: HTMLElement) => {
-    if (matchHotKey(window.siyuan.config.keymap.editor.general.copyHPath.custom, event)) {
-        fetchPost("/api/filetree/getHPathByID", {
-            id: protyle.block.rootID
-        }, (response) => {
-            writeText(response.data);
-        });
-        event.preventDefault();
-        event.stopPropagation();
-        return true;
-    }
-
     if (matchHotKey(window.siyuan.config.keymap.editor.general.netImg2LocalAsset.custom, event)) {
         net2LocalAssets(protyle, "Img");
         event.preventDefault();
@@ -48,12 +38,71 @@ export const commonHotkey = (protyle: IProtyle, event: KeyboardEvent, nodeElemen
         event.stopPropagation();
         return true;
     }
+    if (matchHotKey(window.siyuan.config.keymap.editor.general.copyHPath.custom, event)) {
+        fetchPost("/api/filetree/getHPathByID", {
+            id: protyle.block.rootID
+        }, (response) => {
+            writeText(response.data);
+        });
+        event.preventDefault();
+        event.stopPropagation();
+        return true;
+    }
 
     if (matchHotKey(window.siyuan.config.keymap.editor.general.copyProtocolInMd.custom, event)) {
-        const id = nodeElement ? nodeElement.getAttribute("data-node-id") : protyle.block.rootID;
-        fetchPost("/api/block/getRefText", {id}, (response) => {
-            writeText(`[${response.data}](siyuan://blocks/${id})`);
-        });
+        if (nodeElement) {
+            const selectElements = Array.from(protyle.wysiwyg.element.querySelectorAll(".protyle-wysiwyg--select"));
+            if (selectElements.length === 0) {
+                selectElements.push(nodeElement);
+            }
+            copyTextByType(selectElements.map(item => item.getAttribute("data-node-id")), "protocolMd");
+        } else {
+            copyTextByType([protyle.block.rootID], "protocolMd");
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        return true;
+    }
+
+    if (matchHotKey(window.siyuan.config.keymap.editor.general.copyID.custom, event)) {
+        if (nodeElement) {
+            const selectElements = Array.from(protyle.wysiwyg.element.querySelectorAll(".protyle-wysiwyg--select"));
+            if (selectElements.length === 0) {
+                selectElements.push(nodeElement);
+            }
+            copyTextByType(selectElements.map(item => item.getAttribute("data-node-id")), "id");
+        } else {
+            copyTextByType([protyle.block.rootID], "id");
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        return true;
+    }
+    if (matchHotKey(window.siyuan.config.keymap.editor.general.copyProtocol.custom, event)) {
+        if (nodeElement) {
+            const selectElements = Array.from(protyle.wysiwyg.element.querySelectorAll(".protyle-wysiwyg--select"));
+            if (selectElements.length === 0) {
+                selectElements.push(nodeElement);
+            }
+            copyTextByType(selectElements.map(item => item.getAttribute("data-node-id")), "protocol");
+        } else {
+            copyTextByType([protyle.block.rootID], "protocol");
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        return true;
+    }
+
+    if (matchHotKey(window.siyuan.config.keymap.editor.general.copyBlockEmbed.custom, event)) {
+        if (nodeElement) {
+            const selectElements = Array.from(protyle.wysiwyg.element.querySelectorAll(".protyle-wysiwyg--select"));
+            if (selectElements.length === 0) {
+                selectElements.push(nodeElement);
+            }
+            copyTextByType(selectElements.map(item => item.getAttribute("data-node-id")), "blockEmbed");
+        } else {
+            copyTextByType([protyle.block.rootID], "blockEmbed");
+        }
         event.preventDefault();
         event.stopPropagation();
         return true;
@@ -91,7 +140,7 @@ export const upSelect = (options: {
         options.event.stopPropagation();
         options.event.preventDefault();
     } else {
-        const tdElement = hasClosestByMatchTag(options.range.startContainer, "TD") || hasClosestByMatchTag(options.range.startContainer, "TH");
+        const tdElement = hasClosestByTag(options.range.startContainer, "TD") || hasClosestByTag(options.range.startContainer, "TH");
         const nodeEditableElement = (tdElement || getContenteditableElement(options.nodeElement) || options.nodeElement) as HTMLElement;
         const startIndex = getSelectionOffset(nodeEditableElement, options.editorElement, options.range).start;
         const innerText = nodeEditableElement.innerText;
@@ -138,7 +187,7 @@ export const downSelect = (options: {
         options.event.stopPropagation();
         options.event.preventDefault();
     } else {
-        const tdElement = hasClosestByMatchTag(options.range.startContainer, "TD") || hasClosestByMatchTag(options.range.startContainer, "TH");
+        const tdElement = hasClosestByTag(options.range.startContainer, "TD") || hasClosestByTag(options.range.startContainer, "TH");
         const nodeEditableElement = (tdElement || getContenteditableElement(options.nodeElement) || options.nodeElement) as HTMLElement;
         const endIndex = getSelectionOffset(nodeEditableElement, options.editorElement, options.range).end;
         const innerText = nodeEditableElement.innerText;
@@ -156,6 +205,9 @@ export const downSelect = (options: {
                     // 代码块中 shift+alt 向下选中到末尾时，最后一个字符无法选中
                     options.event.preventDefault();
                 }
+            } else if (tdElement) {
+                setLastNodeRange(tdElement, options.range, false);
+                options.event.preventDefault();
             }
             return;
         }
@@ -206,7 +258,8 @@ export const duplicateBlock = (nodeElements: Element[], protyle: IProtyle) => {
     const doOperations: IOperation[] = [];
     const undoOperations: IOperation[] = [];
     let starIndex: number;
-    if (nodeElements[nodeElements.length - 1].getAttribute("data-subtype") === "o") {
+    if (nodeElements[nodeElements.length - 1].classList.contains("li") &&
+        nodeElements[nodeElements.length - 1].getAttribute("data-subtype") === "o") {
         starIndex = parseInt(nodeElements[nodeElements.length - 1].getAttribute("data-marker"), 10);
     }
     nodeElements.reverse().forEach((item, index) => {
@@ -216,8 +269,19 @@ export const duplicateBlock = (nodeElements: Element[], protyle: IProtyle) => {
         }
         const newId = Lute.NewNodeID();
         tempElement.setAttribute("data-node-id", newId);
+        tempElement.removeAttribute(Constants.CUSTOM_RIFF_DECKS);
+        tempElement.classList.remove("protyle-wysiwyg--hl");
+        tempElement.setAttribute("updated", newId.split("-")[0]);
+        tempElement.removeAttribute("refcount");
+        tempElement.lastElementChild.querySelector(".protyle-attr--refcount")?.remove();
         tempElement.querySelectorAll("[data-node-id]").forEach(childItem => {
-            childItem.setAttribute("data-node-id", Lute.NewNodeID());
+            const subNewId = Lute.NewNodeID();
+            childItem.setAttribute("data-node-id", subNewId);
+            childItem.removeAttribute(Constants.CUSTOM_RIFF_DECKS);
+            childItem.classList.remove("protyle-wysiwyg--hl");
+            childItem.setAttribute("updated", subNewId.split("-")[0]);
+            childItem.removeAttribute("refcount");
+            childItem.lastElementChild.querySelector(".protyle-attr--refcount")?.remove();
         });
         item.classList.remove("protyle-wysiwyg--select");
         if (typeof starIndex === "number") {

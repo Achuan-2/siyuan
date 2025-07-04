@@ -11,7 +11,7 @@ import {onWindowsMsg} from "../window/onWindowsMsg";
 import {Constants} from "../constants";
 import {appearance} from "../config/appearance";
 import {fetchPost, fetchSyncPost} from "../util/fetch";
-import {addGA, initAssets, setInlineStyle} from "../util/assets";
+import {initAssets, setInlineStyle} from "../util/assets";
 import {renderSnippet} from "../config/util/snippets";
 import {openFile, openFileById} from "../editor/util";
 import {exitSiYuan} from "../dialog/processSystem";
@@ -29,6 +29,7 @@ import {sendGlobalShortcut} from "./globalEvent/keydown";
 import {closeWindow} from "../window/closeWin";
 import {checkFold} from "../util/noRelyPCFunction";
 import {correctHotkey} from "./globalEvent/commonHotkey";
+import {recordBeforeResizeTop} from "../protyle/util/resize";
 
 export const onGetConfig = (isStart: boolean, app: App) => {
     correctHotkey(app);
@@ -39,6 +40,11 @@ export const onGetConfig = (isStart: boolean, app: App) => {
         port: location.port
     });
     webFrame.setZoomFactor(window.siyuan.storage[Constants.LOCAL_ZOOM]);
+    ipcRenderer.send(Constants.SIYUAN_CMD, {
+        cmd: "setTrafficLightPosition",
+        zoom: window.siyuan.storage[Constants.LOCAL_ZOOM],
+        position: Constants.SIZE_ZOOM.find((item) => item.zoom === window.siyuan.storage[Constants.LOCAL_ZOOM]).position
+    });
     /// #endif
     if (!window.siyuan.config.uiLayout || (window.siyuan.config.uiLayout && !window.siyuan.config.uiLayout.left)) {
         window.siyuan.config.uiLayout = Constants.SIYUAN_EMPTY_LAYOUT;
@@ -62,20 +68,25 @@ export const onGetConfig = (isStart: boolean, app: App) => {
     initBar(app);
     initStatus();
     initWindow(app);
-    appearance.onSetappearance(window.siyuan.config.appearance);
+    appearance.onSetAppearance(window.siyuan.config.appearance);
     initAssets();
     setInlineStyle();
     renderSnippet();
     let resizeTimeout = 0;
+    let firstResize = true;
     window.addEventListener("resize", () => {
+        if (firstResize) {
+            recordBeforeResizeTop();
+            firstResize = false;
+        }
         window.clearTimeout(resizeTimeout);
         resizeTimeout = window.setTimeout(() => {
             adjustLayout();
             resizeTabs();
             resizeTopBar();
+            firstResize = true;
         }, 200);
     });
-    addGA();
 };
 
 const winOnMaxRestore = async () => {
@@ -167,8 +178,8 @@ export const initWindow = async (app: App) => {
             } catch (error) {
                 return;
             }
-            if (urlObj && urlObj.pathname.startsWith("//plugins/")) {
-                const pluginNameType = urlObj.pathname.replace("//plugins/", "");
+            if (urlObj && urlObj.hostname === "plugins") {
+                const pluginNameType = urlObj.pathname.split("/")[1];
                 if (!pluginNameType) {
                     return;
                 }
@@ -310,29 +321,35 @@ ${response.data.replace("%pages", "<span class=totalPages></span>").replace("%pa
                     path: pdfFilePath,
                     removeAssets: ipcData.removeAssets,
                     watermark: ipcData.watermark
-                }, () => {
+                }, async () => {
                     afterExport(pdfFilePath, msgId);
                     if (ipcData.removeAssets) {
                         const removePromise = (dir: string) => {
                             return new Promise(function (resolve) {
-                                //先读文件夹
                                 fs.stat(dir, function (err, stat) {
-                                    if (stat) {
-                                        if (stat.isDirectory()) {
-                                            fs.readdir(dir, function (err, files) {
-                                                files = files.map(file => path.join(dir, file)); // a/b  a/m
-                                                Promise.all(files.map(file => removePromise(file))).then(function () {
-                                                    fs.rmdir(dir, resolve);
-                                                });
+                                    if (!stat) {
+                                        return;
+                                    }
+
+                                    if (stat.isDirectory()) {
+                                        fs.readdir(dir, function (err, files) {
+                                            files = files.map(file => path.join(dir, file)); // a/b  a/m
+                                            Promise.all(files.map(file => removePromise(file))).then(function () {
+                                                fs.rm(dir, resolve);
                                             });
-                                        } else {
-                                            fs.unlink(dir, resolve);
-                                        }
+                                        });
+                                    } else {
+                                        fs.unlink(dir, resolve);
                                     }
                                 });
                             });
                         };
-                        removePromise(path.join(savePath, "assets"));
+
+                        const assetsDir = path.join(savePath, "assets");
+                        await removePromise(assetsDir);
+                        if (1 > fs.readdirSync(assetsDir).length) {
+                            fs.rmdirSync(assetsDir);
+                        }
                     }
                 });
             });

@@ -20,6 +20,7 @@ import {hideTooltip} from "../../dialog/tooltip";
 import {stickyRow} from "../render/av/row";
 import {updateReadonly as updateReadonlyMethod} from "../breadcrumb/action";
 import {getContenteditableElement} from "../wysiwyg/getBlock";
+import {activeBlur} from "../../mobile/util/keyboardToolbar";
 
 export const onGet = (options: {
     data: IWebSocketData,
@@ -77,8 +78,10 @@ export const onGet = (options: {
         options.protyle.wysiwyg.element.setAttribute("data-doc-type", options.data.data.type);
     }
 
-    // 防止动态加载加载过多的内容
-    if (options.action.includes(Constants.CB_GET_APPEND) || options.action.includes(Constants.CB_GET_BEFORE) || options.action.includes(Constants.CB_GET_HTML)) {
+    if (options.protyle.options.render.title && options.protyle.title.element.getAttribute("data-render") !== "true") {
+        // 文档A的大纲，关闭文档A后，点击大纲无法渲染头部
+    } else if (options.action.includes(Constants.CB_GET_APPEND) || options.action.includes(Constants.CB_GET_BEFORE) || options.action.includes(Constants.CB_GET_HTML)) {
+        // 防止动态加载加载过多的内容
         setHTML({
             content: options.data.data.content,
             expand: options.data.data.isBacklinkExpand,
@@ -181,6 +184,15 @@ const setHTML = (options: {
     } else {
         protyle.wysiwyg.element.innerHTML = options.content;
     }
+
+    /// #if MOBILE
+    protyle.wysiwyg.element.querySelectorAll("video, audio").forEach(item => {
+        item.addEventListener("playing", () => {
+            activeBlur();
+            console.log("playing");
+        });
+    });
+    /// #endif
     // https://github.com/siyuan-note/siyuan/issues/10528
     if (!protyle.block.showAll && protyle.wysiwyg.element.childElementCount === 1 && protyle.wysiwyg.element.firstElementChild.classList.contains("p")) {
         const editElement = getContenteditableElement(protyle.wysiwyg.element.firstElementChild);
@@ -210,7 +222,7 @@ const setHTML = (options: {
     if (options.action.includes(Constants.CB_GET_FOCUSFIRST)) {
         // settimeout 时间需短一点，否则定位后快速滚动无效
         const headerHeight = protyle.wysiwyg.element.offsetTop - 16;
-        preventScroll(protyle, headerHeight, 256);
+        preventScroll(protyle, headerHeight, Constants.TIMEOUT_INPUT);
         protyle.contentElement.scrollTop = headerHeight;
     }
     if (options.isSyncing) {
@@ -233,12 +245,12 @@ const setHTML = (options: {
         protyle.block.id = protyle.block.rootID;
         protyle.wysiwyg.element.setAttribute("data-doc-type", "NodeDocument");
     }
-    if (protyle.options.defId) {
-        protyle.wysiwyg.element.querySelectorAll(`[data-id="${protyle.options.defId}"]`).forEach(item => {
+    protyle.options.defIds?.forEach(item => {
+        protyle.wysiwyg.element.querySelectorAll(`[data-id="${item}"]`).forEach(item => {
             item.classList.add("def--mark");
         });
-        protyle.options.defId = undefined;
-    }
+    });
+    protyle.options.defIds = [];
     if (options.action.includes(Constants.CB_GET_APPEND) || options.action.includes(Constants.CB_GET_BEFORE)) {
         protyle.app.plugins.forEach(item => {
             item.eventBus.emit("loaded-protyle-dynamic", {
@@ -322,6 +334,9 @@ export const disabledProtyle = (protyle: IProtyle) => {
     }
     protyle.wysiwyg.element.querySelectorAll(".protyle-icons--show").forEach(item => {
         item.classList.remove("protyle-icons--show");
+    });
+    protyle.wysiwyg.element.querySelectorAll(".av__gallery-fields--edit").forEach(item => {
+        item.classList.remove("av__gallery-fields--edit");
     });
     protyle.wysiwyg.element.querySelectorAll(".render-node .protyle-action__edit").forEach(item => {
         item.classList.add("fn__none");
@@ -438,7 +453,7 @@ const focusElementById = (protyle: IProtyle, action: string[], scrollAttr?: IScr
         if (scrollAttr && scrollAttr.focusId) {
             range = focusByOffset(focusElement, scrollAttr.focusStart, scrollAttr.focusEnd) as Range;
         } else {
-            focusBlock(focusElement);
+            focusBlock(focusElement, undefined, action.includes(Constants.CB_GET_OUTLINE) ? false : true);
         }
         /// #if !MOBILE
         if (!action.includes(Constants.CB_GET_UNUNDO)) {

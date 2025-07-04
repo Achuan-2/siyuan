@@ -19,6 +19,15 @@
       width: 16px;
     }
 
+    &-list {
+      height: 28px;
+      width: 42px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      position: absolute;
+    }
+
     &-input {
       padding-left: 35px !important;
     }
@@ -51,10 +60,11 @@
     }
   }
 
-  // repo password
+  // repo password & av description
   &__icona {
     position: relative;
     color: var(--b3-theme-on-surface);
+    line-height: normal;
 
     &-icon {
       position: absolute;
@@ -101,7 +111,8 @@
     left: 0;
     opacity: .001;
     overflow: hidden;
-    cursor: pointer
+    cursor: pointer;
+    font-size: 0;
   }
 }
 

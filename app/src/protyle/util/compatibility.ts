@@ -8,8 +8,10 @@ export const openByMobile = (uri: string) => {
     }
     if (isInIOS()) {
         if (uri.startsWith("assets/")) {
-            window.webkit.messageHandlers.openLink.postMessage(location.origin + "/" + uri);
+            // iOS 16.7 之前的版本，uri 需要 encodeURIComponent
+            window.webkit.messageHandlers.openLink.postMessage(location.origin + "/assets/" + encodeURIComponent(uri.replace("assets/", "")));
         } else if (uri.startsWith("/")) {
+            // 导出 zip 返回的是已经 encode 过的，因此不能再 encode
             window.webkit.messageHandlers.openLink.postMessage(location.origin + uri);
         } else {
             try {
@@ -21,6 +23,23 @@ export const openByMobile = (uri: string) => {
         }
     } else if (isInAndroid()) {
         window.JSAndroid.openExternal(uri);
+    } else if (isInHarmony()) {
+        window.JSHarmony.openExternal(uri);
+    } else {
+        window.open(uri);
+    }
+};
+
+export const exportByMobile = (uri: string) => {
+    if (!uri) {
+        return;
+    }
+    if (isInIOS()) {
+        openByMobile(uri);
+    } else if (isInAndroid()) {
+        window.JSAndroid.exportByDefault(uri);
+    } else if (isInHarmony()) {
+        window.JSHarmony.exportByDefault(uri);
     } else {
         window.open(uri);
     }
@@ -29,8 +48,45 @@ export const openByMobile = (uri: string) => {
 export const readText = () => {
     if (isInAndroid()) {
         return window.JSAndroid.readClipboard();
+    } else if (isInHarmony()) {
+        return window.JSHarmony.readClipboard();
     }
     return navigator.clipboard.readText();
+};
+
+export const readClipboard = async () => {
+    const text: {
+        textHTML?: string,
+        textPlain?: string,
+        files?: File[],
+    } = {textPlain: "", textHTML: ""};
+    try {
+        const clipboardContents = await navigator.clipboard.read();
+        for (const item of clipboardContents) {
+            if (item.types.includes("text/html")) {
+                const blob = await item.getType("text/html");
+                text.textHTML = await blob.text();
+            }
+            if (item.types.includes("text/plain")) {
+                const blob = await item.getType("text/plain");
+                text.textPlain = await blob.text();
+            }
+            if (item.types.includes("image/png")) {
+                const blob = await item.getType("image/png");
+                text.files = [new File([blob], "image.png", {type: "image/png", lastModified: Date.now()})];
+            }
+        }
+        return text;
+    } catch (e) {
+        if (isInAndroid()) {
+            text.textPlain = window.JSAndroid.readClipboard();
+            text.textHTML = window.JSAndroid.readHTMLClipboard();
+        } else if (isInHarmony()) {
+            text.textPlain = window.JSHarmony.readClipboard();
+            text.textHTML = window.JSHarmony.readHTMLClipboard();
+        }
+        return text;
+    }
 };
 
 export const writeText = (text: string) => {
@@ -44,6 +100,10 @@ export const writeText = (text: string) => {
             window.JSAndroid.writeClipboard(text);
             return;
         }
+        if (isInHarmony()) {
+            window.JSHarmony.writeClipboard(text);
+            return;
+        }
         if (isInIOS()) {
             window.webkit.messageHandlers.setClipboard.postMessage(text);
             return;
@@ -54,6 +114,8 @@ export const writeText = (text: string) => {
             window.webkit.messageHandlers.setClipboard.postMessage(text);
         } else if (isInAndroid()) {
             window.JSAndroid.writeClipboard(text);
+        } else if (isInHarmony()) {
+            window.JSHarmony.writeClipboard(text);
         } else {
             const textElement = document.createElement("textarea");
             textElement.value = text;
@@ -118,6 +180,11 @@ export const isIPhone = () => {
     return navigator.userAgent.indexOf("iPhone") > -1;
 };
 
+export const isSafari = () => {
+    const userAgent = navigator.userAgent;
+    return userAgent.includes("Safari") && !userAgent.includes("Chrome") && !userAgent.includes("Chromium");
+};
+
 export const isIPad = () => {
     return navigator.userAgent.indexOf("iPad") > -1;
 };
@@ -126,12 +193,40 @@ export const isMac = () => {
     return navigator.platform.toUpperCase().indexOf("MAC") > -1;
 };
 
+export const isWin11 = async () => {
+    if (!(navigator as any).userAgentData || !(navigator as any).userAgentData.getHighEntropyValues) {
+        return false;
+    }
+    const ua = await (navigator as any).userAgentData.getHighEntropyValues(["platformVersion"]);
+    if ((navigator as any).userAgentData.platform === "Windows") {
+        if (parseInt(ua.platformVersion.split(".")[0]) >= 13) {
+            return true;
+        }
+    }
+    return false;
+};
+
+export const isWindows = () => {
+    return navigator.platform.toUpperCase().indexOf("WIN") > -1;
+};
+
 export const isInAndroid = () => {
     return window.siyuan.config.system.container === "android" && window.JSAndroid;
 };
 
 export const isInIOS = () => {
     return window.siyuan.config.system.container === "ios" && window.webkit?.messageHandlers;
+};
+
+export const isInHarmony = () => {
+    return window.siyuan.config.system.container === "harmony" && window.JSHarmony;
+};
+
+export const updateHotkeyAfterTip = (hotkey: string) => {
+    if (hotkey) {
+        return " " + updateHotkeyTip(hotkey);
+    }
+    return "";
 };
 
 // Mac，Windows 快捷键展示
@@ -204,7 +299,7 @@ export const getLocalStorage = (cb: () => void) => {
             dark: "dark",
             annoColor: "var(--b3-pdf-background1)"
         };
-        defaultStorage[Constants.LOCAL_LAYOUTS] = [];   // {name: "", layout:{}, time: number, filespaths: filesPath[]}
+        defaultStorage[Constants.LOCAL_LAYOUTS] = [];   // {name: "", layout:{}, time: number, filespaths: IFilesPath[]}
         defaultStorage[Constants.LOCAL_AI] = [];   // {name: "", memo: ""}
         defaultStorage[Constants.LOCAL_PLUGIN_DOCKS] = {};  // { pluginName: {dockId: IPluginDockTab}}
         defaultStorage[Constants.LOCAL_PLUGINTOPUNPIN] = [];
@@ -255,7 +350,7 @@ export const getLocalStorage = (cb: () => void) => {
             currentTab: "emoji"
         };
         defaultStorage[Constants.LOCAL_FONTSTYLES] = [];
-        defaultStorage[Constants.LOCAL_FILESPATHS] = [];    // filesPath[]
+        defaultStorage[Constants.LOCAL_FILESPATHS] = [];    // IFilesPath[]
         defaultStorage[Constants.LOCAL_SEARCHDATA] = {
             page: 1,
             sort: 0,
@@ -284,6 +379,7 @@ export const getLocalStorage = (cb: () => void) => {
             replaceTypes: Object.assign({}, Constants.SIYUAN_DEFAULT_REPLACETYPES),
         };
         defaultStorage[Constants.LOCAL_ZOOM] = 1;
+        defaultStorage[Constants.LOCAL_MOVE_PATH] = {keys: [], k: ""};
 
         [Constants.LOCAL_EXPORTIMG, Constants.LOCAL_SEARCHKEYS, Constants.LOCAL_PDFTHEME, Constants.LOCAL_BAZAAR,
             Constants.LOCAL_EXPORTWORD, Constants.LOCAL_EXPORTPDF, Constants.LOCAL_DOCINFO, Constants.LOCAL_FONTSTYLES,
@@ -291,7 +387,7 @@ export const getLocalStorage = (cb: () => void) => {
             Constants.LOCAL_PLUGINTOPUNPIN, Constants.LOCAL_SEARCHASSET, Constants.LOCAL_FLASHCARD,
             Constants.LOCAL_DIALOGPOSITION, Constants.LOCAL_SEARCHUNREF, Constants.LOCAL_HISTORY,
             Constants.LOCAL_OUTLINE, Constants.LOCAL_FILEPOSITION, Constants.LOCAL_FILESPATHS, Constants.LOCAL_IMAGES,
-            Constants.LOCAL_PLUGIN_DOCKS, Constants.LOCAL_EMOJIS].forEach((key) => {
+            Constants.LOCAL_PLUGIN_DOCKS, Constants.LOCAL_EMOJIS, Constants.LOCAL_MOVE_PATH].forEach((key) => {
             if (typeof response.data[key] === "string") {
                 try {
                     const parseData = JSON.parse(response.data[key]);

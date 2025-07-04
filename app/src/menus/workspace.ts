@@ -3,11 +3,18 @@ import {MenuItem} from "./Menu";
 import {ipcRenderer} from "electron";
 /// #endif
 import {openHistory} from "../history/history";
-import {getOpenNotebookCount, originalPath, pathPosix, showFileInFolder} from "../util/pathName";
+import {getOpenNotebookCount, originalPath, pathPosix, useShell} from "../util/pathName";
 import {fetchNewDailyNote, mountHelp, newDailyNote} from "../util/mount";
 import {fetchPost} from "../util/fetch";
 import {Constants} from "../constants";
-import {isInAndroid, isInIOS, isIPad, setStorageVal, writeText} from "../protyle/util/compatibility";
+import {
+    isInAndroid,
+    isInHarmony,
+    isInIOS,
+    isIPad,
+    setStorageVal,
+    writeText
+} from "../protyle/util/compatibility";
 import {openCard} from "../card/openCard";
 import {openSetting} from "../config";
 import {getAllDocks} from "../layout/getAll";
@@ -26,6 +33,7 @@ import {App} from "../index";
 import {isBrowser} from "../util/functions";
 import {openRecentDocs} from "../business/openRecentDocs";
 import * as dayjs from "dayjs";
+import {upDownHint} from "../util/upDownHint";
 
 const editLayout = (layoutName?: string) => {
     const dialog = new Dialog({
@@ -317,7 +325,7 @@ export const workspaceMenu = (app: App, rect: DOMRect) => {
                 });
             });
             /// #endif
-            if (!isBrowser() || isInIOS() || isInAndroid()) {
+            if (!isBrowser() || isInIOS() || isInAndroid() || isInHarmony()) {
                 window.siyuan.menus.menu.append(new MenuItem({
                     id: "workspaceList",
                     label: window.siyuan.languages.workspaceList,
@@ -337,46 +345,106 @@ export const workspaceMenu = (app: App, rect: DOMRect) => {
         }];
         if (window.siyuan.storage[Constants.LOCAL_LAYOUTS].length > 0) {
             layoutSubMenu.push({id: "separator_1", type: "separator"});
-        }
-        window.siyuan.storage[Constants.LOCAL_LAYOUTS].forEach((item: ISaveLayout) => {
             layoutSubMenu.push({
                 iconHTML: "",
-                action: "iconEdit",
-                label: `${item.name} <span class="ft__smaller ft__on-surface">${item.time ? dayjs(item.time).format("YYYY-MM-DD HH:mm") : ""}</span>`,
+                type: "empty",
+                label: `<input class="b3-text-field fn__block" style="margin: 4px 0" placeholder="${window.siyuan.languages.search}">
+<div class="b3-list b3-list--background" style="max-width: 50vw"></div>`,
                 bind(menuElement) {
-                    menuElement.addEventListener("click", (event) => {
-                        if (hasClosestByClassName(event.target as Element, "b3-menu__action")) {
+                    const genListHTML = () => {
+                        let html = "";
+                        window.siyuan.storage[Constants.LOCAL_LAYOUTS].sort((a: ISaveLayout, b: ISaveLayout) => {
+                            return a.name.localeCompare(b.name, undefined, {numeric: true});
+                        }).forEach((item: ISaveLayout) => {
+                            if (inputElement.value === "" || item.name.toLowerCase().indexOf(inputElement.value.toLowerCase()) > -1) {
+                                html += `<div data-name="${item.name}" class="b3-list-item b3-list-item--narrow b3-list-item--hide-action ${html ? "" : "b3-list-item--focus"}">
+    <div class="b3-list-item__text">${item.name}</div>
+    <span class="b3-list-item__meta">${item.time ? dayjs(item.time).format("YYYY-MM-DD HH:mm") : ""}</span>
+    <span class="b3-list-item__action">
+        <svg><use xlink:href="#iconEdit"></use></svg>
+    </span>
+</div>`;
+                            }
+                        });
+                        return html;
+                    };
+                    const inputElement = menuElement.querySelector(".b3-text-field") as HTMLInputElement;
+                    const listElement = menuElement.querySelector(".b3-list");
+                    inputElement.addEventListener("keydown", (event) => {
+                        event.stopPropagation();
+                        if (event.isComposing) {
+                            return;
+                        }
+                        upDownHint(listElement, event);
+                        if (event.key === "Escape") {
+                            window.siyuan.menus.menu.remove();
+                        } else if (event.key === "Enter") {
+                            const currentElement = listElement.querySelector(".b3-list-item--focus");
+                            if (currentElement) {
+                                listElement.dispatchEvent(new CustomEvent("click", {detail: currentElement.getAttribute("data-name")}));
+                            }
+                        }
+                    });
+                    inputElement.addEventListener("compositionend", () => {
+                        listElement.innerHTML = genListHTML();
+                    });
+                    inputElement.addEventListener("input", (event: InputEvent) => {
+                        if (event.isComposing) {
+                            return;
+                        }
+                        event.stopPropagation();
+                        listElement.innerHTML = genListHTML();
+                    });
+                    listElement.addEventListener("click", (event: MouseEvent) => {
+                        if (window.siyuan.config.readonly) {
+                            return;
+                        }
+                        const actionElement = hasClosestByClassName(event.target as Element, "b3-list-item__action");
+                        if (actionElement) {
                             event.preventDefault();
                             event.stopPropagation();
-                            editLayout(item.name);
+                            editLayout(actionElement.parentElement.dataset.name);
                             window.siyuan.menus.menu.remove();
                             return;
                         }
-                        if (window.siyuan.config.readonly) {
-                            window.location.reload();
-                        } else {
-                            fetchPost("/api/system/setUILayout", {layout: item.layout}, () => {
-                                if (item.filesPaths) {
-                                    window.siyuan.storage[Constants.LOCAL_FILESPATHS] = item.filesPaths;
-                                    setStorageVal(Constants.LOCAL_FILESPATHS, item.filesPaths, () => {
-                                        window.location.reload();
-                                    });
-                                } else {
-                                    window.location.reload();
+                        const liElement = hasClosestByClassName(event.target as Element, "b3-list-item");
+                        if (liElement || event.detail) {
+                            const itemData: ISaveLayout = window.siyuan.storage[Constants.LOCAL_LAYOUTS].find((item: ISaveLayout) => {
+                                if (typeof event.detail === "string") {
+                                    return item.name === event.detail;
+                                } else if (liElement) {
+                                    return item.name === liElement.dataset.name;
                                 }
                             });
+                            if (itemData) {
+                                fetchPost("/api/system/setUILayout", {layout: itemData.layout}, () => {
+                                    if (itemData.filesPaths) {
+                                        window.siyuan.storage[Constants.LOCAL_FILESPATHS] = itemData.filesPaths;
+                                        setStorageVal(Constants.LOCAL_FILESPATHS, itemData.filesPaths, () => {
+                                            window.location.reload();
+                                        });
+                                    } else {
+                                        window.location.reload();
+                                    }
+                                });
+                            }
+                            event.preventDefault();
+                            event.stopPropagation();
                         }
                     });
+                    listElement.innerHTML = genListHTML();
                 }
             });
-        });
-        window.siyuan.menus.menu.append(new MenuItem({
-            id: "layout",
-            label: window.siyuan.languages.layout,
-            icon: "iconLayout",
-            type: "submenu",
-            submenu: layoutSubMenu
-        }).element);
+        }
+        if (!window.siyuan.config.readonly) {
+            window.siyuan.menus.menu.append(new MenuItem({
+                id: "layout",
+                label: window.siyuan.languages.layout,
+                icon: "iconLayout",
+                type: "submenu",
+                submenu: layoutSubMenu
+            }).element);
+        }
         window.siyuan.menus.menu.append(new MenuItem({id: "separator_1", type: "separator"}).element);
         if (!window.siyuan.config.readonly) {
             if (getOpenNotebookCount() < 2) {
@@ -497,7 +565,7 @@ export const workspaceMenu = (app: App, rect: DOMRect) => {
             }
         }).element);
         /// #endif
-        if (isIPad() || isInAndroid() || !isBrowser()) {
+        if (isIPad() || isInAndroid() || isInHarmony() || !isBrowser()) {
             window.siyuan.menus.menu.append(new MenuItem({id: "separator_3", type: "separator"}).element);
             window.siyuan.menus.menu.append(new MenuItem({
                 id: "safeQuit",
@@ -534,6 +602,42 @@ const openWorkspace = (workspace: string) => {
 
 const workspaceItem = (item: IWorkspace) => {
     /// #if !BROWSER
+    const submenu = [{
+        id: "showInFolder",
+        icon: "iconFolder",
+        label: window.siyuan.languages.showInFolder,
+        click() {
+            useShell("showItemInFolder", item.path);
+        }
+    }, {
+        id: "copyPath",
+        icon: "iconCopy",
+        label: window.siyuan.languages.copyPath,
+        click() {
+            writeText(item.path);
+            showMessage(window.siyuan.languages.copied);
+        }
+    }];
+    if (item.path !== window.siyuan.config.system.workspaceDir) {
+        submenu.splice(0, 0, {
+            id: "openBy",
+            icon: "iconOpenWindow",
+            label: window.siyuan.languages.openBy,
+            click() {
+                openWorkspace(item.path);
+            }
+        });
+        if (item.closed) {
+            submenu.push({
+                id: "removeWorkspaceTip",
+                icon: "iconTrashcan",
+                label: window.siyuan.languages.removeWorkspaceTip,
+                click() {
+                    fetchPost("/api/system/removeWorkspaceDir", {path: item.path});
+                }
+            });
+        }
+    }
     return {
         label: `<div aria-label="${item.path}" class="fn__ellipsis ariaLabel" style="max-width: 256px">
     ${originalPath().basename(item.path)}
@@ -541,36 +645,7 @@ const workspaceItem = (item: IWorkspace) => {
         current: !item.closed,
         iconHTML: "",
         type: "submenu",
-        submenu: [{
-            id: "openBy",
-            icon: "iconOpenWindow",
-            label: window.siyuan.languages.openBy,
-            click() {
-                openWorkspace(item.path);
-            }
-        }, {
-            id: "showInFolder",
-            icon: "iconFolder",
-            label: window.siyuan.languages.showInFolder,
-            click() {
-                showFileInFolder(item.path);
-            }
-        }, {
-            id: "copyPath",
-            icon: "iconCopy",
-            label: window.siyuan.languages.copyPath,
-            click() {
-                writeText(item.path);
-                showMessage(window.siyuan.languages.copied);
-            }
-        }, {
-            id: "removeWorkspaceTip",
-            icon: "iconTrashcan",
-            label: window.siyuan.languages.removeWorkspaceTip,
-            click() {
-                fetchPost("/api/system/removeWorkspaceDir", {path: item.path});
-            }
-        }],
+        submenu,
         click() {
             openWorkspace(item.path);
         },

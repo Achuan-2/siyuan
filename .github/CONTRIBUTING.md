@@ -3,32 +3,31 @@
 ## Get the source code
 
 * `git clone git@github.com:siyuan-note/siyuan.git`
-* switch to dev branch `git checkout dev`
+* Switch to dev branch `git checkout dev`
 
-## User Interface
+## NPM dependencies
 
-Install pnpm: `npm install -g pnpm@9.12.1`
+Install pnpm: `npm install -g pnpm@10.12.4`
 
 <details>
 <summary>For China mainland</summary>
 
 Set the Electron mirror environment variable and install Electron:
 
-* macOS/Linux: `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ pnpm install electron@v32.2.2 -D`
+* macOS/Linux: `ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ pnpm install electron@v37.2.0 -D`
 * Windows:
-    * `SET ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/`
-    * `pnpm install electron@v32.2.2 -D`
+  * `SET ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/`
+  * `pnpm install electron@v37.2.0 -D`
 
 NPM mirror:
 
 * Use npmmirror China mirror repository `pnpm --registry https://registry.npmmirror.com/ i`
 * Revert to using official repository `pnpm --registry https://registry.npmjs.org i`
-
 </details>
 
-On the desktop, go to the app folder to run:
+Enter the app folder and execute:
 
-* `pnpm install electron@v32.2.2 -D`
+* `pnpm install electron@v37.2.0 -D`
 * `pnpm run dev`
 * `pnpm run start`
 
@@ -42,9 +41,11 @@ Note: In the development environment, the kernel process will not be automatical
 ### Desktop
 
 * `cd kernel`
-* `go build --tags "fts5" -o "../app/kernel/SiYuan-Kernel.exe"`
+* Windows: `go build --tags "fts5" -o "../app/kernel/SiYuan-Kernel.exe"`
+* Linux/macOS: `go build --tags "fts5" -o "../app/kernel/SiYuan-Kernel"`
 * `cd ../app/kernel`
-* `./SiYuan-Kernel.exe --wd=.. --mode=dev`
+* Windows: `./SiYuan-Kernel.exe --wd=.. --mode=dev`
+* Linux/macOS: `./SiYuan-Kernel --wd=.. --mode=dev`
 
 ### iOS
 
@@ -55,7 +56,14 @@ Note: In the development environment, the kernel process will not be automatical
 ### Android
 
 * `cd kernel`
-* `gomobile bind --tags fts5 -ldflags '-s -w' -v -o kernel.aar -target='android/arm64' -androidapi 24 ./mobile/`
+* `set JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8`
+* `gomobile bind --tags fts5 -ldflags "-s -w"  -v -o kernel.aar -target=android/arm64 -androidapi 26 ./mobile/`
 * https://github.com/siyuan-note/siyuan-android
 
-For the mobile-end, please refer to the corresponding project repository.
+### Harmony
+
+Only support compilation under Linux, need to install Harmony SDK, and need to modify Go source code, please refer to https://github.com/siyuan-note/siyuan/issues/13184
+
+* `cd kernel/harmony`
+* `./build.sh` (`./build-win.sh` for Windows Emulator)
+* https://github.com/siyuan-note/siyuan-harmony

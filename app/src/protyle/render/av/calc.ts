@@ -2,6 +2,7 @@ import {Menu} from "../../../plugin/Menu";
 import {transaction} from "../../wysiwyg/transaction";
 import {hasClosestBlock, hasClosestByClassName} from "../../util/hasClosest";
 import {fetchSyncPost} from "../../../util/fetch";
+import {getFieldsByData} from "./view";
 
 const calcItem = (options: {
     menu: Menu,
@@ -38,7 +39,7 @@ const calcItem = (options: {
                 }]);
             } else {
                 options.target.querySelector(".b3-menu__accelerator").textContent = getNameByOperator(options.operator, true);
-                const colData = options.data.view.columns.find((item) => {
+                const colData = getFieldsByData(options.data).find((item) => {
                     if (item.id === options.colId) {
                         if (!item.rollup) {
                             item.rollup = {};
@@ -79,7 +80,7 @@ export const openCalcMenu = async (protyle: IProtyle, calcElement: HTMLElement, 
     data: IAV,
     colId: string,
     blockID: string
-}) => {
+}, x?: number) => {
     let rowElement: HTMLElement | false;
     let type;
     let colId: string;
@@ -148,28 +149,6 @@ export const openCalcMenu = async (protyle: IProtyle, calcElement: HTMLElement, 
             colId,
             avId,
             oldOperator,
-            operator: "Count values",
-            data: panelData?.data,
-            blockID,
-            target: calcElement
-        });
-        calcItem({
-            menu,
-            protyle,
-            colId,
-            avId,
-            oldOperator,
-            operator: "Count unique values",
-            data: panelData?.data,
-            blockID,
-            target: calcElement
-        });
-        calcItem({
-            menu,
-            protyle,
-            colId,
-            avId,
-            oldOperator,
             operator: "Count empty",
             data: panelData?.data,
             blockID,
@@ -192,6 +171,28 @@ export const openCalcMenu = async (protyle: IProtyle, calcElement: HTMLElement, 
             colId,
             avId,
             oldOperator,
+            operator: "Count values",
+            data: panelData?.data,
+            blockID,
+            target: calcElement
+        });
+        calcItem({
+            menu,
+            protyle,
+            colId,
+            avId,
+            oldOperator,
+            operator: "Count unique values",
+            data: panelData?.data,
+            blockID,
+            target: calcElement
+        });
+        calcItem({
+            menu,
+            protyle,
+            colId,
+            avId,
+            oldOperator,
             operator: "Percent empty",
             data: panelData?.data,
             blockID,
@@ -204,6 +205,17 @@ export const openCalcMenu = async (protyle: IProtyle, calcElement: HTMLElement, 
             avId,
             oldOperator,
             operator: "Percent not empty",
+            data: panelData?.data,
+            blockID,
+            target: calcElement
+        });
+        calcItem({
+            menu,
+            protyle,
+            colId,
+            avId,
+            oldOperator,
+            operator: "Percent unique values",
             data: panelData?.data,
             blockID,
             target: calcElement
@@ -263,7 +275,8 @@ export const openCalcMenu = async (protyle: IProtyle, calcElement: HTMLElement, 
             const avResponse = await fetchSyncPost("api/av/renderAttributeView", {id: avId});
             avData = avResponse.data;
         }
-        avData.view.columns.find((item) => {
+
+        getFieldsByData(avData).find((item) => {
             if (item.id === colId) {
                 relationKeyID = item.rollup?.relationKeyID;
                 keyID = item.rollup?.keyID;
@@ -272,7 +285,7 @@ export const openCalcMenu = async (protyle: IProtyle, calcElement: HTMLElement, 
         });
         if (relationKeyID && keyID) {
             let relationAvId: string;
-            avData.view.columns.find((item) => {
+            getFieldsByData(avData).find((item) => {
                 if (item.id === relationKeyID) {
                     relationAvId = item.relation?.avID;
                     return true;
@@ -392,7 +405,7 @@ export const openCalcMenu = async (protyle: IProtyle, calcElement: HTMLElement, 
         });
     }
     const calcRect = calcElement.getBoundingClientRect();
-    menu.open({x: calcRect.left, y: calcRect.bottom, h: calcRect.height});
+    menu.open({x: Math.max(x || 0, calcRect.left), y: calcRect.bottom, h: calcRect.height});
 };
 
 export const getCalcValue = (column: IAVColumn) => {
@@ -407,61 +420,64 @@ export const getCalcValue = (column: IAVColumn) => {
     let value = "";
     switch (column.calc.operator) {
         case "Count all":
-            value = `<span>${resultCalc.formattedContent}</span>${window.siyuan.languages.calcResultCountAll}`;
+            value = `<span>${resultCalc.formattedContent}</span><small>${window.siyuan.languages.calcResultCountAll}</small>`;
             break;
         case "Count values":
-            value = `<span>${resultCalc.formattedContent}</span>${window.siyuan.languages.calcResultCountValues}`;
+            value = `<span>${resultCalc.formattedContent}</span><small>${window.siyuan.languages.calcResultCountValues}</small>`;
             break;
         case "Count unique values":
-            value = `<span>${resultCalc.formattedContent}</span>${window.siyuan.languages.calcResultCountUniqueValues}`;
+            value = `<span>${resultCalc.formattedContent}</span><small>${window.siyuan.languages.calcResultCountUniqueValues}</small>`;
             break;
         case "Count empty":
-            value = `<span>${resultCalc.formattedContent}</span>${window.siyuan.languages.calcResultCountEmpty}`;
+            value = `<span>${resultCalc.formattedContent}</span><small>${window.siyuan.languages.calcResultCountEmpty}</small>`;
             break;
         case "Count not empty":
-            value = `<span>${resultCalc.formattedContent}</span>${window.siyuan.languages.calcResultCountNotEmpty}`;
+            value = `<span>${resultCalc.formattedContent}</span><small>${window.siyuan.languages.calcResultCountNotEmpty}</small>`;
             break;
         case "Percent empty":
-            value = `<span>${resultCalc.formattedContent}</span>${window.siyuan.languages.calcResultPercentEmpty}`;
+            value = `<span>${resultCalc.formattedContent}</span><small>${window.siyuan.languages.calcResultPercentEmpty}</small>`;
             break;
         case "Percent not empty":
-            value = `<span>${resultCalc.formattedContent}</span>${window.siyuan.languages.calcResultPercentNotEmpty}`;
+            value = `<span>${resultCalc.formattedContent}</span><small>${window.siyuan.languages.calcResultPercentNotEmpty}</small>`;
+            break;
+        case "Percent unique values":
+            value = `<span>${resultCalc.formattedContent}</span><small>${window.siyuan.languages.calcResultPercentUniqueValues}</small>`;
             break;
         case "Sum":
-            value = `<span>${resultCalc.formattedContent}</span>${window.siyuan.languages.calcResultSum}`;
+            value = `<span>${resultCalc.formattedContent}</span><small>${window.siyuan.languages.calcResultSum}</small>`;
             break;
         case  "Average":
-            value = `<span>${resultCalc.formattedContent}</span>${window.siyuan.languages.calcResultAverage}`;
+            value = `<span>${resultCalc.formattedContent}</span><small>${window.siyuan.languages.calcResultAverage}</small>`;
             break;
         case  "Median":
-            value = `<span>${resultCalc.formattedContent}</span>${window.siyuan.languages.calcResultMedian}`;
+            value = `<span>${resultCalc.formattedContent}</span><small>${window.siyuan.languages.calcResultMedian}</small>`;
             break;
         case  "Min":
-            value = `<span>${resultCalc.formattedContent}</span>${window.siyuan.languages.calcResultMin}`;
+            value = `<span>${resultCalc.formattedContent}</span><small>${window.siyuan.languages.calcResultMin}</small>`;
             break;
         case  "Max":
-            value = `<span>${resultCalc.formattedContent}</span>${window.siyuan.languages.calcResultMax}`;
+            value = `<span>${resultCalc.formattedContent}</span><small>${window.siyuan.languages.calcResultMax}</small>`;
             break;
         case  "Range":
-            value = `<span>${resultCalc.formattedContent}</span>${window.siyuan.languages.calcResultRange}`;
+            value = `<span>${resultCalc.formattedContent}</span><small>${window.siyuan.languages.calcResultRange}</small>`;
             break;
         case  "Earliest":
-            value = `<span>${resultCalc.formattedContent}</span>${window.siyuan.languages.calcOperatorEarliest}`;
+            value = `<span>${resultCalc.formattedContent}</span><small>${window.siyuan.languages.calcOperatorEarliest}</small>`;
             break;
         case  "Latest":
-            value = `<span>${resultCalc.formattedContent}</span>${window.siyuan.languages.calcOperatorLatest}`;
+            value = `<span>${resultCalc.formattedContent}</span><small>${window.siyuan.languages.calcOperatorLatest}</small>`;
             break;
         case  "Checked":
-            value = `<span>${resultCalc.formattedContent}</span>${window.siyuan.languages.checked}`;
+            value = `<span>${resultCalc.formattedContent}</span><small>${window.siyuan.languages.checked}</small>`;
             break;
         case  "Unchecked":
-            value = `<span>${resultCalc.formattedContent}</span>${window.siyuan.languages.unchecked}`;
+            value = `<span>${resultCalc.formattedContent}</span><small>${window.siyuan.languages.unchecked}</small>`;
             break;
         case  "Percent checked":
-            value = `<span>${resultCalc.formattedContent}</span>${window.siyuan.languages.percentChecked}`;
+            value = `<span>${resultCalc.formattedContent}</span><small>${window.siyuan.languages.percentChecked}</small>`;
             break;
         case  "Percent unchecked":
-            value = `<span>${resultCalc.formattedContent}</span>${window.siyuan.languages.percentUnchecked}`;
+            value = `<span>${resultCalc.formattedContent}</span><small>${window.siyuan.languages.percentUnchecked}</small>`;
             break;
     }
     return value;
@@ -486,6 +502,8 @@ export const getNameByOperator = (operator: string, isRollup: boolean) => {
             return window.siyuan.languages.calcOperatorPercentEmpty;
         case "Percent not empty":
             return window.siyuan.languages.calcOperatorPercentNotEmpty;
+        case "Percent unique values":
+            return window.siyuan.languages.calcOperatorPercentUniqueValues;
         case "Checked":
             return window.siyuan.languages.checked;
         case "Unchecked":

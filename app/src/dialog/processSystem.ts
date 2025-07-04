@@ -23,7 +23,7 @@ import {setEmpty} from "../mobile/util/setEmpty";
 import {hideAllElements, hideElements} from "../protyle/ui/hideElements";
 import {App} from "../index";
 import {saveScroll} from "../protyle/scroll/saveScroll";
-import {isInAndroid, isInIOS, setStorageVal} from "../protyle/util/compatibility";
+import {isInAndroid, isInHarmony, isInIOS, setStorageVal} from "../protyle/util/compatibility";
 import {Plugin} from "../plugin";
 
 const updateTitle = (rootID: string, tab: Tab, protyle?: IProtyle) => {
@@ -156,9 +156,9 @@ export const setRefDynamicText = (data: {
     "refText": string,
     "rootID": string
 }) => {
-    getAllEditor().forEach(item => {
+    getAllEditor().forEach(editor => {
         // 不能对比 rootId，否则嵌入块中的锚文本无法更新
-        item.protyle.wysiwyg.element.querySelectorAll(`[data-node-id="${data.blockID}"] span[data-type="block-ref"][data-subtype="d"][data-id="${data.defBlockID}"]`).forEach(item => {
+        editor.protyle.wysiwyg.element.querySelectorAll(`[data-node-id="${data.blockID}"] span[data-type~="block-ref"][data-subtype="d"][data-id="${data.defBlockID}"]`).forEach(item => {
             item.innerHTML = data.refText;
         });
     });
@@ -169,22 +169,22 @@ export const setDefRefCount = (data: {
     "refCount": number,
     "rootRefCount": number,
     "rootID": string
-    refIDs: string[]
 }) => {
     getAllEditor().forEach(editor => {
-        if (data.rootID === data.blockID && editor.protyle.block.rootID === data.rootID) {
+        if (editor.protyle.block.rootID === data.rootID && editor.protyle.title) {
             const attrElement = editor.protyle.title.element.querySelector(".protyle-attr");
             const countElement = attrElement.querySelector(".protyle-attr--refcount");
             if (countElement) {
-                if (data.refCount === 0) {
+                if (data.rootRefCount === 0) {
                     countElement.remove();
                 } else {
-                    countElement.textContent = data.refCount.toString();
-                    countElement.setAttribute("data-id", data.refIDs.toString());
+                    countElement.textContent = data.rootRefCount.toString();
                 }
-            } else if (data.refCount > 0) {
-                attrElement.insertAdjacentHTML("beforeend", `<div class="protyle-attr--refcount popover__block" data-defids="[&quot;${data.blockID}&quot;]" data-id="${data.refIDs.toString()}" style="">${data.refCount}</div>`);
+            } else if (data.rootRefCount > 0) {
+                attrElement.insertAdjacentHTML("beforeend", `<div class="protyle-attr--refcount popover__block">${data.rootRefCount}</div>`);
             }
+        }
+        if (data.rootID === data.blockID) {
             return;
         }
         // 不能对比 rootId，否则嵌入块中的锚文本无法更新
@@ -253,20 +253,19 @@ export const kernelError = () => {
     if (document.querySelector("#errorLog")) {
         return;
     }
-    let iosReStart = "";
+    let title = `💔 ${window.siyuan.languages.kernelFault0} <small>v${Constants.SIYUAN_VERSION}</small>`;
+    let body = `<div>${window.siyuan.languages.kernelFault1}</div><div class="fn__hr"></div><div>${window.siyuan.languages.kernelFault2}</div>`;
     if (isInIOS()) {
-        iosReStart = `<div class="fn__hr"></div><div class="fn__flex"><div class="fn__flex-1"></div><button class="b3-button">${window.siyuan.languages.retry}</button></div>`;
+        title = `🍵 ${window.siyuan.languages.pleaseWait} <small>v${Constants.SIYUAN_VERSION}</small>`;
+        body = `<div>${window.siyuan.languages.reconnectPrompt}</div><div class="fn__hr"></div><div class="fn__flex"><div class="fn__flex-1"></div><button class="b3-button">${window.siyuan.languages.retry}</button></div>`;
     }
     const dialog = new Dialog({
         disableClose: true,
-        title: `💔 ${window.siyuan.languages.kernelFault0} <small>v${Constants.SIYUAN_VERSION}</small>`,
+        title: title,
         width: isMobile() ? "92vw" : "520px",
         content: `<div class="b3-dialog__content">
 <div class="ft__breakword">
-    <div>${window.siyuan.languages.kernelFault1}</div>
-    <div class="fn__hr"></div>
-    <div>${window.siyuan.languages.kernelFault2}</div>
-    ${iosReStart}
+    ${body}
 </div>
 </div>`
     });
@@ -298,7 +297,7 @@ export const exitSiYuan = async () => {
                         /// #if !BROWSER
                         ipcRenderer.send(Constants.SIYUAN_QUIT, location.port);
                         /// #else
-                        if (isInIOS() || isInAndroid()) {
+                        if (isInIOS() || isInAndroid() || isInHarmony()) {
                             window.location.href = "siyuan://api/system/exit";
                         }
                         /// #endif
@@ -307,6 +306,11 @@ export const exitSiYuan = async () => {
             }
         } else if (response.code === 2) { // 提示新安装包
             hideMessage();
+
+            if ("std" === window.siyuan.config.system.container) {
+                ipcRenderer.send(Constants.SIYUAN_SHOW_WINDOW);
+            }
+
             confirmDialog(window.siyuan.languages.tip, response.msg, () => {
                 fetchPost("/api/system/exit", {
                     force: true,
@@ -338,7 +342,7 @@ export const exitSiYuan = async () => {
             /// #if !BROWSER
             ipcRenderer.send(Constants.SIYUAN_QUIT, location.port);
             /// #else
-            if (isInIOS() || isInAndroid()) {
+            if (isInIOS() || isInAndroid() || isInHarmony()) {
                 window.location.href = "siyuan://api/system/exit";
             }
             /// #endif
@@ -405,7 +409,7 @@ export const progressStatus = (data: IWebSocketData) => {
         statusElement.style.bottom = "0";
         statusTimeout = window.setTimeout(() => {
             statusElement.style.bottom = "";
-        }, 7000);
+        }, 12000);
     } else {
         const msgElement = statusElement.querySelector(".status__msg");
         if (msgElement) {
@@ -413,7 +417,7 @@ export const progressStatus = (data: IWebSocketData) => {
             msgElement.innerHTML = data.msg;
             statusTimeout = window.setTimeout(() => {
                 msgElement.innerHTML = "";
-            }, 7000);
+            }, 12000);
         }
     }
 };
@@ -434,7 +438,7 @@ export const progressLoading = (data: IWebSocketData) => {
 <div class="b3-dialog__loading">
     <div style="text-align: right">${data.data.current}/${data.data.total}</div>
     <div style="margin: 8px 0;height: 8px;border-radius: var(--b3-border-radius);overflow: hidden;background-color:#fff;"><div style="width: ${data.data.current / data.data.total * 100}%;transition: var(--b3-transition);background-color: var(--b3-theme-primary);height: 8px;"></div></div>
-    <div>${data.msg}</div>
+    <div class="ft__breakword">${data.msg}</div>
 </div>`;
     } else if (data.code === 1) {
         if (progressElement.lastElementChild) {
@@ -443,7 +447,7 @@ export const progressLoading = (data: IWebSocketData) => {
             progressElement.innerHTML = `<div class="b3-dialog__scrim" style="opacity: 1"></div>
 <div class="b3-dialog__loading">
     <div style="margin: 8px 0;height: 8px;border-radius: var(--b3-border-radius);overflow: hidden;background-color:#fff;"><div style="background-color: var(--b3-theme-primary);height: 8px;background-image: linear-gradient(-45deg, rgba(255, 255, 255, 0.2) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.2) 50%, rgba(255, 255, 255, 0.2) 75%, transparent 75%, transparent);animation: stripMove 450ms linear infinite;background-size: 50px 50px;"></div></div>
-    <div>${data.msg}</div>
+    <div class="ft__breakword">${data.msg}</div>
 </div>`;
         }
     }

@@ -16,36 +16,34 @@
 
 package av
 
-type Calculable interface {
-	CalcCols()
-}
-
+// ColumnCalc 描述了列（字段）计算操作和结果的结构。
 type ColumnCalc struct {
-	Operator CalcOperator `json:"operator"`
-	Result   *Value       `json:"result"`
+	Operator CalcOperator `json:"operator"` // 计算操作符
+	Result   *Value       `json:"result"`   // 计算结果
 }
 
 type CalcOperator string
 
 const (
-	CalcOperatorNone              CalcOperator = ""
-	CalcOperatorCountAll          CalcOperator = "Count all"
-	CalcOperatorCountValues       CalcOperator = "Count values"
-	CalcOperatorCountUniqueValues CalcOperator = "Count unique values"
-	CalcOperatorCountEmpty        CalcOperator = "Count empty"
-	CalcOperatorCountNotEmpty     CalcOperator = "Count not empty"
-	CalcOperatorPercentEmpty      CalcOperator = "Percent empty"
-	CalcOperatorPercentNotEmpty   CalcOperator = "Percent not empty"
-	CalcOperatorSum               CalcOperator = "Sum"
-	CalcOperatorAverage           CalcOperator = "Average"
-	CalcOperatorMedian            CalcOperator = "Median"
-	CalcOperatorMin               CalcOperator = "Min"
-	CalcOperatorMax               CalcOperator = "Max"
-	CalcOperatorRange             CalcOperator = "Range"
-	CalcOperatorEarliest          CalcOperator = "Earliest"
-	CalcOperatorLatest            CalcOperator = "Latest"
-	CalcOperatorChecked           CalcOperator = "Checked"
-	CalcOperatorUnchecked         CalcOperator = "Unchecked"
-	CalcOperatorPercentChecked    CalcOperator = "Percent checked"
-	CalcOperatorPercentUnchecked  CalcOperator = "Percent unchecked"
+	CalcOperatorNone                CalcOperator = ""
+	CalcOperatorCountAll            CalcOperator = "Count all"
+	CalcOperatorCountValues         CalcOperator = "Count values"
+	CalcOperatorCountUniqueValues   CalcOperator = "Count unique values"
+	CalcOperatorCountEmpty          CalcOperator = "Count empty"
+	CalcOperatorCountNotEmpty       CalcOperator = "Count not empty"
+	CalcOperatorPercentEmpty        CalcOperator = "Percent empty"
+	CalcOperatorPercentNotEmpty     CalcOperator = "Percent not empty"
+	CalcOperatorPercentUniqueValues CalcOperator = "Percent unique values"
+	CalcOperatorSum                 CalcOperator = "Sum"
+	CalcOperatorAverage             CalcOperator = "Average"
+	CalcOperatorMedian              CalcOperator = "Median"
+	CalcOperatorMin                 CalcOperator = "Min"
+	CalcOperatorMax                 CalcOperator = "Max"
+	CalcOperatorRange               CalcOperator = "Range"
+	CalcOperatorEarliest            CalcOperator = "Earliest"
+	CalcOperatorLatest              CalcOperator = "Latest"
+	CalcOperatorChecked             CalcOperator = "Checked"
+	CalcOperatorUnchecked           CalcOperator = "Unchecked"
+	CalcOperatorPercentChecked      CalcOperator = "Percent checked"
+	CalcOperatorPercentUnchecked    CalcOperator = "Percent unchecked"
 )

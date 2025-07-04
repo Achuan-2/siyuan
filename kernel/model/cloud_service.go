@@ -215,7 +215,6 @@ var (
 )
 
 func RefreshCheckJob() {
-	go util.GetRhyResult(true) // 发一次请求进行结果缓存
 	go refreshSubscriptionExpirationRemind()
 	go refreshUser()
 	go refreshAnnouncement()
@@ -297,7 +296,7 @@ func refreshAnnouncement() {
 		}
 	}
 
-	for _, announcement := range GetAnnouncements() {
+	for _, announcement := range getAnnouncements() {
 		var exist bool
 		for _, existingAnnouncement := range existingAnnouncements {
 			if announcement.Id == existingAnnouncement.Id {
@@ -468,6 +467,7 @@ func GetCloudShorthand(id string) (ret map[string]interface{}, err error) {
 	luteEngine := NewLute()
 	luteEngine.SetFootnotes(true)
 	tree := parse.Parse("", []byte(md), luteEngine.ParseOptions)
+	luteEngine.RenderOptions.ProtyleMarkNetImg = false
 	content := luteEngine.ProtylePreview(tree, luteEngine.RenderOptions)
 	ret["shorthandContent"] = content
 	return
@@ -521,6 +521,7 @@ func GetCloudShorthands(page int) (result map[string]interface{}, err error) {
 		md := shorthand["shorthandContent"].(string)
 		shorthand["shorthandMd"] = md
 		tree := parse.Parse("", []byte(md), luteEngine.ParseOptions)
+		luteEngine.RenderOptions.ProtyleMarkNetImg = false
 		content := luteEngine.ProtylePreview(tree, luteEngine.RenderOptions)
 		shorthand["shorthandContent"] = content
 	}
@@ -566,7 +567,7 @@ func getUser(token string) (*conf.User, error) {
 
 func UseActivationcode(code string) (err error) {
 	code = strings.TrimSpace(code)
-	code = gulu.Str.RemoveInvisible(code)
+	code = util.RemoveInvalid(code)
 	requestResult := gulu.Ret.NewResult()
 	request := httpclient.NewCloudRequest30s()
 	resp, err := request.
@@ -590,7 +591,7 @@ func UseActivationcode(code string) (err error) {
 
 func CheckActivationcode(code string) (retCode int, msg string) {
 	code = strings.TrimSpace(code)
-	code = gulu.Str.RemoveInvisible(code)
+	code = util.RemoveInvalid(code)
 	retCode = 1
 	requestResult := gulu.Ret.NewResult()
 	request := httpclient.NewCloudRequest30s()

@@ -8,11 +8,23 @@ import {afterExport} from "./util";
 /// #endif
 import {confirmDialog} from "../../dialog/confirmDialog";
 import {getThemeMode, setInlineStyle} from "../../util/assets";
-import {fetchPost} from "../../util/fetch";
+import {fetchPost, fetchSyncPost} from "../../util/fetch";
 import {Dialog} from "../../dialog";
 import {replaceLocalPath} from "../../editor/rename";
 import {setStorageVal} from "../util/compatibility";
 import {isPaidUser} from "../../util/needSubscribe";
+import {getCloudURL} from "../../config/util/about";
+import {getFrontend} from "../../util/functions";
+
+const getPluginStyle = async () => {
+    const response = await fetchSyncPost("/api/petal/loadPetals", {frontend: getFrontend()});
+    let css = "";
+    // 为加快启动速度，不进行 await
+    response.data.forEach((item: IPluginData) => {
+        css += item.css || "";
+    });
+    return css;
+};
 
 export const saveExport = (option: IExportOptions) => {
     /// #if !BROWSER
@@ -64,7 +76,7 @@ export const saveExport = (option: IExportOptions) => {
             wordDialog.destroy();
         });
     } else {
-        getExportPath(option);
+        getExportPath(option, false, true);
     }
     /// #endif
 };
@@ -102,9 +114,9 @@ const renderPDF = async (id: string) => {
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes"/>
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
-    <link rel="stylesheet" type="text/css" id="baseStyle" href="${servePath}/stage/build/export/base.css?${Constants.SIYUAN_VERSION}"/>
-    <link rel="stylesheet" type="text/css" id="themeDefaultStyle" href="${servePath}/appearance/themes/daylight/theme.css?${Constants.SIYUAN_VERSION}"/>
-    <script src="${servePath}/stage/protyle/js/protyle-html.js?v=3.0.5"></script>
+    <link rel="stylesheet" type="text/css" id="baseStyle" href="${servePath}/stage/build/export/base.css?v=${Constants.SIYUAN_VERSION}"/>
+    <link rel="stylesheet" type="text/css" id="themeDefaultStyle" href="${servePath}/appearance/themes/daylight/theme.css?v=${Constants.SIYUAN_VERSION}"/>
+    <script src="${servePath}/stage/protyle/js/protyle-html.js?v=${Constants.SIYUAN_VERSION}"></script>
     ${themeStyle}
     <title>${window.siyuan.languages.export} PDF</title>
     <style>
@@ -168,8 +180,8 @@ const renderPDF = async (id: string) => {
         .b3-label:last-child {
             border-bottom: none;
         }
-        ${setInlineStyle(false)}
-        ${document.getElementById("pluginsStyle").innerHTML}
+        ${await setInlineStyle(false)}
+        ${await getPluginStyle()}
         ${getSnippetCSS()}
     </style>
 </head>
@@ -258,7 +270,7 @@ const renderPDF = async (id: string) => {
             </div>
             <span class="fn__hr"></span>
             <input id="watermark" class="b3-switch" type="checkbox" ${localData.watermark ? "checked" : ""}>
-            <div style="display:none;font-size: 12px;margin-top: 12px;color: var(--b3-theme-on-surface);">${window.siyuan.languages._kernel[214]}</div>
+            <div style="display:none;font-size: 12px;margin-top: 12px;color: var(--b3-theme-on-surface);">${window.siyuan.languages._kernel[214].replaceAll("${accountServer}", getCloudURL(""))}</div>
         </label>
     </div>
     <div class="fn__flex" style="padding: 0 16px">
@@ -311,12 +323,13 @@ const renderPDF = async (id: string) => {
             item.parentElement.style.width = Math.min(item.parentElement.clientWidth, width) + "px";
             item.removeAttribute('data-render');
         })
-        Protyle.highlightRender(previewElement, "${servePath}/stage/protyle");
+        Protyle.highlightRender(previewElement, "${servePath}/stage/protyle", document.querySelector("#scale").value);
         previewElement.querySelectorAll('[data-type="NodeMathBlock"]').forEach((item) => {
-            item.style.width = "";
-            item.style.boxSizing = "border-box";
-            item.style.width = Math.min(item.clientWidth, width) + "px";
+            // 超级块内不能移除 width https://github.com/siyuan-note/siyuan/issues/14318
             item.removeAttribute('data-render');
+        })
+        previewElement.querySelectorAll('[data-type="NodeCodeBlock"][data-subtype="mermaid"] svg').forEach((item) => {
+            item.style.maxHeight = width * 1.414 + "px";
         })
         Protyle.mathRender(previewElement, "${servePath}/stage/protyle", true);
         previewElement.querySelectorAll("table").forEach(item => {
@@ -385,21 +398,18 @@ const renderPDF = async (id: string) => {
         })
     }
     const renderPreview = (data) => {
-        previewElement.innerHTML = '<div style="padding:6px 0 0 0" class="protyle-wysiwyg${window.siyuan.config.editor.displayBookmarkIcon ? " protyle-wysiwyg--attr" : ""}">' + data.content + '</div>';
+        previewElement.innerHTML = '<div style="padding:8px 0 0 0" class="protyle-wysiwyg${window.siyuan.config.editor.displayBookmarkIcon ? " protyle-wysiwyg--attr" : ""}">' + data.content + '</div>';
         const wysElement = previewElement.querySelector(".protyle-wysiwyg");
         wysElement.setAttribute("data-doc-type", data.type || "NodeDocument");
-        if (data.attrs.memo) {
-            wysElement.setAttribute("memo", data.attrs.memo);
-        }
-        if (data.attrs.name) {
-            wysElement.setAttribute("name", data.attrs.name);
-        }
-        if (data.attrs.bookmark) {
-            wysElement.setAttribute("bookmark", data.attrs.bookmark);
-        }
-        if (data.attrs.alias) {
-            wysElement.setAttribute("alias", data.attrs.alias);
-        }
+        Object.keys(data.attrs).forEach(key => {
+            wysElement.setAttribute(key, data.attrs[key]);
+        })
+        // https://github.com/siyuan-note/siyuan/issues/13669
+        wysElement.querySelectorAll('[data-node-id]').forEach((item) => {
+            if (item.querySelector(".img")) {
+                item.insertAdjacentHTML("beforeend", "<hr style='margin:0;border:0'>");
+            }
+        })
         Protyle.mermaidRender(wysElement, "${servePath}/stage/protyle");
         Protyle.flowchartRender(wysElement, "${servePath}/stage/protyle");
         Protyle.graphvizRender(wysElement, "${servePath}/stage/protyle");
@@ -418,7 +428,7 @@ const renderPDF = async (id: string) => {
             alert(response.msg)
             return;
         }
-        document.title = '${window.siyuan.languages.export} PDF - ' + response.data.name
+        document.title = response.data.name
         window.siyuan = {
           config: {
             appearance: { mode: 0, codeBlockThemeDark: "${window.siyuan.config.appearance.codeBlockThemeDark}", codeBlockThemeLight: "${window.siyuan.config.appearance.codeBlockThemeLight}" },
@@ -441,7 +451,8 @@ const renderPDF = async (id: string) => {
                     const linkAddress = target.getAttribute("href");
                     if (linkAddress.startsWith("#")) {
                         // 导出预览模式点击块引转换后的脚注跳转不正确 https://github.com/siyuan-note/siyuan/issues/5700
-                        previewElement.querySelector(linkAddress).scrollIntoView();
+                        const hash = linkAddress.substring(1);
+                        previewElement.querySelector('[data-node-id="' + hash + '"], [id="' + hash + '"]').scrollIntoView();
                         event.stopPropagation();
                         event.preventDefault();
                         return;
@@ -634,7 +645,7 @@ const getExportPath = (option: IExportOptions, removeAssets?: boolean, mergeSubd
     });
 };
 
-const onExport = (data: IWebSocketData, filePath: string, exportOption: IExportOptions, removeAssets?: boolean, msgId?: string) => {
+const onExport = async (data: IWebSocketData, filePath: string, exportOption: IExportOptions, removeAssets?: boolean, msgId?: string) => {
     let themeName = window.siyuan.config.appearance.themeLight;
     let mode = 0;
     if (["html", "htmlmd"].includes(exportOption.type) && window.siyuan.config.appearance.mode === 1) {
@@ -655,17 +666,16 @@ const onExport = (data: IWebSocketData, filePath: string, exportOption: IExportO
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes"/>
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
-    <script src="stage/protyle/js/lute/lute.min.js"></script>
-    <script src="stage/protyle/js/protyle-html.js?v=3.0.5"></script>
-    <link rel="stylesheet" type="text/css" id="baseStyle" href="stage/build/export/base.css?${Constants.SIYUAN_VERSION}"/>
-    <link rel="stylesheet" type="text/css" id="themeDefaultStyle" href="appearance/themes/${themeName}/theme.css?${Constants.SIYUAN_VERSION}"/>
+    <link rel="stylesheet" type="text/css" id="baseStyle" href="stage/build/export/base.css?v=${Constants.SIYUAN_VERSION}"/>
+    <link rel="stylesheet" type="text/css" id="themeDefaultStyle" href="appearance/themes/${themeName}/theme.css?v=${Constants.SIYUAN_VERSION}"/>
+    <script src="stage/protyle/js/protyle-html.js?v=${Constants.SIYUAN_VERSION}"></script>
     ${themeStyle}
     <title>${data.data.name}</title>
     <!-- Exported by SiYuan v${Constants.SIYUAN_VERSION} -->
     <style>
         body {font-family: var(--b3-font-family);background-color: var(--b3-theme-background);color: var(--b3-theme-on-background)}
-        ${setInlineStyle(false)}
-        ${document.getElementById("pluginsStyle").innerHTML}
+        ${await setInlineStyle(false)}
+        ${await getPluginStyle()}
         ${getSnippetCSS()}
     </style>
 </head>
@@ -673,9 +683,9 @@ const onExport = (data: IWebSocketData, filePath: string, exportOption: IExportO
 <div class="${["htmlmd", "word"].includes(exportOption.type) ? "b3-typography" : "protyle-wysiwyg" + (window.siyuan.config.editor.displayBookmarkIcon ? " protyle-wysiwyg--attr" : "")}" 
 style="max-width: 800px;margin: 0 auto;" 
 id="preview">${data.data.content}</div>
-<script src="appearance/icons/${window.siyuan.config.appearance.icon}/icon.js?${Constants.SIYUAN_VERSION}"></script>
-<script src="stage/build/export/protyle-method.js?${Constants.SIYUAN_VERSION}"></script>
-<script src="stage/protyle/js/lute/lute.min.js?${Constants.SIYUAN_VERSION}"></script>    
+<script src="appearance/icons/${window.siyuan.config.appearance.icon}/icon.js?v=${Constants.SIYUAN_VERSION}"></script>
+<script src="stage/build/export/protyle-method.js?v=${Constants.SIYUAN_VERSION}"></script>
+<script src="stage/protyle/js/lute/lute.min.js?v=${Constants.SIYUAN_VERSION}"></script>  
 <script>
     window.siyuan = {
       config: {

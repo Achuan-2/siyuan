@@ -51,8 +51,18 @@ type TOperation =
     | "moveOutlineHeading"
     | "updateAttrViewColRollup"
     | "hideAttrViewName"
+    | "setAttrViewCardSize"
+    | "setAttrViewCardAspectRatio"
+    | "setAttrViewCoverFrom"
+    | "setAttrViewCoverFromAssetKeyID"
+    | "setAttrViewFitImage"
+    | "setAttrViewShowIcon"
+    | "setAttrViewWrapField"
     | "setAttrViewColDate"
     | "unbindAttrViewBlock"
+    | "setAttrViewViewDesc"
+    | "setAttrViewColDesc"
+    | "setAttrViewBlockView"
 type TBazaarType = "templates" | "icons" | "widgets" | "themes" | "plugins"
 type TCardType = "doc" | "notebook" | "all"
 type TEventBus = "ws-main" | "sync-start" | "sync-end" | "sync-fail" |
@@ -69,6 +79,7 @@ type TEventBus = "ws-main" | "sync-start" | "sync-end" | "sync-fail" |
     "destroy-protyle" |
     "lock-screen" |
     "mobile-keyboard-show" | "mobile-keyboard-hide"
+type TAVView = "table" | "gallery"
 type TAVCol =
     "text"
     | "date"
@@ -105,7 +116,26 @@ type TAVFilterOperator =
     | "Is relative to today"
     | "Is true"
     | "Is false"
+
 declare module "blueimp-md5"
+
+declare class Highlight {
+    constructor(...range: Range[]);
+
+    add(range: Range): void
+
+    clear(): void
+
+    forEach(callbackfn: (value: Range, key: number) => void): void;
+}
+
+declare namespace CSS {
+    const highlights: Map<string, Highlight>;
+}
+
+interface CSSStyleDeclarationElectron extends CSSStyleDeclaration {
+    WebkitAppRegion: string;
+}
 
 interface Window {
     echarts: {
@@ -121,13 +151,24 @@ interface Window {
         dispose(element: Element): void;
         getInstanceById(id: string): {
             resize: () => void
+            clear: () => void
+            getOption: () => { series: { type: string }[] }
         };
-    }
+    };
     ABCJS: {
         renderAbc(element: Element, text: string, options: {
             responsive: string
         }): void;
-    }
+    };
+    MathJax: {
+        svg: {
+            fontCache: string
+        }
+        startup?: {
+            promise: Promise<void>
+        }
+        tex2svg?(math: string, options: { display: boolean }): HTMLElement
+    };
     hljs: {
         listLanguages(): string[];
         highlight(text: string, options: {
@@ -148,7 +189,7 @@ interface Window {
             trust: boolean;
             strict: (errorCode: string) => "ignore" | "warn";
         }): string;
-    }
+    };
     mermaid: {
         initialize(options: any): void,
         render(id: string, text: string): { svg: string }
@@ -156,43 +197,73 @@ interface Window {
     plantumlEncoder: {
         encode(options: string): string,
     };
-    pdfjsLib: any
+    pdfjsLib: any;
 
-    dataLayer: any[]
+    dataLayer: any[];
 
-    siyuan: ISiyuan
-    webkit: any
-    html2canvas: (element: Element, opitons: {
-        useCORS: boolean,
-        scale?: number
-    }) => Promise<any>;
+    siyuan: ISiyuan;
+    webkit: {
+        messageHandlers: {
+            openLink: { postMessage: (url: string) => void }
+            startKernelFast: { postMessage: (url: string) => void }
+            changeStatusBar: { postMessage: (url: string) => void }
+            setClipboard: { postMessage: (url: string) => void }
+            purchase: { postMessage: (url: string) => void }
+        }
+    };
+    htmlToImage: {
+        toCanvas: (element: Element) => Promise<HTMLCanvasElement>
+        toBlob: (element: Element) => Promise<Blob>
+    };
     JSAndroid: {
         returnDesktop(): void
         openExternal(url: string): void
+        exportByDefault(url: string): void
         changeStatusBarColor(color: string, mode: number): void
         writeClipboard(text: string): void
         writeHTMLClipboard(text: string, html: string): void
         writeImageClipboard(uri: string): void
         readClipboard(): string
+        readHTMLClipboard(): string
         getBlockURL(): string
-    }
+        hideKeyboard(): void
+    };
+    JSHarmony: {
+        openExternal(url: string): void
+        exportByDefault(url: string): void
+        changeStatusBarColor(color: string, mode: number): void
+        writeClipboard(text: string): void
+        writeHTMLClipboard(text: string, html: string): void
+        readClipboard(): string
+        readHTMLClipboard(): string
+        returnDesktop(): void
+    };
 
-    Protyle: import("../protyle/method").default
+    Protyle: import("../protyle/method").default;
 
-    goBack(): void
+    goBack(): void;
 
-    reconnectWebSocket(): void
+    showMessage(message: string, timeout: number, type: string, messageId?: string): void;
 
-    showKeyboardToolbar(height: number): void
+    reconnectWebSocket(): void;
 
-    hideKeyboardToolbar(): void
+    showKeyboardToolbar(height: number): void;
 
-    openFileByURL(URL: string): boolean
+    processIOSPurchaseResponse(code: number): void;
 
-    destroyTheme(): Promise<void>
+    hideKeyboardToolbar(): void;
+
+    openFileByURL(URL: string): boolean;
+
+    destroyTheme(): Promise<void>;
 }
 
-interface filesPath {
+interface IRefDefs {
+    refID: string,
+    defIDs?: string[]
+}
+
+interface IFilesPath {
     notebookId: string,
     openPaths: string[]
 }
@@ -209,30 +280,30 @@ interface ISaveLayout {
     name: string,
     layout: IObject
     time: number
-    filesPaths: filesPath[]
+    filesPaths: IFilesPath[]
 }
 
 interface IWorkspace {
-    path: string
-    closed: boolean
+    path: string;
+    closed: boolean;
 }
 
 interface ICardPackage {
-    id: string
-    updated: string
-    name: string
-    size: number
+    id: string;
+    updated: string;
+    name: string;
+    size: number;
 }
 
 interface ICard {
-    deckID: string
-    cardID: string
-    blockID: string
-    nextDues: IObject
-    lapses: number  // 遗忘次数
-    lastReview: number  // 最后复习时间
-    reps: number  // 复习次数
-    state: number   // 卡片状态 0：新卡
+    deckID: string;
+    cardID: string;
+    blockID: string;
+    nextDues: IObject;
+    lapses: number;  // 遗忘次数
+    lastReview: number;  // 最后复习时间
+    reps: number;  // 复习次数
+    state: number;   // 卡片状态 0：新卡
 }
 
 interface ICardData {
@@ -243,12 +314,12 @@ interface ICardData {
 }
 
 interface IPluginSettingOption {
-    title: string
-    description?: string
-    actionElement?: HTMLElement
-    direction?: "column" | "row"
+    title: string;
+    description?: string;
+    actionElement?: HTMLElement;
+    direction?: "column" | "row";
 
-    createActionElement?(): HTMLElement
+    createActionElement?(): HTMLElement;
 }
 
 interface ISearchAssetOption {
@@ -274,22 +345,22 @@ interface ITextOption {
 }
 
 interface ISnippet {
-    id?: string
-    name: string
-    type: string
-    enabled: boolean
-    content: string
+    id?: string;
+    name: string;
+    type: string;
+    enabled: boolean;
+    content: string;
 }
 
 interface IInbox {
-    oId: string
-    shorthandContent: string
-    shorthandMd: string
-    shorthandDesc: string
-    shorthandFrom: number
-    shorthandTitle: string
-    shorthandURL: string
-    hCreated: string
+    oId: string;
+    shorthandContent: string;
+    shorthandMd: string;
+    shorthandDesc: string;
+    shorthandFrom: number;
+    shorthandTitle: string;
+    shorthandURL: string;
+    hCreated: string;
 }
 
 interface IPdfAnno {
@@ -344,15 +415,15 @@ interface IEmoji {
 }
 
 interface INotebook {
-    name: string
-    id: string
-    closed: boolean
-    icon: string
-    sort: number
+    name: string;
+    id: string;
+    closed: boolean;
+    icon: string;
+    sort: number;
     dueFlashcardCount?: string;
     newFlashcardCount?: string;
     flashcardCount?: string;
-    sortMode: number
+    sortMode: number;
 }
 
 interface ISiyuan {
@@ -405,6 +476,7 @@ interface ISiyuan {
         }[]
     },
     dragElement?: HTMLElement,
+    currentDragOverTabHeadersElement?: HTMLElement
     layout?: {
         layout?: import("../layout").Layout,
         centerLayout?: import("../layout").Layout,
@@ -463,6 +535,7 @@ interface IOperation {
     deckID?: string // add/removeFlashcards 专享
     blockIDs?: string[] // add/removeFlashcards 专享
     removeDest?: boolean // removeAttrViewCol 专享
+    layout?: string // addAttrViewView 专享
 }
 
 interface IOperationSrcs {
@@ -559,32 +632,33 @@ interface IOpenFileOptions {
     keepCursor?: boolean // file，是否跳转到新 tab 上
     zoomIn?: boolean // 是否缩放
     removeCurrentTab?: boolean // 在当前页签打开时需移除原有页签
+    openNewTab?: boolean // 使用新页签打开
     afterOpen?: (model?: import("../layout/Model").Model) => void // 打开后回调
 }
 
 interface ILayoutOptions {
-    direction?: Config.TUILayoutDirection
-    size?: string
-    resize?: Config.TUILayoutDirection
-    type?: Config.TUILayoutType
-    element?: HTMLElement
+    direction?: Config.TUILayoutDirection;
+    size?: string;
+    resize?: Config.TUILayoutDirection;
+    type?: Config.TUILayoutType;
+    element?: HTMLElement;
 }
 
 interface ITab {
-    icon?: string
-    docIcon?: string
-    title?: string
-    panel?: string
-    callback?: (tab: import("../layout/Tab").Tab) => void
+    icon?: string;
+    docIcon?: string;
+    title?: string;
+    panel?: string;
+    callback?: (tab: import("../layout/Tab").Tab) => void;
 }
 
 interface IWebSocketData {
-    cmd?: string
-    callback?: string
-    data?: any
-    msg: string
-    code: number
-    sid?: string
+    cmd?: string;
+    callback?: string;
+    data?: any;
+    msg: string;
+    code: number;
+    sid?: string;
 }
 
 interface IGraphCommon {
@@ -597,7 +671,7 @@ interface IGraphCommon {
         linkWidth: number
         nodeSize: number
         arrow: boolean
-    }
+    };
     type: {
         blockquote: boolean
         code: boolean
@@ -609,7 +683,7 @@ interface IGraphCommon {
         super: boolean
         table: boolean
         tag: boolean
-    }
+    };
 }
 
 interface IKeymapItem {
@@ -717,51 +791,54 @@ interface IMenu {
 }
 
 interface IBazaarItem {
-    incompatible?: boolean  // 仅 plugin
-    enabled: boolean
-    preferredName: string
-    preferredDesc: string
-    preferredReadme: string
-    iconURL: string
-    stars: string
-    author: string
-    updated: string
-    downloads: string
-    current: false
-    installed: false
-    outdated: false
-    name: string
-    previewURL: string
-    previewURLThumb: string
-    repoHash: string
-    repoURL: string
-    url: string
-    openIssues: number
-    version: string
-    modes: string[]
-    hSize: string
-    hInstallSize: string
-    hInstallDate: string
-    hUpdated: string
-    preferredFunding: string
+    incompatible?: boolean;  // 仅 plugin
+    enabled: boolean;
+    preferredName: string;
+    preferredDesc: string;
+    preferredReadme: string;
+    iconURL: string;
+    stars: string;
+    author: string;
+    updated: string;
+    downloads: string;
+    current: false;
+    installed: false;
+    outdated: false;
+    name: string;
+    previewURL: string;
+    previewURLThumb: string;
+    repoHash: string;
+    repoURL: string;
+    url: string;
+    openIssues: number;
+    version: string;
+    modes: string[];
+    hSize: string;
+    hInstallSize: string;
+    hInstallDate: string;
+    hUpdated: string;
+    preferredFunding: string;
 }
 
 interface IAV {
-    id: string
-    name: string
-    view: IAVTable
-    viewID: string
-    viewType: string
-    views: IAVView[]
+    id: string;
+    name: string;
+    view: IAVTable | IAVGallery;
+    viewID: string;
+    viewType: TAVView;
+    views: IAVView[];
 }
 
 interface IAVView {
-    name: string
-    id: string
-    type: string
-    icon: string
-    hideAttrViewName: boolean
-    pageSize: number
+    name: string;
+    desc: string;
+    id: string;
+    type: TAVView;
+    icon: string;
+    hideAttrViewName: boolean;
+    pageSize: number;
+    showIcon: boolean;
+    wrapField: boolean;
 }
 
 interface IAVTable extends IAVView {
@@ -770,7 +847,20 @@ interface IAVTable extends IAVView {
     sorts: IAVSort[],
     rows: IAVRow[],
     rowCount: number,
-    pageSize: number,
+}
+
+interface IAVGallery extends IAVView {
+    coverFrom: number;    // 0：无，1：内容图，2：资源字段，3：内容块
+    coverFromAssetKeyID?: string;
+    cardSize: number;   // 0：小卡片，1：中卡片，2：大卡片
+    cardAspectRatio: number;
+    fitImage: boolean;
+    cards: IAVGalleryItem[],
+    desc: string
+    fields: IAVColumn[]
+    filters: IAVFilter[],
+    sorts: IAVSort[],
+    cardCount: number,
 }
 
 interface IAVFilter {
@@ -782,9 +872,9 @@ interface IAVFilter {
 }
 
 interface relativeDate {
-    count: number   // 数量
-    unit: number    // 单位：0: 天、1: 周、2: 月、3: 年
-    direction: number   // 方向：-1: 前、0: 现在、1: 后
+    count: number;   // 数量
+    unit: number;    // 单位：0: 天、1: 周、2: 月、3: 年
+    direction: number;   // 方向：-1: 前、0: 现在、1: 后
 }
 
 interface IAVSort {
@@ -797,6 +887,7 @@ interface IAVColumn {
     icon: string,
     id: string,
     name: string,
+    desc: string,
     wrap: boolean,
     pin: boolean,
     hidden: boolean,
@@ -811,6 +902,7 @@ interface IAVColumn {
     options?: {
         name: string,
         color: string,
+        desc?: string,
     }[],
     relation?: IAVColumnRelation,
     rollup?: IAVCellRollupValue
@@ -819,6 +911,13 @@ interface IAVColumn {
 interface IAVRow {
     id: string,
     cells: IAVCell[]
+}
+
+interface IAVGalleryItem {
+    coverURL?: string;
+    coverContent?: string;
+    id: string;
+    values: IAVCell[];
 }
 
 interface IAVCell {
@@ -847,7 +946,8 @@ interface IAVCellValue {
     mAsset?: IAVCellAssetValue[]
     block?: {
         content: string,
-        id?: string
+        id?: string,
+        icon?: string
     }
     url?: {
         content: string
@@ -874,8 +974,8 @@ interface IAVCellValue {
 }
 
 interface IAVCellRelationValue {
-    blockIDs: string[]
-    contents?: IAVCellValue[]
+    blockIDs: string[];
+    contents?: IAVCellValue[];
 }
 
 interface IAVCellDateValue {
@@ -900,15 +1000,15 @@ interface IAVCellAssetValue {
 }
 
 interface IAVColumnRelation {
-    avID?: string
-    backKeyID?: string
-    isTwoWay?: boolean
+    avID?: string;
+    backKeyID?: string;
+    isTwoWay?: boolean;
 }
 
 interface IAVCellRollupValue {
-    relationKeyID?: string  // 关联列 ID
-    keyID?: string
-    calc?: IAVCalc
+    relationKeyID?: string;  // 关联列 ID
+    keyID?: string;
+    calc?: IAVCalc;
 }
 
 interface IAVCalc {

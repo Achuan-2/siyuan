@@ -82,7 +82,7 @@ func RemoveIndexes(paths []string) {
 
 func listSyFiles(dir string) (ret []string) {
 	dirPath := filepath.Join(util.DataDir, dir)
-	err := filelock.Walk(dirPath, func(path string, d fs.FileInfo, err error) error {
+	err := filelock.Walk(dirPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			logging.LogWarnf("walk dir [%s] failed: %s", dirPath, err)
 			return err
@@ -362,21 +362,12 @@ func init() {
 func subscribeSQLEvents() {
 	// 使用下面的 EvtSQLInsertBlocksFTS 就可以了
 	//eventbus.Subscribe(eventbus.EvtSQLInsertBlocks, func(context map[string]interface{}, current, total, blockCount int, hash string) {
-	//	if util.ContainerAndroid == util.Container || util.ContainerIOS == util.Container {
-	//		// Android/iOS 端不显示数据索引和搜索索引状态提示 https://github.com/siyuan-note/siyuan/issues/6392
-	//		return
-	//	}
 	//
 	//	msg := fmt.Sprintf(Conf.Language(89), current, total, blockCount, hash)
 	//	util.SetBootDetails(msg)
 	//	util.ContextPushMsg(context, msg)
 	//})
 	eventbus.Subscribe(eventbus.EvtSQLInsertBlocksFTS, func(context map[string]interface{}, blockCount int, hash string) {
-		if util.ContainerAndroid == util.Container || util.ContainerIOS == util.Container {
-			// Android/iOS 端不显示数据索引和搜索索引状态提示 https://github.com/siyuan-note/siyuan/issues/6392
-			return
-		}
-
 		current := context["current"].(int)
 		total := context["total"]
 		msg := fmt.Sprintf(Conf.Language(90), current, total, blockCount, hash)
@@ -384,7 +375,7 @@ func subscribeSQLEvents() {
 		util.ContextPushMsg(context, msg)
 	})
 	eventbus.Subscribe(eventbus.EvtSQLDeleteBlocks, func(context map[string]interface{}, rootID string) {
-		if util.ContainerAndroid == util.Container || util.ContainerIOS == util.Container {
+		if util.ContainerAndroid == util.Container || util.ContainerIOS == util.Container || util.ContainerHarmony == util.Container {
 			return
 		}
 
@@ -395,7 +386,7 @@ func subscribeSQLEvents() {
 		util.ContextPushMsg(context, msg)
 	})
 	eventbus.Subscribe(eventbus.EvtSQLUpdateBlocksHPaths, func(context map[string]interface{}, blockCount int, hash string) {
-		if util.ContainerAndroid == util.Container || util.ContainerIOS == util.Container {
+		if util.ContainerAndroid == util.Container || util.ContainerIOS == util.Container || util.ContainerHarmony == util.Container {
 			return
 		}
 
@@ -407,7 +398,7 @@ func subscribeSQLEvents() {
 	})
 
 	eventbus.Subscribe(eventbus.EvtSQLInsertHistory, func(context map[string]interface{}) {
-		if util.ContainerAndroid == util.Container || util.ContainerIOS == util.Container {
+		if util.ContainerAndroid == util.Container || util.ContainerIOS == util.Container || util.ContainerHarmony == util.Container {
 			return
 		}
 
@@ -419,7 +410,7 @@ func subscribeSQLEvents() {
 	})
 
 	eventbus.Subscribe(eventbus.EvtSQLInsertAssetContent, func(context map[string]interface{}) {
-		if util.ContainerAndroid == util.Container || util.ContainerIOS == util.Container {
+		if util.ContainerAndroid == util.Container || util.ContainerIOS == util.Container || util.ContainerHarmony == util.Container {
 			return
 		}
 

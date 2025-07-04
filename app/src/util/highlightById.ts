@@ -1,5 +1,5 @@
-import {hasClosestBlock, hasClosestByAttribute} from "../protyle/util/hasClosest";
-import {getEditorRange} from "../protyle/util/selection";
+import {hasClosestBlock, isInEmbedBlock} from "../protyle/util/hasClosest";
+import {focusByRange, getEditorRange} from "../protyle/util/selection";
 
 export const bgFade = (element: Element) => {
     element.classList.add("protyle-wysiwyg--hl");
@@ -22,7 +22,7 @@ export const highlightById = (protyle: IProtyle, id: string, top = false) => {
     }
 
     Array.from(protyleElement.querySelectorAll(`[data-node-id="${id}"]`)).find((item: HTMLElement) => {
-        if (!hasClosestByAttribute(item, "data-type", "block-render", true)) {
+        if (!isInEmbedBlock(item)) {
             nodeElement = item;
             return true;
         }
@@ -47,16 +47,19 @@ export const scrollCenter = (protyle: IProtyle, nodeElement?: Element, top = fal
             if (blockElement.classList.contains("code-block")) {
                 const brElement = document.createElement("br");
                 range.insertNode(brElement);
-                brElement.scrollIntoView({block: "center", behavior});
+                brElement.scrollIntoView({block: "nearest", behavior});
                 brElement.remove();
                 return;
             }
             // undo 时禁止数据库滚动
-            if (blockElement.classList.contains("av") && blockElement.dataset.render === "true" &&
-                (blockElement.querySelector(".av__row--header").getAttribute("style")?.indexOf("transform") > -1 || blockElement.querySelector(".av__row--footer").getAttribute("style")?.indexOf("transform") > -1)) {
+            if (blockElement.classList.contains("av") && blockElement.dataset.render === "true" && (
+                blockElement.querySelector(".av__row--header")?.getAttribute("style")?.indexOf("transform") > -1 ||
+                blockElement.querySelector(".av__row--footer")?.getAttribute("style")?.indexOf("transform") > -1
+            )) {
                 return;
             }
-
+            // 撤销时 br 插入删除会导致 rang 被修改 https://github.com/siyuan-note/siyuan/issues/12679
+            const cloneRange = range.cloneRange();
             const br2Element = document.createElement("br");
             range.insertNode(br2Element);
             const editorElement = protyle.contentElement;
@@ -71,6 +74,7 @@ export const scrollCenter = (protyle: IProtyle, nodeElement?: Element, top = fal
                 editorElement.scroll({top: scrollTop, behavior});
             }
             br2Element.remove();
+            focusByRange(cloneRange);
             return;
         }
     }

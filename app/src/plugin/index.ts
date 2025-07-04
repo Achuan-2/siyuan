@@ -15,6 +15,7 @@ import {hasClosestByAttribute} from "../protyle/util/hasClosest";
 import {BlockPanel} from "../block/Panel";
 import {Setting} from "./Setting";
 import {clearOBG} from "../layout/dock/util";
+import {Constants} from "../constants";
 
 export class Plugin {
     private app: App;
@@ -27,7 +28,7 @@ export class Plugin {
         filter: string[],
         html: string,
         id: string,
-        callback: (protyle: import("../protyle").Protyle) => void
+        callback: (protyle: import("../protyle").Protyle, nodeElement: HTMLElement) => void
     }[] = [];
     // TODO
     public customBlockRenders: {
@@ -74,6 +75,29 @@ export class Plugin {
         Object.defineProperty(this, "name", {
             value: options.name,
             writable: false,
+        });
+
+        this.updateProtyleToolbar([]).forEach(toolbarItem => {
+            if (typeof toolbarItem === "string" || Constants.INLINE_TYPE.concat("|").includes(toolbarItem.name) || !toolbarItem.hotkey) {
+                return;
+            }
+            if (!window.siyuan.config.keymap.plugin) {
+                window.siyuan.config.keymap.plugin = {};
+            }
+            if (!window.siyuan.config.keymap.plugin[options.name]) {
+                window.siyuan.config.keymap.plugin[options.name] = {
+                    [toolbarItem.name]: {
+                        default: toolbarItem.hotkey,
+                        custom: toolbarItem.hotkey,
+                    }
+                };
+            }
+            if (!window.siyuan.config.keymap.plugin[options.name][toolbarItem.name]) {
+                window.siyuan.config.keymap.plugin[options.name][toolbarItem.name] = {
+                    default: toolbarItem.hotkey,
+                    custom: toolbarItem.hotkey,
+                };
+            }
         });
     }
 
@@ -138,7 +162,7 @@ export class Plugin {
     public addTopBar(options: {
         icon: string,
         title: string,
-        position?: "right" | "left",
+        position?: "south" | "left",
         callback: (evt: MouseEvent) => void
     }) {
         if (!options.icon.startsWith("icon") && !options.icon.startsWith("<svg")) {
@@ -158,7 +182,7 @@ export class Plugin {
             iconElement.setAttribute("aria-label", options.title);
             iconElement.innerHTML = options.icon.startsWith("icon") ? `<svg><use xlink:href="#${options.icon}"></use></svg>` : options.icon;
             iconElement.addEventListener("click", options.callback);
-            iconElement.setAttribute("data-position", options.position || "right");
+            iconElement.setAttribute("data-location", options.position || "right");
         }
         this.topBarIcons.push(iconElement);
         return iconElement;
@@ -169,7 +193,7 @@ export class Plugin {
         position?: "right" | "left",
     }) {
         /// #if !MOBILE
-        options.element.setAttribute("data-position", options.position || "right");
+        options.element.setAttribute("data-location", options.position || "right");
         this.statusBarIcons.push(options.element);
         return options.element;
         /// #endif
@@ -355,21 +379,21 @@ export class Plugin {
     }
 
     public addFloatLayer = (options: {
-        ids: string[],
-        defIds?: string[],
+        refDefs: IRefDefs[],
         x?: number,
         y?: number,
         targetElement?: HTMLElement,
+        originalRefBlockIDs?: IObject,
         isBacklink: boolean,
     }) => {
         window.siyuan.blockPanels.push(new BlockPanel({
             app: this.app,
+            originalRefBlockIDs: options.originalRefBlockIDs,
             targetElement: options.targetElement,
             isBacklink: options.isBacklink,
             x: options.x,
             y: options.y,
-            nodeIds: options.ids,
-            defIds: options.defIds,
+            refDefs: options.refDefs,
         }));
     };
 

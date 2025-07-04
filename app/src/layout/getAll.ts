@@ -59,6 +59,7 @@ export const getAllEditor = () => {
     return editors;
 };
 
+/// #if !MOBILE
 export const getAllModels = () => {
     const models: IModels = {
         editor: [],
@@ -160,3 +161,4 @@ export const getAllDocks = () => {
     });
     return docks;
 };
+/// #endif

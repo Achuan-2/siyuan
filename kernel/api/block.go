@@ -26,9 +26,29 @@ import (
 	"github.com/88250/lute/html"
 	"github.com/gin-gonic/gin"
 	"github.com/siyuan-note/logging"
+	"github.com/siyuan-note/siyuan/kernel/filesys"
 	"github.com/siyuan-note/siyuan/kernel/model"
 	"github.com/siyuan-note/siyuan/kernel/util"
 )
+
+func checkBlockRef(c *gin.Context) {
+	ret := gulu.Ret.NewResult()
+	defer c.JSON(http.StatusOK, ret)
+
+	arg, ok := util.JsonArg(c, ret)
+	if !ok {
+		return
+	}
+
+	idsArg := arg["ids"].([]interface{})
+	var ids []string
+	for _, id := range idsArg {
+		ids = append(ids, id.(string))
+	}
+	ids = gulu.Str.RemoveDuplicatedElem(ids)
+
+	ret.Data = model.CheckBlockRef(ids)
+}
 
 func getBlockTreeInfos(c *gin.Context) {
 	ret := gulu.Ret.NewResult()
@@ -223,6 +243,22 @@ func setBlockReminder(c *gin.Context) {
 	}
 }
 
+func getUnfoldedParentID(c *gin.Context) {
+	ret := gulu.Ret.NewResult()
+	defer c.JSON(http.StatusOK, ret)
+
+	arg, ok := util.JsonArg(c, ret)
+	if !ok {
+		return
+	}
+
+	id := arg["id"].(string)
+	parentID := model.GetUnfoldedParentID(id)
+	ret.Data = map[string]interface{}{
+		"parentID": parentID,
+	}
+}
+
 func checkBlockFold(c *gin.Context) {
 	ret := gulu.Ret.NewResult()
 	defer c.JSON(http.StatusOK, ret)
@@ -320,7 +356,10 @@ func getContentWordCount(c *gin.Context) {
 	}
 
 	content := arg["content"].(string)
-	ret.Data = model.ContentStat(content)
+	ret.Data = map[string]any{
+		"reqId": arg["reqId"],
+		"stat":  filesys.ContentStat(content),
+	}
 }
 
 func getBlocksWordCount(c *gin.Context) {
@@ -337,7 +376,10 @@ func getBlocksWordCount(c *gin.Context) {
 	for _, id := range idsArg {
 		ids = append(ids, id.(string))
 	}
-	ret.Data = model.BlocksWordCount(ids)
+	ret.Data = map[string]any{
+		"reqId": arg["reqId"],
+		"stat":  filesys.BlocksWordCount(ids),
+	}
 }
 
 func getTreeStat(c *gin.Context) {
@@ -350,7 +392,10 @@ func getTreeStat(c *gin.Context) {
 	}
 
 	id := arg["id"].(string)
-	ret.Data = model.StatTree(id)
+	ret.Data = map[string]any{
+		"reqId": arg["reqId"],
+		"stat":  filesys.StatTree(id),
+	}
 }
 
 func getDOMText(c *gin.Context) {
@@ -376,7 +421,10 @@ func getRefText(c *gin.Context) {
 	}
 
 	id := arg["id"].(string)
-	model.FlushTxQueue()
+	if util.InvalidIDPattern(id, ret) {
+		return
+	}
+
 	refText := model.GetBlockRefText(id)
 	if "" == refText {
 		// 空块返回 id https://github.com/siyuan-note/siyuan/issues/10259
@@ -409,11 +457,10 @@ func getRefIDs(c *gin.Context) {
 	}
 
 	id := arg["id"].(string)
-	refIDs, refTexts, defIDs := model.GetBlockRefs(id)
-	ret.Data = map[string][]string{
-		"refIDs":   refIDs,
-		"refTexts": refTexts,
-		"defIDs":   defIDs,
+	refDefs, originalRefBlockIDs := model.GetBlockRefs(id)
+	ret.Data = map[string]any{
+		"refDefs":             refDefs,
+		"originalRefBlockIDs": originalRefBlockIDs,
 	}
 }
 
@@ -427,10 +474,17 @@ func getRefIDsByFileAnnotationID(c *gin.Context) {
 	}
 
 	id := arg["id"].(string)
-	refIDs, refTexts := model.GetBlockRefIDsByFileAnnotationID(id)
-	ret.Data = map[string][]string{
-		"refIDs":   refIDs,
-		"refTexts": refTexts,
+	refIDs := model.GetBlockRefIDsByFileAnnotationID(id)
+	var retRefDefs []model.RefDefs
+	for _, blockID := range refIDs {
+		retRefDefs = append(retRefDefs, model.RefDefs{RefID: blockID, DefIDs: []string{}})
+	}
+	if 1 > len(retRefDefs) {
+		retRefDefs = []model.RefDefs{}
+	}
+
+	ret.Data = map[string]any{
+		"refDefs": retRefDefs,
 	}
 }
 
@@ -451,7 +505,17 @@ func getBlockDefIDsByRefText(c *gin.Context) {
 	}
 	excludeIDs = nil // 不限制虚拟引用搜索自己 https://ld246.com/article/1633243424177
 	ids := model.GetBlockDefIDsByRefText(anchor, excludeIDs)
-	ret.Data = ids
+	var retRefDefs []model.RefDefs
+	for _, id := range ids {
+		retRefDefs = append(retRefDefs, model.RefDefs{RefID: id, DefIDs: []string{}})
+	}
+	if 1 > len(retRefDefs) {
+		retRefDefs = []model.RefDefs{}
+	}
+
+	ret.Data = map[string]any{
+		"refDefs": retRefDefs,
+	}
 }
 
 func getBlockBreadcrumb(c *gin.Context) {
@@ -562,13 +626,14 @@ func getBlockInfo(c *gin.Context) {
 	}
 	rootTitle := root.IAL["title"]
 	rootTitle = html.UnescapeString(rootTitle)
+	icon := root.IAL["icon"]
 	ret.Data = map[string]string{
 		"box":         block.Box,
 		"path":        block.Path,
 		"rootID":      block.RootID,
 		"rootTitle":   rootTitle,
 		"rootChildID": rootChildID,
-		"rootIcon":    root.IAL["icon"],
+		"rootIcon":    icon,
 	}
 }
 
@@ -589,6 +654,25 @@ func getBlockDOM(c *gin.Context) {
 	}
 }
 
+func getBlockDOMs(c *gin.Context) {
+	ret := gulu.Ret.NewResult()
+	defer c.JSON(http.StatusOK, ret)
+
+	arg, ok := util.JsonArg(c, ret)
+	if !ok {
+		return
+	}
+
+	idsArg := arg["ids"].([]interface{})
+	var ids []string
+	for _, id := range idsArg {
+		ids = append(ids, id.(string))
+	}
+
+	doms := model.GetBlockDOMs(ids)
+	ret.Data = doms
+}
+
 func getBlockKramdown(c *gin.Context) {
 	ret := gulu.Ret.NewResult()
 	defer c.JSON(http.StatusOK, ret)
@@ -603,7 +687,20 @@ func getBlockKramdown(c *gin.Context) {
 		return
 	}
 
-	kramdown := model.GetBlockKramdown(id)
+	// md：Markdown 标记符模式，使用标记符导出
+	// textmark：文本标记模式，使用 span 标签导出
+	// https://github.com/siyuan-note/siyuan/issues/13183
+	mode := "md"
+	if modeArg := arg["mode"]; nil != modeArg {
+		mode = modeArg.(string)
+		if "md" != mode && "textmark" != mode {
+			ret.Code = -1
+			ret.Msg = "Invalid mode"
+			return
+		}
+	}
+
+	kramdown := model.GetBlockKramdown(id, mode)
 	ret.Data = map[string]string{
 		"id":       id,
 		"kramdown": kramdown,

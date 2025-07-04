@@ -72,6 +72,14 @@ export const commandPanel = (app: App) => {
 </li>`;
         }
     });
+    Object.keys(window.siyuan.config.keymap.editor.general).forEach((key) => {
+        if (["switchReadonly", "switchAdjust"].includes(key)) {
+            html += `<li class="b3-list-item" data-command="${key}">
+    <span class="b3-list-item__text">${window.siyuan.languages[key]}</span>
+    <span class="b3-list-item__meta${isMobile() ? " fn__none" : ""}">${updateHotkeyTip(window.siyuan.config.keymap.editor.general[key].custom)}</span>
+</li>`;
+        }
+    });
     listElement.insertAdjacentHTML("beforeend", html);
     app.plugins.forEach(plugin => {
         plugin.commands.forEach(command => {
@@ -160,7 +168,7 @@ const filterList = (inputElement: HTMLInputElement, listElement: Element) => {
         const elementValue = element.querySelector(".b3-list-item__text").textContent.toLowerCase();
         const command = element.dataset.command;
         if (inputValue.indexOf(elementValue) > -1 || elementValue.indexOf(inputValue) > -1 ||
-            inputValue.indexOf(command) > -1 || command.indexOf(inputValue) > -1) {
+            inputValue.indexOf(command) > -1 || command?.indexOf(inputValue) > -1) {
             if (!hasFocus) {
                 element.classList.add("b3-list-item--focus");
             }

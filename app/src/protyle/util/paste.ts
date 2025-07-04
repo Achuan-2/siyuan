@@ -1,11 +1,11 @@
 import {Constants} from "../../constants";
 import {uploadFiles, uploadLocalFiles} from "../upload";
 import {processPasteCode, processRender} from "./processCode";
-import {readText, writeText} from "./compatibility";
+import {readText} from "./compatibility";
 /// #if !BROWSER
 import {clipboard} from "electron";
 /// #endif
-import {hasClosestBlock} from "./hasClosest";
+import {hasClosestBlock, hasClosestByAttribute, hasClosestByClassName} from "./hasClosest";
 import {getEditorRange} from "./selection";
 import {blockRender} from "../render/blockRender";
 import {highlightRender} from "../render/highlightRender";
@@ -82,8 +82,16 @@ export const getPlainText = (blockElement: HTMLElement, isNested = false) => {
     } else if (blockElement.classList.contains("render-node")) {
         // 需在嵌入块后，代码块前
         text += Lute.UnEscapeHTMLStr(blockElement.getAttribute("data-content"));
-    } else if (["NodeHeading", "NodeParagraph", "NodeCodeBlock", "NodeTable"].includes(dataType)) {
+    } else if (["NodeHeading", "NodeParagraph", "NodeCodeBlock"].includes(dataType)) {
         text += blockElement.querySelector("[spellcheck]").textContent;
+    } else if (dataType === "NodeTable") {
+        blockElement.querySelectorAll("th, td").forEach((item) => {
+            text += item.textContent.trim() + "\t";
+            if (!item.nextElementSibling) {
+                text = text.slice(0, -1) + "\n";
+            }
+        });
+        text = text.slice(0, -1);
     } else if (!isNested && ["NodeBlockquote", "NodeList", "NodeSuperBlock", "NodeListItem"].includes(dataType)) {
         blockElement.querySelectorAll("[data-node-id]").forEach((item: HTMLElement) => {
             const nestedText = getPlainText(item, true);
@@ -95,7 +103,6 @@ export const getPlainText = (blockElement: HTMLElement, isNested = false) => {
 
 export const pasteEscaped = async (protyle: IProtyle, nodeElement: Element) => {
     try {
-        // * _ [ ] ! \ ` < > & ~ { } ( ) = # $ ^ | .
         let clipText = await readText();
         // 删掉 <span data-type\="text".*>text</span> 标签，只保留文本
         clipText = clipText.replace(/<span data-type="text".*?>(.*?)<\/span>/g, "$1");
@@ -129,22 +136,9 @@ export const pasteEscaped = async (protyle: IProtyle, nodeElement: Element) => {
             .replace(/\|/g, "\\|")
             .replace(/\./g, "\\.");
         // 转义文本不能使用 DOM 结构 https://github.com/siyuan-note/siyuan/issues/11778
-        pasteText(protyle, clipText, nodeElement, false);
+        paste(protyle, {textPlain: clipText, textHTML: "", target: nodeElement as HTMLElement});
     } catch (e) {
         console.log(e);
-    }
-};
-
-const filterClipboardHint = (protyle: IProtyle, textPlain: string) => {
-    let needRender = true;
-    protyle.options.hint.extend.find(item => {
-        if (item.key === textPlain) {
-            needRender = false;
-            return true;
-        }
-    });
-    if (needRender) {
-        protyle.hint.render(protyle);
     }
 };
 
@@ -166,80 +160,65 @@ export const pasteAsPlainText = async (protyle: IProtyle) => {
     }
     if (localFiles.length > 0) {
         uploadLocalFiles(localFiles, protyle, false);
-        writeText("");
+        return;
     }
     /// #endif
     if (localFiles.length === 0) {
         // Inline-level elements support pasted as plain text https://github.com/siyuan-note/siyuan/issues/8010
-        navigator.clipboard.readText().then(textPlain => {
-            // 对一些内置需要解析的 HTML 标签进行内部转移 Improve sub/sup pasting as plain text https://github.com/siyuan-note/siyuan/issues/12155
-            textPlain = textPlain.replace(/<sub>/g, "__@sub@__").replace(/<\/sub>/g, "__@/sub@__");
-            textPlain = textPlain.replace(/<sup>/g, "__@sup@__").replace(/<\/sup>/g, "__@/sup@__");
-            textPlain = textPlain.replace(/<kbd>/g, "__@kbd@__").replace(/<\/kbd>/g, "__@/kbd@__");
-            textPlain = textPlain.replace(/<u>/g, "__@u@__").replace(/<\/u>/g, "__@/u@__");
+        let textPlain = await readText();
+        if (getSelection().rangeCount > 0) {
+            const range = getSelection().getRangeAt(0);
+            if (hasClosestByAttribute(range.startContainer, "data-type", "code") || hasClosestByClassName(range.startContainer, "hljs")) {
+                insertHTML(textPlain.replace(/\u200D```/g, "```").replace(/```/g, "\u200D```"), protyle);
+                return;
+            }
+        }
+        // 对一些内置需要解析的 HTML 标签进行内部转移 Improve sub/sup pasting as plain text https://github.com/siyuan-note/siyuan/issues/12155
+        textPlain = textPlain.replace(/<sub>/g, "__@sub@__").replace(/<\/sub>/g, "__@/sub@__");
+        textPlain = textPlain.replace(/<sup>/g, "__@sup@__").replace(/<\/sup>/g, "__@/sup@__");
+        textPlain = textPlain.replace(/<kbd>/g, "__@kbd@__").replace(/<\/kbd>/g, "__@/kbd@__");
+        textPlain = textPlain.replace(/<u>/g, "__@u@__").replace(/<\/u>/g, "__@/u@__");
 
-            // 删掉 <span data-type\="text".*>text</span> 标签，只保留文本
-            textPlain = textPlain.replace(/<span data-type="text".*?>(.*?)<\/span>/g, "$1");
+        // 删掉 <span data-type\="text".*>text</span> 标签，只保留文本
+        textPlain = textPlain.replace(/<span data-type="text".*?>(.*?)<\/span>/g, "$1");
 
-            // 对 HTML 标签进行内部转义，避免被 Lute 解析以后变为小写 https://github.com/siyuan-note/siyuan/issues/10620
-            textPlain = textPlain.replace(/</g, ";;;lt;;;").replace(/>/g, ";;;gt;;;");
+        // 对 HTML 标签进行内部转义，避免被 Lute 解析以后变为小写 https://github.com/siyuan-note/siyuan/issues/10620
+        textPlain = textPlain.replace(/</g, ";;;lt;;;").replace(/>/g, ";;;gt;;;");
 
-            // 反转义内置需要解析的 HTML 标签
-            textPlain = textPlain.replace(/__@sub@__/g, "<sub>").replace(/__@\/sub@__/g, "</sub>");
-            textPlain = textPlain.replace(/__@sup@__/g, "<sup>").replace(/__@\/sup@__/g, "</sup>");
-            textPlain = textPlain.replace(/__@kbd@__/g, "<kbd>").replace(/__@\/kbd@__/g, "</kbd>");
-            textPlain = textPlain.replace(/__@u@__/g, "<u>").replace(/__@\/u@__/g, "</u>");
+        // 反转义内置需要解析的 HTML 标签
+        textPlain = textPlain.replace(/__@sub@__/g, "<sub>").replace(/__@\/sub@__/g, "</sub>");
+        textPlain = textPlain.replace(/__@sup@__/g, "<sup>").replace(/__@\/sup@__/g, "</sup>");
+        textPlain = textPlain.replace(/__@kbd@__/g, "<kbd>").replace(/__@\/kbd@__/g, "</kbd>");
+        textPlain = textPlain.replace(/__@u@__/g, "<u>").replace(/__@\/u@__/g, "</u>");
 
-            protyle.lute.SetInlineAsterisk(true);
-            protyle.lute.SetGFMStrikethrough(true);
-            protyle.lute.SetInlineMath(true);
-            protyle.lute.SetSub(true);
-            protyle.lute.SetSup(true);
-            protyle.lute.SetTag(true);
-            protyle.lute.SetInlineUnderscore(true);
-            const content = protyle.lute.BlockDOM2EscapeMarkerContent(protyle.lute.Md2BlockDOM(textPlain));
-            protyle.lute.SetInlineAsterisk(window.siyuan.config.editor.markdown.inlineAsterisk);
-            protyle.lute.SetGFMStrikethrough(window.siyuan.config.editor.markdown.inlineStrikethrough);
-            protyle.lute.SetInlineMath(window.siyuan.config.editor.markdown.inlineMath);
-            protyle.lute.SetSub(window.siyuan.config.editor.markdown.inlineSub);
-            protyle.lute.SetSup(window.siyuan.config.editor.markdown.inlineSup);
-            protyle.lute.SetTag(window.siyuan.config.editor.markdown.inlineTag);
-            protyle.lute.SetInlineUnderscore(window.siyuan.config.editor.markdown.inlineUnderscore);
+        enableLuteMarkdownSyntax(protyle);
+        const content = protyle.lute.BlockDOM2EscapeMarkerContent(protyle.lute.Md2BlockDOM(textPlain));
+        restoreLuteMarkdownSyntax(protyle);
 
-            // insertHTML 会进行内部反转义
-            insertHTML(content, protyle, false, false, true);
-            filterClipboardHint(protyle, textPlain);
-        });
+        // insertHTML 会进行内部反转义
+        insertHTML(content, protyle, false, false, true);
     }
 };
 
-export const pasteText = (protyle: IProtyle, textPlain: string, nodeElement: Element, toBlockDOM = true) => {
-    const range = getEditorRange(protyle.wysiwyg.element);
-    if (nodeElement.getAttribute("data-type") === "NodeCodeBlock") {
-        // 粘贴在代码位置
-        insertHTML(textPlain, protyle);
-        return;
-    }
-    if (range.toString() !== "") {
-        if (isDynamicRef(textPlain)) {
-            textPlain = textPlain.replace(/'.+'\)\)$/, ` "${range.toString()}"))`);
-        } else if (isFileAnnotation(textPlain)) {
-            textPlain = textPlain.replace(/".+">>$/, `"${range.toString()}">>`);
-        } else {
-            const linkDest = protyle.lute.GetLinkDest(textPlain);
-            if (linkDest) {
-                textPlain = `[${range.toString()}](${linkDest})`;
-            }
-        }
-    }
-    insertHTML(toBlockDOM ? protyle.lute.Md2BlockDOM(textPlain) : textPlain, protyle, false, false, true);
+export const enableLuteMarkdownSyntax = (protyle: IProtyle) => {
+    protyle.lute.SetInlineAsterisk(true);
+    protyle.lute.SetGFMStrikethrough(true);
+    protyle.lute.SetInlineMath(true);
+    protyle.lute.SetSub(true);
+    protyle.lute.SetSup(true);
+    protyle.lute.SetTag(true);
+    protyle.lute.SetInlineUnderscore(true);
+};
 
-    blockRender(protyle, protyle.wysiwyg.element);
-    processRender(protyle.wysiwyg.element);
-    highlightRender(protyle.wysiwyg.element);
-    avRender(protyle.wysiwyg.element, protyle);
-    filterClipboardHint(protyle, textPlain);
-    scrollCenter(protyle, undefined, false, "smooth");
+export const restoreLuteMarkdownSyntax = (protyle: IProtyle) => {
+    protyle.lute.SetInlineAsterisk(window.siyuan.config.editor.markdown.inlineAsterisk);
+    protyle.lute.SetGFMStrikethrough(window.siyuan.config.editor.markdown.inlineStrikethrough);
+    protyle.lute.SetInlineMath(window.siyuan.config.editor.markdown.inlineMath);
+    protyle.lute.SetSub(window.siyuan.config.editor.markdown.inlineSub);
+    protyle.lute.SetSup(window.siyuan.config.editor.markdown.inlineSup);
+    protyle.lute.SetTag(window.siyuan.config.editor.markdown.inlineTag);
+    protyle.lute.SetInlineUnderscore(window.siyuan.config.editor.markdown.inlineUnderscore);
+    protyle.lute.SetMark(window.siyuan.config.editor.markdown.inlineMark);
 };
 
 const readLocalFile = async (protyle: IProtyle, localFiles: string[]) => {
@@ -264,28 +243,39 @@ const readLocalFile = async (protyle: IProtyle, localFiles: string[]) => {
         }
     }
     uploadLocalFiles(localFiles, protyle, true);
-    writeText("");
 };
 
-export const paste = async (protyle: IProtyle, event: (ClipboardEvent | DragEvent) & { target: HTMLElement }) => {
-    event.stopPropagation();
-    event.preventDefault();
+export const paste = async (protyle: IProtyle, event: (ClipboardEvent | DragEvent | {
+    textHTML?: string,
+    textPlain?: string,
+    files?: File[],
+}) & {
+    target: HTMLElement
+}) => {
+    if ("clipboardData" in event || "dataTransfer" in event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
     let textHTML: string;
     let textPlain: string;
     let siyuanHTML: string;
-    let files: FileList | DataTransferItemList;
+    let files: FileList | DataTransferItemList | File[];
     if ("clipboardData" in event) {
         textHTML = event.clipboardData.getData("text/html");
         textPlain = event.clipboardData.getData("text/plain");
         siyuanHTML = event.clipboardData.getData("text/siyuan");
         files = event.clipboardData.files;
-    } else {
+    } else if ("dataTransfer" in event) {
         textHTML = event.dataTransfer.getData("text/html");
         textPlain = event.dataTransfer.getData("text/plain");
         siyuanHTML = event.dataTransfer.getData("text/siyuan");
         if (event.dataTransfer.types[0] === "Files") {
             files = event.dataTransfer.items;
         }
+    } else {
+        textHTML = event.textHTML;
+        textPlain = event.textPlain;
+        files = event.files;
     }
 
     // Improve the pasting of selected text in PDF rectangular annotation https://github.com/siyuan-note/siyuan/issues/11629
@@ -379,7 +369,8 @@ export const paste = async (protyle: IProtyle, event: (ClipboardEvent | DragEven
         }
         return;
     }
-    hideElements(["select"], protyle);
+    protyle.hint.enableExtend = Constants.BLOCK_HINT_KEYS.includes(protyle.hint.splitChar);
+    hideElements(protyle.hint.enableExtend ? ["select"] : ["select", "hint"], protyle);
     protyle.wysiwyg.element.querySelectorAll(".protyle-wysiwyg--hl").forEach(item => {
         item.classList.remove("protyle-wysiwyg--hl");
     });
@@ -387,12 +378,51 @@ export const paste = async (protyle: IProtyle, event: (ClipboardEvent | DragEven
     const range = getEditorRange(protyle.wysiwyg.element);
     if (nodeElement.getAttribute("data-type") === "NodeCodeBlock" ||
         protyle.toolbar.getCurrentType(range).includes("code")) {
-        insertHTML(textPlain, protyle);
+        // https://github.com/siyuan-note/siyuan/issues/13552
+        insertHTML(textPlain.replace(/\u200D```/g, "```").replace(/```/g, "\u200D```"), protyle);
         return;
     } else if (siyuanHTML) {
         // 编辑器内部粘贴
         const tempElement = document.createElement("div");
         tempElement.innerHTML = siyuanHTML;
+        if (range.toString()) {
+            let types: string[] = [];
+            let linkElement: HTMLElement;
+            if (tempElement.childNodes.length === 1 && tempElement.childElementCount === 1) {
+                types = (tempElement.firstElementChild.getAttribute("data-type") || "").split(" ");
+                if ((types.includes("block-ref") || types.includes("a"))) {
+                    linkElement = tempElement.firstElementChild as HTMLElement;
+                }
+            }
+            if (!linkElement) {
+                const linkTemp = document.createElement("template");
+                linkTemp.innerHTML = protyle.lute.SpinBlockDOM(siyuanHTML);
+                if (linkTemp.content.firstChild.nodeType !== 3 && linkTemp.content.firstElementChild.classList.contains("p")) {
+                    linkTemp.innerHTML = linkTemp.content.firstElementChild.firstElementChild.innerHTML.trim();
+                }
+                if (linkTemp.content.childNodes.length === 1 && linkTemp.content.childElementCount === 1) {
+                    types = (linkTemp.content.firstElementChild.getAttribute("data-type") || "").split(" ");
+                    if ((types.includes("block-ref") || types.includes("a"))) {
+                        linkElement = linkTemp.content.firstElementChild as HTMLElement;
+                    }
+                }
+            }
+
+            if (types.includes("block-ref")) {
+                protyle.toolbar.setInlineMark(protyle, "block-ref", "range", {
+                    type: "id",
+                    color: `${linkElement.dataset.id}${Constants.ZWSP}s${Constants.ZWSP}${range.toString()}`
+                });
+                return;
+            }
+            if (types.includes("a")) {
+                protyle.toolbar.setInlineMark(protyle, "a", "range", {
+                    type: "a",
+                    color: `${linkElement.dataset.href}${Constants.ZWSP}${range.toString()}`
+                });
+                return;
+            }
+        }
         let isBlock = false;
         tempElement.querySelectorAll("[data-node-id]").forEach((e) => {
             const newId = Lute.NewNodeID();
@@ -400,6 +430,7 @@ export const paste = async (protyle: IProtyle, event: (ClipboardEvent | DragEven
             e.removeAttribute(Constants.CUSTOM_RIFF_DECKS);
             e.classList.remove("protyle-wysiwyg--select", "protyle-wysiwyg--hl");
             e.setAttribute("updated", newId.split("-")[0]);
+            e.removeAttribute("refcount");
             isBlock = true;
         });
         if (nodeElement.classList.contains("table")) {
@@ -426,9 +457,12 @@ export const paste = async (protyle: IProtyle, event: (ClipboardEvent | DragEven
                 // 复制 HTML 块粘贴出来的不是 HTML 块 https://github.com/siyuan-note/siyuan/issues/12994
                 tempInnerHTML = Lute.UnEscapeHTMLStr(tempInnerHTML);
             }
+
+            // https://github.com/siyuan-note/siyuan/issues/13552
+            tempInnerHTML = tempInnerHTML.replace(/\u200D```/g, "```");
+
             insertHTML(tempInnerHTML, protyle, isBlock, false, true);
         }
-        filterClipboardHint(protyle, protyle.lute.BlockDOM2StdMd(tempInnerHTML));
         blockRender(protyle, protyle.wysiwyg.element);
         processRender(protyle.wysiwyg.element);
         highlightRender(protyle.wysiwyg.element);
@@ -452,8 +486,23 @@ export const paste = async (protyle: IProtyle, event: (ClipboardEvent | DragEven
             )) {
                 isHTML = false;
             } else {
-                // 需注意 Edge 中的画选不应识别为图片 https://github.com/siyuan-note/siyuan/issues/7021
+                // 需注意 Edge 中的划选不应识别为图片 https://github.com/siyuan-note/siyuan/issues/7021
                 isHTML = true;
+            }
+
+            const textHTMLLowercase = textHTML.toLowerCase();
+            if (textPlain && "" !== textPlain.trim() && (textHTML.startsWith("<span") || textHTML.startsWith("<br")) &&
+                (0 > textHTMLLowercase.indexOf("class=\"katex") && 0 > textHTMLLowercase.indexOf("class=\"math") &&
+                    0 > textHTMLLowercase.indexOf("</a>") && 0 > textHTMLLowercase.indexOf("</img>") &&
+                    0 > textHTMLLowercase.indexOf("</b>") && 0 > textHTMLLowercase.indexOf("</strong>") &&
+                    0 > textHTMLLowercase.indexOf("</i>") && 0 > textHTMLLowercase.indexOf("</em>") &&
+                    0 > textHTMLLowercase.indexOf("</ol>") && 0 > textHTMLLowercase.indexOf("</ul>") &&
+                    0 > textHTMLLowercase.indexOf("</table>") && 0 > textHTMLLowercase.indexOf("</blockquote>") &&
+                    0 > textHTMLLowercase.indexOf("</h1>") && 0 > textHTMLLowercase.indexOf("</h2>") &&
+                    0 > textHTMLLowercase.indexOf("</h3>") && 0 > textHTMLLowercase.indexOf("</h4>") &&
+                    0 > textHTMLLowercase.indexOf("</h5>") && 0 > textHTMLLowercase.indexOf("</h6>"))) {
+                // 豆包复制粘贴问题 https://github.com/siyuan-note/siyuan/issues/13265 https://github.com/siyuan-note/siyuan/issues/14313
+                isHTML = false;
             }
         }
         if (isHTML) {
@@ -468,6 +517,29 @@ export const paste = async (protyle: IProtyle, event: (ClipboardEvent | DragEven
                     e.remove();
                 }
             });
+            // https://github.com/siyuan-note/siyuan/issues/14625#issuecomment-2869618067
+            let linkElement;
+            if (tempElement.childElementCount === 1 && tempElement.childNodes.length === 1) {
+                if (tempElement.firstElementChild.tagName === "A") {
+                    linkElement = tempElement.firstElementChild;
+                } else if (tempElement.firstElementChild.tagName === "P" &&
+                    tempElement.firstElementChild.childElementCount === 1 &&
+                    tempElement.firstElementChild.childNodes.length === 1 &&
+                    tempElement.firstElementChild.firstElementChild.tagName === "A") {
+                    linkElement = tempElement.firstElementChild.firstElementChild;
+                }
+            }
+            if (linkElement) {
+                const selectText = range.toString();
+                protyle.toolbar.setInlineMark(protyle, "a", "range", {
+                    type: "a",
+                    color: `${linkElement.getAttribute("href")}${Constants.ZWSP}${selectText || linkElement.textContent}`
+                });
+                if (!selectText) {
+                    range.collapse(false);
+                }
+                return;
+            }
             fetchPost("/api/lute/html2BlockDOM", {
                 dom: tempElement.innerHTML
             }, (response) => {
@@ -483,13 +555,13 @@ export const paste = async (protyle: IProtyle, event: (ClipboardEvent | DragEven
                 processRender(protyle.wysiwyg.element);
                 highlightRender(protyle.wysiwyg.element);
                 avRender(protyle.wysiwyg.element, protyle);
-                filterClipboardHint(protyle, response.data);
                 scrollCenter(protyle, undefined, false, "smooth");
             });
             return;
         } else if (files && files.length > 0) {
             uploadFiles(protyle, files);
-        } else if (textPlain.trim() !== "" && files && files.length === 0) {
+            return;
+        } else if (textPlain.trim() !== "" && (files && files.length === 0 || !files)) {
             if (range.toString() !== "") {
                 const firstLine = textPlain.split("\n")[0];
                 if (isDynamicRef(textPlain)) {
@@ -507,7 +579,7 @@ export const paste = async (protyle: IProtyle, event: (ClipboardEvent | DragEven
                     return;
                 } else {
                     // https://github.com/siyuan-note/siyuan/issues/8475
-                    const linkDest = protyle.lute.GetLinkDest(textPlain);
+                    const linkDest = textPlain.startsWith("assets/") ? textPlain : protyle.lute.GetLinkDest(textPlain);
                     if (linkDest) {
                         protyle.toolbar.setInlineMark(protyle, "a", "range", {
                             type: "a",
@@ -517,9 +589,12 @@ export const paste = async (protyle: IProtyle, event: (ClipboardEvent | DragEven
                     }
                 }
             }
+
+            // https://github.com/siyuan-note/siyuan/issues/13552
+            textPlain = textPlain.replace(/\u200D```/g, "```");
+
             const textPlainDom = protyle.lute.Md2BlockDOM(textPlain);
             insertHTML(textPlainDom, protyle, false, false, true);
-            filterClipboardHint(protyle, textPlain);
         }
         blockRender(protyle, protyle.wysiwyg.element);
         processRender(protyle.wysiwyg.element);
@@ -533,3 +608,4 @@ export const paste = async (protyle: IProtyle, event: (ClipboardEvent | DragEven
         scrollCenter(protyle, undefined, false, "smooth");
     }
 };
+

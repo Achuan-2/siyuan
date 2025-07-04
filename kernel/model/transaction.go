@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"runtime/debug"
 	"slices"
 	"strings"
 	"sync"
@@ -99,6 +98,8 @@ func flushTx(tx *Transaction) {
 			return
 		case TxErrCodeDataIsSyncing:
 			util.PushMsg(Conf.Language(222), 5000)
+		case TxErrWriteAttributeView:
+			util.PushMsg(Conf.language(258), 5000)
 		default:
 			txData, _ := gulu.JSON.MarshalJSON(tx)
 			logging.LogFatalf(logging.ExitCodeFatal, "transaction failed [%d]: %s\n  tx [%s]", txErr.code, txErr.msg, txData)
@@ -155,8 +156,7 @@ func performTx(tx *Transaction) (ret *TxErr) {
 
 	defer func() {
 		if e := recover(); nil != e {
-			stack := debug.Stack()
-			msg := fmt.Sprintf("PANIC RECOVERED: %v\n\t%s\n", e, stack)
+			msg := fmt.Sprintf("PANIC RECOVERED: %v\n\t%s\n", e, logging.ShortStack())
 			logging.LogErrorf(msg)
 
 			if 1 == tx.state.Load() {
@@ -278,6 +278,26 @@ func performTx(tx *Transaction) (ret *TxErr) {
 			ret = tx.doUnbindAttrViewBlock(op)
 		case "duplicateAttrViewKey":
 			ret = tx.doDuplicateAttrViewKey(op)
+		case "setAttrViewCoverFrom":
+			ret = tx.doSetAttrViewCoverFrom(op)
+		case "setAttrViewCoverFromAssetKeyID":
+			ret = tx.doSetAttrViewCoverFromAssetKeyID(op)
+		case "setAttrViewCardSize":
+			ret = tx.doSetAttrViewCardSize(op)
+		case "setAttrViewFitImage":
+			ret = tx.doSetAttrViewFitImage(op)
+		case "setAttrViewShowIcon":
+			ret = tx.doSetAttrViewShowIcon(op)
+		case "setAttrViewWrapField":
+			ret = tx.doSetAttrViewWrapField(op)
+		case "changeAttrViewLayout":
+			ret = tx.doChangeAttrViewLayout(op)
+		case "setAttrViewBlockView":
+			ret = tx.doSetAttrViewBlockView(op)
+		case "setAttrViewCardAspectRatio":
+			ret = tx.doSetAttrViewCardAspectRatio(op)
+		case "doSetAttrViewGroup":
+			ret = tx.doSetAttrViewGroup(op)
 		}
 
 		if nil != ret {
@@ -307,6 +327,9 @@ func (tx *Transaction) doMove(operation *Operation) (ret *TxErr) {
 		logging.LogErrorf("get node [%s] in tree [%s] failed", id, srcTree.Root.ID)
 		return &TxErr{code: TxErrCodeBlockNotFound, id: id}
 	}
+
+	// 生成文档历史 https://github.com/siyuan-note/siyuan/issues/14359
+	generateOpTypeHistory(srcTree, HistoryOpUpdate)
 
 	var headingChildren []*ast.Node
 	if isMovingFoldHeading := ast.NodeHeading == srcNode.Type && "1" == srcNode.IALAttr("fold"); isMovingFoldHeading {
@@ -358,6 +381,10 @@ func (tx *Transaction) doMove(operation *Operation) (ret *TxErr) {
 			return
 		}
 
+		if isMovingParentIntoChild(srcNode, targetNode) {
+			return
+		}
+
 		for i := len(headingChildren) - 1; -1 < i; i-- {
 			c := headingChildren[i]
 			targetNode.InsertAfter(c)
@@ -377,8 +404,8 @@ func (tx *Transaction) doMove(operation *Operation) (ret *TxErr) {
 			if err = tx.writeTree(targetTree); err != nil {
 				return
 			}
-			task.AppendAsyncTaskWithDelay(task.SetDefRefCount, 1*time.Second, refreshRefCount, srcTree.ID, srcTree.ID)
-			task.AppendAsyncTaskWithDelay(task.SetDefRefCount, 1*time.Second, refreshRefCount, targetTree.ID, srcNode.ID)
+			task.AppendAsyncTaskWithDelay(task.SetDefRefCount, util.SQLFlushInterval, refreshRefCount, srcTree.ID, srcTree.ID)
+			task.AppendAsyncTaskWithDelay(task.SetDefRefCount, util.SQLFlushInterval, refreshRefCount, targetTree.ID, srcNode.ID)
 		}
 		return
 	}
@@ -404,6 +431,10 @@ func (tx *Transaction) doMove(operation *Operation) (ret *TxErr) {
 	}
 
 	if isMovingFoldHeadingIntoSelf(targetNode, headingChildren) {
+		return
+	}
+
+	if isMovingParentIntoChild(srcNode, targetNode) {
 		return
 	}
 
@@ -458,8 +489,8 @@ func (tx *Transaction) doMove(operation *Operation) (ret *TxErr) {
 		if err = tx.writeTree(targetTree); err != nil {
 			return &TxErr{code: TxErrCodeWriteTree, msg: err.Error(), id: id}
 		}
-		task.AppendAsyncTaskWithDelay(task.SetDefRefCount, 1*time.Second, refreshRefCount, srcTree.ID, srcTree.ID)
-		task.AppendAsyncTaskWithDelay(task.SetDefRefCount, 1*time.Second, refreshRefCount, targetTree.ID, srcNode.ID)
+		task.AppendAsyncTaskWithDelay(task.SetDefRefCount, util.SQLFlushInterval, refreshRefCount, srcTree.ID, srcTree.ID)
+		task.AppendAsyncTaskWithDelay(task.SetDefRefCount, util.SQLFlushInterval, refreshRefCount, targetTree.ID, srcNode.ID)
 	}
 	return
 }
@@ -468,6 +499,15 @@ func isMovingFoldHeadingIntoSelf(targetNode *ast.Node, headingChildren []*ast.No
 	for _, headingChild := range headingChildren {
 		if headingChild.ID == targetNode.ID {
 			// 不能将折叠标题移动到自己下方节点的前或后 https://github.com/siyuan-note/siyuan/issues/7163
+			return true
+		}
+	}
+	return false
+}
+
+func isMovingParentIntoChild(srcNode, targetNode *ast.Node) bool {
+	for parent := targetNode.Parent; nil != parent; parent = parent.Parent {
+		if parent.ID == srcNode.ID {
 			return true
 		}
 	}
@@ -762,7 +802,7 @@ func (tx *Transaction) doDelete(operation *Operation) (ret *TxErr) {
 		if nil != defTree {
 			defNode := treenode.GetNodeInTree(defTree, defID)
 			if nil != defNode {
-				task.AppendAsyncTaskWithDelay(task.SetDefRefCount, 1*time.Second, refreshRefCount, defTree.ID, defNode.ID)
+				task.AppendAsyncTaskWithDelay(task.SetDefRefCount, util.SQLFlushInterval, refreshRefCount, defTree.ID, defNode.ID)
 			}
 		}
 	}
@@ -775,9 +815,17 @@ func (tx *Transaction) doDelete(operation *Operation) (ret *TxErr) {
 
 	node.Unlink()
 	if nil != parent && ast.NodeListItem == parent.Type && nil == parent.FirstChild {
-		// 保持空列表项
-		node.FirstChild = nil
-		parent.AppendChild(node)
+		needAppendEmptyListItem := true
+		for _, op := range tx.DoOperations {
+			if "insert" == op.Action && op.ParentID == parent.ID {
+				needAppendEmptyListItem = false
+				break
+			}
+		}
+
+		if needAppendEmptyListItem {
+			parent.AppendChild(treenode.NewParagraph(ast.NewNodeID()))
+		}
 	}
 	treenode.RemoveBlockTree(node.ID)
 
@@ -1085,7 +1133,7 @@ func (tx *Transaction) doInsert(operation *Operation) (ret *TxErr) {
 		if nil != defTree {
 			defNode := treenode.GetNodeInTree(defTree, defID)
 			if nil != defNode {
-				task.AppendAsyncTaskWithDelay(task.SetDefRefCount, 1*time.Second, refreshRefCount, defTree.ID, defNode.ID)
+				task.AppendAsyncTaskWithDelay(task.SetDefRefCount, util.SQLFlushInterval, refreshRefCount, defTree.ID, defNode.ID)
 			}
 		}
 	}
@@ -1196,7 +1244,7 @@ func (tx *Transaction) doUpdate(operation *Operation) (ret *TxErr) {
 			if nil != defTree {
 				defNode := treenode.GetNodeInTree(defTree, defID)
 				if nil != defNode {
-					task.AppendAsyncTaskWithDelay(task.SetDefRefCount, 1*time.Second, refreshRefCount, defTree.ID, defNode.ID)
+					task.AppendAsyncTaskWithDelay(task.SetDefRefCount, util.SQLFlushInterval, refreshRefCount, defTree.ID, defNode.ID)
 				}
 			}
 		}
@@ -1288,10 +1336,17 @@ func upsertAvBlockRel(node *ast.Node) {
 		})
 	}
 
-	affectedAvIDs = gulu.Str.RemoveDuplicatedElem(affectedAvIDs)
 	go func() {
 		time.Sleep(100 * time.Millisecond)
 		sql.FlushQueue()
+
+		affectedAvIDs = gulu.Str.RemoveDuplicatedElem(affectedAvIDs)
+		var relatedAvIDs []string
+		for _, avID := range affectedAvIDs {
+			relatedAvIDs = append(relatedAvIDs, av.GetSrcAvIDs(avID)...)
+		}
+		affectedAvIDs = append(affectedAvIDs, relatedAvIDs...)
+		affectedAvIDs = gulu.Str.RemoveDuplicatedElem(affectedAvIDs)
 		for _, avID := range affectedAvIDs {
 			ReloadAttrView(avID)
 		}
@@ -1447,6 +1502,7 @@ type Operation struct {
 	IsTwoWay            bool                     `json:"isTwoWay"`          // 属性视图关联列是否是双向关系
 	BackRelationKeyID   string                   `json:"backRelationKeyID"` // 属性视图关联列回链关联列的 ID
 	RemoveDest          bool                     `json:"removeDest"`        // 属性视图删除关联目标
+	Layout              av.LayoutType            `json:"layout"`            // 属性视图布局类型
 }
 
 type Transaction struct {
@@ -1602,7 +1658,10 @@ func updateRefText(refNode *ast.Node, changedDefNodes map[string]*ast.Node) (cha
 
 			changed = true
 			if "d" == subtype {
-				refText = getNodeRefText(defNode)
+				refText = strings.TrimSpace(getNodeRefText(defNode))
+				if "" == refText {
+					refText = n.TextMarkBlockRefID
+				}
 				treenode.SetDynamicBlockRefText(n, refText)
 			}
 			defNodes = append(defNodes, &changedDefNode{id: defID, refText: refText, refType: "ref-" + subtype})

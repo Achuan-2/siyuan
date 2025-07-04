@@ -26,20 +26,23 @@ export const openLink = (protyle: IProtyle, aLink: string, event?: MouseEvent, c
     /// #else
     if (isLocalPath(linkAddress)) {
         if (Constants.SIYUAN_ASSETS_EXTS.includes(pathPosix().extname(linkAddress)) &&
-            (!linkAddress.endsWith(".pdf") ||
-                (linkAddress.endsWith(".pdf") && !linkAddress.startsWith("file://")))
+            (
+                !linkAddress.endsWith(".pdf") ||
+                    // 本地 pdf 仅 assets/ 开头的才使用 siyuan 打开
+                (linkAddress.endsWith(".pdf") && linkAddress.startsWith("assets/"))
+            )
         ) {
             if (event && event.altKey) {
                 openAsset(protyle.app, linkAddress, pdfParams);
-            } else if (ctrlIsPressed) {
-                /// #if !BROWSER
-                openBy(linkAddress, "folder");
-                /// #else
-                openByMobile(linkAddress);
-                /// #endif
             } else if (event && event.shiftKey) {
                 /// #if !BROWSER
                 openBy(linkAddress, "app");
+                /// #else
+                openByMobile(linkAddress);
+                /// #endif
+            } else if (ctrlIsPressed) {
+                /// #if !BROWSER
+                openBy(linkAddress, "folder");
                 /// #else
                 openByMobile(linkAddress);
                 /// #endif

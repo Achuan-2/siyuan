@@ -41,6 +41,10 @@ import (
 
 func LoadTrees(ids []string) (ret map[string]*parse.Tree) {
 	ret = map[string]*parse.Tree{}
+	if 1 > len(ids) {
+		return ret
+	}
+
 	bts := treenode.GetBlockTrees(ids)
 	luteEngine := util.NewLute()
 	var boxIDs []string
@@ -69,18 +73,6 @@ func LoadTrees(ids []string) (ret map[string]*parse.Tree) {
 			ret[bID] = tree
 		}
 	}
-	return
-}
-
-func LoadTree(boxID, p string, luteEngine *lute.Lute) (ret *parse.Tree, err error) {
-	filePath := filepath.Join(util.DataDir, boxID, p)
-	data, err := filelock.ReadFile(filePath)
-	if err != nil {
-		logging.LogErrorf("load tree [%s] failed: %s", p, err)
-		return
-	}
-
-	ret, err = LoadTreeByData(data, boxID, p, luteEngine)
 	return
 }
 
@@ -116,6 +108,18 @@ func batchLoadTrees(boxIDs, paths []string, luteEngine *lute.Lute) (ret []*parse
 	}
 	waitGroup.Wait()
 	p.Release()
+	return
+}
+
+func LoadTree(boxID, p string, luteEngine *lute.Lute) (ret *parse.Tree, err error) {
+	filePath := filepath.Join(util.DataDir, boxID, p)
+	data, err := filelock.ReadFile(filePath)
+	if err != nil {
+		logging.LogErrorf("load tree [%s] failed: %s", p, err)
+		return
+	}
+
+	ret, err = LoadTreeByData(data, boxID, p, luteEngine)
 	return
 }
 
@@ -169,7 +173,7 @@ func LoadTreeByData(data []byte, boxID, p string, luteEngine *lute.Lute) (ret *p
 		if "" == title {
 			title = "Untitled"
 		}
-		hPathBuilder.WriteString(title)
+		hPathBuilder.WriteString(util.UnescapeHTML(title))
 		hPathBuilder.WriteString("/")
 	}
 	hPathBuilder.WriteString(ret.Root.IALAttr("title"))
@@ -223,7 +227,7 @@ func prepareWriteTree(tree *parse.Tree) (data []byte, filePath string, err error
 	luteEngine := util.NewLute() // 不关注用户的自定义解析渲染选项
 
 	if nil == tree.Root.FirstChild {
-		newP := treenode.NewParagraph()
+		newP := treenode.NewParagraph("")
 		tree.Root.AppendChild(newP)
 		tree.Root.SetIALAttr("updated", util.TimeFromID(newP.ID))
 		treenode.UpsertBlockTree(tree)
@@ -238,6 +242,7 @@ func prepareWriteTree(tree *parse.Tree) (data []byte, filePath string, err error
 	tree.Root.SetIALAttr("type", "doc")
 	renderer := render.NewJSONRenderer(tree, luteEngine.RenderOptions)
 	data = renderer.Render()
+	data = bytes.ReplaceAll(data, []byte("\\u0000"), []byte(""))
 
 	if !util.UseSingleLineSave {
 		buf := bytes.Buffer{}
@@ -278,6 +283,15 @@ func parseJSON2Tree(boxID, p string, jsonData []byte, luteEngine *lute.Lute) (re
 		needFix = true
 		logging.LogInfof("migrated tree [%s] from spec [%s] to [%s]", filePath, oldSpec, ret.Root.Spec)
 	}
+
+	if pathID := util.GetTreeID(p); pathID != ret.Root.ID {
+		needFix = true
+		logging.LogInfof("reset tree id from [%s] to [%s]", ret.Root.ID, pathID)
+		ret.Root.ID = pathID
+		ret.ID = pathID
+		ret.Root.SetIALAttr("id", ret.ID)
+	}
+
 	if needFix {
 		renderer := render.NewJSONRenderer(ret, luteEngine.RenderOptions)
 		data := renderer.Render()
@@ -299,15 +313,5 @@ func parseJSON2Tree(boxID, p string, jsonData []byte, luteEngine *lute.Lute) (re
 			logging.LogErrorf(msg)
 		}
 	}
-	return
-}
-
-func ReadDocIAL(data []byte) (ret map[string]string) {
-	ret = map[string]string{}
-	val := jsoniter.Get(data, "Properties")
-	if nil == val || val.ValueType() == jsoniter.InvalidValue {
-		return
-	}
-	val.ToVal(&ret)
 	return
 }

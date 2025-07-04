@@ -9,6 +9,7 @@ import {getFrontend, isMobile, isWindow} from "../util/functions";
 import {Constants} from "../constants";
 import {uninstall} from "./uninstall";
 import {setStorageVal} from "../protyle/util/compatibility";
+import { getAllEditor } from "../layout/getAll";
 
 const requireFunc = (key: string) => {
     const modules = {
@@ -28,19 +29,21 @@ const runCode = (code: string, sourceURL: string) => {
 
 export const loadPlugins = async (app: App, names?: string[]) => {
     const response = await fetchSyncPost("/api/petal/loadPetals", {frontend: getFrontend()});
-    let css = "";
+    let css = '<style id="pluginsStyle"></style>';  // 用于将内联样式插入到插件样式前的标识
     // 为加快启动速度，不进行 await
     response.data.forEach((item: IPluginData) => {
         if (!names || (names && names.includes(item.name))) {
             loadPluginJS(app, item);
         }
-        css += item.css || "" + "\n";
+        if (item.css) {
+            css += `<style id="pluginsStyle${item.name}">${item.css}</style>`;
+        }
     });
     const pluginsStyle = document.getElementById("pluginsStyle");
     if (pluginsStyle) {
-        pluginsStyle.innerHTML = css;
+        pluginsStyle.insertAdjacentHTML("afterend", css);
     } else {
-        document.head.insertAdjacentHTML("beforeend", `<style id="pluginsStyle">${css}</style>`);
+        document.head.insertAdjacentHTML("beforeend", css);
     }
 };
 
@@ -80,14 +83,19 @@ const loadPluginJS = async (app: App, item: IPluginData) => {
 // 启用插件
 export const loadPlugin = async (app: App, item: IPluginData) => {
     const plugin = await loadPluginJS(app, item);
-    const styleElement = document.createElement("style");
-    styleElement.textContent = item.css;
-    document.head.append(styleElement);
+    if (item.css) {
+        const styleElement = document.createElement("style");
+        styleElement.id = "pluginsStyle" + item.name;
+        styleElement.textContent = item.css;
+        document.head.append(styleElement);
+    }
     afterLoadPlugin(plugin);
     saveLayout();
+    getAllEditor().forEach(editor => {
+      editor.protyle.toolbar.update(editor.protyle);
+    });
     return plugin;
 };
-
 
 const updateDock = (dockItem: Config.IUILayoutDockTab[], index: number, plugin: Plugin, type: string) => {
     const dockKeys = Object.keys(plugin.docks);
@@ -129,7 +137,7 @@ export const afterLoadPlugin = (plugin: Plugin) => {
                 if (window.siyuan.storage[Constants.LOCAL_PLUGINTOPUNPIN].includes(element.id)) {
                     element.classList.add("fn__none");
                 }
-                document.querySelector("#" + (element.getAttribute("data-position") === "right" ? "barPlugins" : "drag")).before(element);
+                document.querySelector("#" + (element.getAttribute("data-location") === "right" ? "barPlugins" : "drag")).before(element);
             }
         });
     }
@@ -137,7 +145,7 @@ export const afterLoadPlugin = (plugin: Plugin) => {
     resizeTopBar();
     plugin.statusBarIcons.forEach(element => {
         const statusElement = document.getElementById("status");
-        if (element.getAttribute("data-position") === "right") {
+        if (element.getAttribute("data-location") === "right") {
             statusElement.insertAdjacentElement("beforeend", element);
         } else {
             statusElement.insertAdjacentElement("afterbegin", element);

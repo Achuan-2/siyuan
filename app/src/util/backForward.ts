@@ -59,7 +59,7 @@ const focusStack = async (app: App, stack: IBackStack) => {
                         tab,
                         blockId: stack.zoomId || stack.protyle.block.rootID,
                         rootId: stack.protyle.block.rootID,
-                        action: stack.zoomId ? [Constants.CB_GET_FOCUS, Constants.CB_GET_ALL] : [Constants.CB_GET_FOCUS]
+                        action: stack.zoomId ? [Constants.CB_GET_FOCUS, Constants.CB_GET_ALL, Constants.CB_GET_UNUNDO] : [Constants.CB_GET_FOCUS, Constants.CB_GET_UNUNDO]
                     });
                     tab.addModel(editor);
                 }
@@ -115,7 +115,6 @@ const focusStack = async (app: App, stack: IBackStack) => {
         if (stack.protyle.title.editElement.getBoundingClientRect().height === 0) {
             // 切换 tab
             stack.protyle.model.parent.parent.switchTab(stack.protyle.model.parent.headElement);
-            // 需要更新 range，否则 resize 中 `保持光标位置不变` 会导致光标跳动
             stack.protyle.toolbar.range = undefined;
         }
         focusByOffset(stack.protyle.title.editElement, stack.position.start, stack.position.end);

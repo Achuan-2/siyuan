@@ -306,6 +306,8 @@ const JSONToDock = (json: any, app: App) => {
     window.siyuan.layout.bottomDock = new Dock({position: "Bottom", data: json.bottom, app});
 };
 
+const removedTabs: Tab[] = [];
+
 export const JSONToCenter = (
     app: App,
     json: Config.TUILayoutItem,
@@ -370,7 +372,6 @@ export const JSONToCenter = (
             child.headElement.setAttribute("data-init-active", "true");
         }
         (layout as Wnd).addTab(child, false, false, json.activeTime);
-        (layout as Wnd).showHeading();
     } else if (json.instance === "Editor" && json.blockId) {
         if (window.siyuan.config.fileTree.openFilesUseCurrentTab) {
             (layout as Tab).headElement.classList.add("item--unupdate");
@@ -433,8 +434,10 @@ export const JSONToCenter = (
             json.children.forEach((item: any) => {
                 JSONToCenter(app, item, layout ? child : window.siyuan.layout.layout);
             });
-        } else {
+        } else if (json.children && Object.keys(json.children).length > 0) {
             JSONToCenter(app, json.children, child);
+        } else if (child instanceof Tab) {
+            removedTabs.push(child);
         }
     }
 };
@@ -495,7 +498,7 @@ export const JSONToLayout = (app: App, isStart: boolean) => {
             zoomIn: idZoomIn.isZoomIn
         });
     } else {
-        let latestTabHeaderElement:HTMLElement;
+        let latestTabHeaderElement: HTMLElement;
         document.querySelectorAll('li[data-type="tab-header"][data-init-active="true"]').forEach((item: HTMLElement) => {
             if (!latestTabHeaderElement) {
                 latestTabHeaderElement = item;
@@ -506,10 +509,15 @@ export const JSONToLayout = (app: App, isStart: boolean) => {
             }
             const tab = getInstanceById(item.getAttribute("data-id")) as Tab;
             tab.parent.switchTab(item, false, false, true, false);
+            tab.parent.showHeading();
         });
         if (latestTabHeaderElement) {
             setPanelFocus(latestTabHeaderElement.parentElement.parentElement.parentElement, false);
         }
+        // 移除没有数据的页签 https://github.com/siyuan-note/siyuan/issues/13390
+        removedTabs.forEach(item => {
+            item.parent.removeTab(item.id, false, false, false);
+        });
     }
     // 需放在 tab.parent.switchTab 后，否则当前 tab 永远为最后一个
     app.plugins.forEach(item => {
@@ -779,7 +787,7 @@ export const addResize = (obj: Layout | Wnd) => {
     }
 
     const getMinSize = (element: HTMLElement) => {
-        let minSize = 227;
+        let minSize = 232;
         Array.from(element.querySelectorAll(".file-tree")).find((item) => {
             if (item.classList.contains("sy__backlink") || item.classList.contains("sy__graph")
                 || item.classList.contains("sy__globalGraph") || item.classList.contains("sy__inbox")) {
@@ -791,6 +799,7 @@ export const addResize = (obj: Layout | Wnd) => {
         });
         return minSize;
     };
+
     const resizeWnd = (resizeElement: HTMLElement, direction: string) => {
         const setSize = (item: HTMLElement, direction: string) => {
             if (item.classList.contains("fn__flex-1")) {
@@ -833,7 +842,7 @@ export const addResize = (obj: Layout | Wnd) => {
             documentSelf.ondragstart = () => {
                 // 文件树拖拽会产生透明效果
                 document.querySelectorAll(".sy__file .b3-list-item").forEach((item: HTMLElement) => {
-                    if (item.style.opacity === "0.1") {
+                    if (item.style.opacity === "0.38") {
                         item.style.opacity = "";
                     }
                 });
@@ -901,6 +910,62 @@ export const addResize = (obj: Layout | Wnd) => {
     resizeElement.classList.add("layout__resize");
     obj.element.insertAdjacentElement("beforebegin", resizeElement);
     resizeWnd(resizeElement, obj.resize);
+
+    resizeElement.addEventListener("dblclick", () => {
+        const previousElement = resizeElement.previousElementSibling as HTMLElement;
+        const nextElement = resizeElement.nextElementSibling as HTMLElement;
+        if (previousElement && nextElement) {
+            const bigType = ["graph", "inbox", "globalGraph", "backlink"];
+            let size = 232;
+            nextElement.style.transition = "none";
+            previousElement.style.transition = "none";
+            if (resizeElement.classList.contains("layout__resize--lr")) {
+                if (previousElement.classList.contains("layout__dockl")) {
+                    document.querySelectorAll("#dockLeft .dock__item--active").forEach(item => {
+                        if (bigType.includes(item.getAttribute("data-type"))) {
+                            size = 320;
+                        }
+                    });
+                    previousElement.style.width = size + "px";
+                    window.siyuan.layout.leftDock.setSize();
+                } else if (nextElement.classList.contains("layout__dockr")) {
+                    document.querySelectorAll("#dockRight .dock__item--active").forEach(item => {
+                        if (bigType.includes(item.getAttribute("data-type"))) {
+                            size = 320;
+                        }
+                    });
+                    nextElement.style.width = size + "px";
+                    window.siyuan.layout.rightDock.setSize();
+                } else {
+                    previousElement.style.width = "";
+                    nextElement.style.width = "";
+                    previousElement.classList.add("fn__flex-1");
+                    nextElement.classList.add("fn__flex-1");
+                    if (resizeElement.parentElement.classList.contains("layout__dockb")) {
+                        window.siyuan.layout.bottomDock.setSize();
+                    }
+                }
+            } else {
+                if (nextElement.classList.contains("layout__dockb")) {
+                    nextElement.style.height = "232px";
+                    window.siyuan.layout.bottomDock.setSize();
+                } else {
+                    previousElement.style.height = "";
+                    nextElement.style.height = "";
+                    previousElement.classList.add("fn__flex-1");
+                    nextElement.classList.add("fn__flex-1");
+                    if (resizeElement.parentElement.classList.contains("layout__dockl")) {
+                        window.siyuan.layout.leftDock.setSize();
+                    } else if (resizeElement.parentElement.classList.contains("layout__dockr")) {
+                        window.siyuan.layout.rightDock.setSize();
+                    }
+                }
+            }
+            resizeTabs();
+            nextElement.style.transition = "";
+            previousElement.style.transition = "";
+        }
+    });
 };
 
 export const adjustLayout = (layout: Layout = window.siyuan.layout.centerLayout.parent) => {

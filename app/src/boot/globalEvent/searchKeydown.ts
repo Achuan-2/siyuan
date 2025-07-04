@@ -10,13 +10,14 @@ import {App} from "../../index";
 import {Dialog} from "../../dialog";
 import {getAllModels} from "../../layout/getAll";
 import {hasClosestByClassName} from "../../protyle/util/hasClosest";
-import {getArticle, inputEvent, replace, toggleReplaceHistory, toggleSearchHistory} from "../../search/util";
-import {showFileInFolder} from "../../util/pathName";
-import {assetInputEvent, renderPreview, toggleAssetHistory} from "../../search/assets";
+import {getArticle, inputEvent, replace} from "../../search/util";
+import {useShell} from "../../util/pathName";
+import {assetInputEvent, renderPreview} from "../../search/assets";
 import {initSearchMenu} from "../../menus/search";
 import {writeText} from "../../protyle/util/compatibility";
 import {checkFold} from "../../util/noRelyPCFunction";
 import {getUnRefList} from "../../search/unRef";
+import {toggleAssetHistory, toggleReplaceHistory, toggleSearchHistory} from "../../search/toggleHistory";
 
 export const searchKeydown = (app: App, event: KeyboardEvent) => {
     if (getSelection().rangeCount === 0) {
@@ -72,7 +73,7 @@ export const searchKeydown = (app: App, event: KeyboardEvent) => {
             toggleAssetHistory(assetsElement);
         } else if (searchType === "doc") {
             if (targetId === "replaceInput") {
-                toggleReplaceHistory(element);
+                toggleReplaceHistory(element.querySelector("#replaceInput"));
             } else {
                 toggleSearchHistory(element, config, edit);
             }
@@ -234,7 +235,7 @@ export const searchKeydown = (app: App, event: KeyboardEvent) => {
             }
         } else {
             /// #if !BROWSER
-            showFileInFolder(path.join(window.siyuan.config.system.dataDir, currentList.lastElementChild.getAttribute("aria-label")));
+            useShell("showItemInFolder", path.join(window.siyuan.config.system.dataDir, currentList.lastElementChild.getAttribute("aria-label")));
             /// #endif
         }
         return true;

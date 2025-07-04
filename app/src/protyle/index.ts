@@ -17,7 +17,8 @@ import {Breadcrumb} from "./breadcrumb";
 import {
     onTransaction,
     transaction,
-    turnsIntoOneTransaction, turnsIntoTransaction,
+    turnsIntoOneTransaction,
+    turnsIntoTransaction,
     updateBatchTransaction,
     updateTransaction
 } from "./wysiwyg/transaction";
@@ -28,7 +29,7 @@ import {setPanelFocus} from "../layout/util";
 /// #endif
 import {Title} from "./header/Title";
 import {Background} from "./header/Background";
-import {onGet, setReadonlyByConfig} from "./util/onGet";
+import {disabledProtyle, enableProtyle, onGet, setReadonlyByConfig} from "./util/onGet";
 import {reloadProtyle} from "./util/reload";
 import {renderBacklink} from "./wysiwyg/renderBacklink";
 import {setEmpty} from "../mobile/util/setEmpty";
@@ -41,6 +42,12 @@ import {focusBlock, getEditorRange} from "./util/selection";
 import {hasClosestBlock} from "./util/hasClosest";
 import {setStorageVal} from "./util/compatibility";
 import {merge} from "./util/merge";
+/// #if !MOBILE
+import {getAllModels} from "../layout/getAll";
+/// #endif
+import {isSupportCSSHL} from "./render/searchMarkRender";
+import {renderAVAttribute} from "./render/av/blockAttr";
+import {genEmptyElement} from "../block/util";
 
 export class Protyle {
 
@@ -71,7 +78,21 @@ export class Protyle {
             element: id,
             options: mergedOptions,
             block: {},
+            highlight: {
+                mark: isSupportCSSHL() ? new Highlight() : undefined,
+                markHL: isSupportCSSHL() ? new Highlight() : undefined,
+                ranges: [],
+                rangeIndex: 0,
+                styleElement: document.createElement("style"),
+            }
         };
+
+        if (isSupportCSSHL()) {
+            const styleId = genUUID();
+            this.protyle.highlight.styleElement.dataset.uuid = styleId;
+            this.protyle.highlight.styleElement.textContent = `.protyle-wysiwyg::highlight(search-mark-${styleId}) {background-color: var(--b3-highlight-background);color: var(--b3-highlight-color);}
+  .protyle-wysiwyg::highlight(search-mark-hl-${styleId}) {color: var(--b3-highlight-color);background-color: var(--b3-highlight-current-background)}`;
+        }
 
         this.protyle.hint = new Hint(this.protyle);
         if (mergedOptions.render.breadcrumb) {
@@ -111,6 +132,18 @@ export class Protyle {
                         case "reload":
                             if (data.data === this.protyle.block.rootID) {
                                 reloadProtyle(this.protyle, false);
+                                /// #if !MOBILE
+                                getAllModels().outline.forEach(item => {
+                                    if (item.blockId === data.data) {
+                                        fetchPost("/api/outline/getDocOutline", {
+                                            id: item.blockId,
+                                            preview: item.isPreview
+                                        }, response => {
+                                            item.update(response);
+                                        });
+                                    }
+                                });
+                                /// #endif
                             }
                             break;
                         case "refreshAttributeView":
@@ -125,13 +158,37 @@ export class Protyle {
                             }
                             break;
                         case "transactions":
-                            data.data[0].doOperations.forEach((item: IOperation) => {
+                            data.data[0].doOperations.find((item: IOperation) => {
                                 if (!this.protyle.preview.element.classList.contains("fn__none") &&
                                     item.action !== "updateAttrs"   // 预览模式下点击只读
                                 ) {
                                     this.protyle.preview.render(this.protyle);
+                                } else if (options.backlinkData && ["delete", "move"].includes(item.action)) {
+                                    // 只对特定情况刷新，否则展开、编辑等操作刷新会频繁
+                                    /// #if !MOBILE
+                                    getAllModels().backlink.find(backlinkItem => {
+                                        if (backlinkItem.element.contains(this.protyle.element)) {
+                                            backlinkItem.refresh();
+                                            return true;
+                                        }
+                                    });
+                                    /// #endif
+                                    return true;
                                 } else {
                                     onTransaction(this.protyle, item, false);
+                                    // 反链面板移除元素后，文档为空
+                                    if (this.protyle.wysiwyg.element.childElementCount === 0 && this.protyle.block.parentID) {
+                                        const newID = Lute.NewNodeID();
+                                        const emptyElement = genEmptyElement(false, false, newID);
+                                        this.protyle.wysiwyg.element.append(emptyElement);
+                                        transaction(this.protyle, [{
+                                            action: "insert",
+                                            data: emptyElement.outerHTML,
+                                            id: newID,
+                                            parentID: this.protyle.block.parentID
+                                        }]);
+                                        this.protyle.undo.clear();
+                                    }
                                 }
                             });
                             break;
@@ -228,7 +285,7 @@ export class Protyle {
                 this.protyle.block.rootID = options.blockId;
                 renderBacklink(this.protyle, options.backlinkData);
                 // 为了满足 eventPath0.style.paddingLeft 从而显示块标 https://github.com/siyuan-note/siyuan/issues/11578
-                this.protyle.wysiwyg.element.style.paddingLeft = "16px";
+                this.protyle.wysiwyg.element.style.padding = "4px 16px 4px 24px";
                 return;
             }
             if (!options.blockId) {
@@ -264,6 +321,7 @@ export class Protyle {
         fetchPost("/api/filetree/getDoc", {
             id: mergedOptions.blockId,
             isBacklink: mergedOptions.action.includes(Constants.CB_GET_BACKLINK),
+            originalRefBlockIDs: mergedOptions.originalRefBlockIDs,
             // 0: 仅当前 ID（默认值），1：向上 2：向下，3：上下都加载，4：加载最后
             mode: (mergedOptions.action && mergedOptions.action.includes(Constants.CB_GET_CONTEXT)) ? 3 : 0,
             size: mergedOptions.action?.includes(Constants.CB_GET_ALL) ? Constants.SIZE_GET_MAX : window.siyuan.config.editor.dynamicLoadBlocks,
@@ -429,5 +487,17 @@ export class Protyle {
 
     public focusBlock(element: Element, toStart = true) {
         return focusBlock(element, undefined, toStart);
+    }
+
+    public disable() {
+        disabledProtyle(this.protyle);
+    }
+
+    public enable() {
+        enableProtyle(this.protyle);
+    }
+
+    public renderAVAttribute(element: HTMLElement, id: string, cb?: (element: HTMLElement) => void) {
+        renderAVAttribute(element, id, this.protyle, cb);
     }
 }

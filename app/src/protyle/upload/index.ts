@@ -9,6 +9,7 @@ import {genAssetHTML} from "../../asset/renderAssets";
 import {hasClosestBlock} from "../util/hasClosest";
 import {getContenteditableElement} from "../wysiwyg/getBlock";
 import {getTypeByCellElement, updateCellsValue} from "../render/av/cell";
+import {scrollCenter} from "../../util/highlightById";
 
 export class Upload {
     public element: HTMLElement;
@@ -106,6 +107,7 @@ const genUploadedLabel = (responseText: string, protyle: IProtyle) => {
         range.setEndAfter(range.startContainer.parentElement);
         range.collapse(false);
     }
+    const keys = Object.keys(response.data.succMap);
     // https://github.com/siyuan-note/siyuan/issues/7624
     const nodeElement = hasClosestBlock(range.startContainer);
     if (nodeElement) {
@@ -113,38 +115,70 @@ const genUploadedLabel = (responseText: string, protyle: IProtyle) => {
             insertBlock = false;
         } else {
             const editableElement = getContenteditableElement(nodeElement);
-            if (editableElement && editableElement.textContent !== "" && nodeElement.classList.contains("p")) {
+            if (editableElement && nodeElement.classList.contains("p") &&
+                (editableElement.textContent !== "" || keys.length < 2)) {
                 insertBlock = false;
             }
         }
     }
-    let succFileText = "";
-    const keys = Object.keys(response.data.succMap);
+    let successFileText = "";
+    // 插入多个资源文件时按文件名自然升序排列 Use natural ascending order when inserting multiple assets https://github.com/siyuan-note/siyuan/issues/14643
+    keys.sort((a, b) => a.localeCompare(b, undefined, {numeric: true}));
     const avAssets: IAVCellAssetValue[] = [];
+    let hasImage = false;
     keys.forEach((key, index) => {
         const path = response.data.succMap[key];
         const type = pathPosix().extname(key).toLowerCase();
         const filename = protyle.options.upload.filename(key);
         const name = filename.substring(0, filename.length - type.length);
+        hasImage = Constants.SIYUAN_ASSETS_IMAGE.includes(type);
         avAssets.push({
             type: Constants.SIYUAN_ASSETS_IMAGE.includes(type) ? "image" : "file",
             content: path,
             name: name
         });
-        succFileText += genAssetHTML(type, path, name, filename);
+        successFileText += genAssetHTML(type, path, name, filename);
         if (!Constants.SIYUAN_ASSETS_AUDIO.includes(type) && !Constants.SIYUAN_ASSETS_VIDEO.includes(type) &&
             keys.length - 1 !== index) {
             if (nodeElement && nodeElement.classList.contains("table")) {
-                succFileText += "<br>";
+                successFileText += "<br>";
             } else if (insertBlock) {
-                succFileText += "\n\n";
+                successFileText += "\n\n";
             } else {
-                succFileText += "\n";
+                successFileText += "\n";
             }
         }
     });
 
-    if ((nodeElement && nodeElement.classList.contains("av"))) {
+    if (document.querySelector(".av__panel")) {
+        const cellElements: HTMLElement[] = [document.querySelector('.custom-attr__avvalue[data-type="mAsset"][data-active="true"]')];
+        if (!cellElements[0]) {
+            cellElements.splice(0, 1);
+            protyle.wysiwyg.element.querySelectorAll(".av__cell--active").forEach((item: HTMLElement) => {
+                if (getTypeByCellElement(item) === "mAsset") {
+                    cellElements.push(item);
+                }
+            });
+            if (cellElements.length === 0) {
+                document.querySelector(".av__panel .b3-menu__items")?.getAttribute("data-ids")?.split(",").forEach((id: string) => {
+                    const item = protyle.wysiwyg.element.querySelector(`.av__gallery-fields [data-dtype="mAsset"][data-id="${id}"]`) as HTMLElement;
+                    if (item) {
+                        cellElements.push(item);
+                    }
+                });
+            }
+        }
+        if (cellElements.length > 0) {
+            const blockElement = hasClosestBlock(cellElements[0]);
+            if (blockElement) {
+                updateCellsValue(protyle, blockElement, avAssets, cellElements);
+                document.querySelector(".av__panel")?.remove();
+                return;
+            }
+        } else {
+            return;
+        }
+    } else if (nodeElement && nodeElement.classList.contains("av")) {
         const cellElements: HTMLElement[] = [];
         nodeElement.querySelectorAll(".av__row--select:not(.av__row--header)").forEach(item => {
             item.querySelectorAll(".av__cell").forEach((cellItem: HTMLElement) => {
@@ -162,36 +196,17 @@ const genUploadedLabel = (responseText: string, protyle: IProtyle) => {
         }
         if (cellElements.length > 0) {
             updateCellsValue(protyle, nodeElement, avAssets, cellElements);
-            document.querySelector(".av__panel")?.remove();
             return;
-        } else {
-            return;
-        }
-    }
-
-    if (document.querySelector(".av__panel")) {
-        const cellElements: HTMLElement[] = [document.querySelector('.custom-attr__avvalue[data-type="mAsset"][data-active="true"]')];
-        if (!cellElements[0]) {
-            cellElements.splice(0, 1);
-            protyle.wysiwyg.element.querySelectorAll(".av__cell--active").forEach((item: HTMLElement) => {
-                if (getTypeByCellElement(item) === "mAsset") {
-                    cellElements.push(item);
-                }
-            });
-        }
-        if (cellElements.length > 0) {
-            const blockElement = hasClosestBlock(cellElements[0]);
-            if (blockElement) {
-                updateCellsValue(protyle, blockElement, avAssets, cellElements);
-                document.querySelector(".av__panel")?.remove();
-                return;
-            }
         } else {
             return;
         }
     }
     // 避免插入代码块中，其次因为都要独立成块 https://github.com/siyuan-note/siyuan/issues/7607
-    insertHTML(succFileText, protyle, insertBlock);
+    insertHTML(successFileText, protyle, insertBlock);
+    // 粘贴图片后定位不准确 https://github.com/siyuan-note/siyuan/issues/13336
+    setTimeout(() => {
+        scrollCenter(protyle, undefined, false, "smooth");
+    }, hasImage ? 0 : Constants.TIMEOUT_LOAD);
 };
 
 export const uploadLocalFiles = (files: string[], protyle: IProtyle, isUpload: boolean) => {

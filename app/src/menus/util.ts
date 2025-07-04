@@ -3,22 +3,23 @@ import {ipcRenderer} from "electron";
 import * as path from "path";
 /// #endif
 import {fetchPost} from "../util/fetch";
-import {getAssetName, pathPosix, showFileInFolder} from "../util/pathName";
+import {getAssetName, pathPosix, useShell} from "../util/pathName";
 import {openFileById} from "../editor/util";
 import {Constants} from "../constants";
 import {openNewWindowById} from "../window/openNewWindow";
 import {MenuItem} from "./Menu";
 import {App} from "../index";
-import {isInAndroid, openByMobile, updateHotkeyTip} from "../protyle/util/compatibility";
+import {exportByMobile, isInAndroid, updateHotkeyTip} from "../protyle/util/compatibility";
 import {checkFold} from "../util/noRelyPCFunction";
 
 export const exportAsset = (src: string) => {
     return {
+        id: "export",
         label: window.siyuan.languages.export,
         icon: "iconUpload",
         async click() {
             /// #if BROWSER
-            openByMobile(src);
+            exportByMobile(src);
             /// #else
             const result = await ipcRenderer.invoke(Constants.SIYUAN_GET, {
                 cmd: "showSaveDialog",
@@ -148,11 +149,11 @@ export const openEditorTab = (app: App, ids: string[], notebookId?: string, path
         label: window.siyuan.languages.showInFolder,
         click: () => {
             if (notebookId) {
-                showFileInFolder(path.join(window.siyuan.config.system.dataDir, notebookId, pathString));
+                useShell("showItemInFolder", path.join(window.siyuan.config.system.dataDir, notebookId, pathString));
             } else {
                 ids.forEach((id) => {
                     fetchPost("/api/block/getBlockInfo", {id}, (response) => {
-                        showFileInFolder(path.join(window.siyuan.config.system.dataDir, response.data.box, response.data.path));
+                        useShell("showItemInFolder", path.join(window.siyuan.config.system.dataDir, response.data.box, response.data.path));
                     });
                 });
             }
@@ -174,7 +175,6 @@ export const openEditorTab = (app: App, ids: string[], notebookId?: string, path
 export const copyPNGByLink = (link: string) => {
     if (isInAndroid()) {
         window.JSAndroid.writeImageClipboard(link);
-        return;
     } else {
         const canvas = document.createElement("canvas");
         const tempElement = document.createElement("img");

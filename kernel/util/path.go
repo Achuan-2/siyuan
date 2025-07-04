@@ -18,10 +18,12 @@ package util
 
 import (
 	"bytes"
+	"io/fs"
 	"net"
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -36,6 +38,21 @@ var (
 	UserAgent = "SiYuan/" + Ver
 )
 
+func TrimSpaceInPath(p string) string {
+	parts := strings.Split(p, "/")
+	for i, part := range parts {
+		parts[i] = strings.TrimSpace(part)
+	}
+	return strings.Join(parts, "/")
+}
+
+func GetTreeID(treePath string) string {
+	if strings.Contains(treePath, "\\") {
+		return strings.TrimSuffix(filepath.Base(treePath), ".sy")
+	}
+	return strings.TrimSuffix(path.Base(treePath), ".sy")
+}
+
 func ShortPathForBootingDisplay(p string) string {
 	if 25 > len(p) {
 		return p
@@ -48,7 +65,7 @@ func ShortPathForBootingDisplay(p string) string {
 var LocalIPs []string
 
 func GetLocalIPs() (ret []string) {
-	if ContainerAndroid == Container {
+	if ContainerAndroid == Container || ContainerHarmony == Container {
 		// Android 上用不了 net.InterfaceAddrs() https://github.com/golang/go/issues/40569，所以前面使用启动内核传入的参数 localIPs
 		LocalIPs = append(LocalIPs, LocalHost)
 		LocalIPs = gulu.Str.RemoveDuplicatedElem(LocalIPs)
@@ -167,7 +184,7 @@ func GetChildDocDepth(treeAbsPath string) (ret int) {
 
 	baseDepth := strings.Count(filepath.ToSlash(treeAbsPath), "/")
 	depth := 1
-	filelock.Walk(dir, func(path string, info os.FileInfo, err error) error {
+	filelock.Walk(dir, func(path string, d fs.DirEntry, err error) error {
 		p := filepath.ToSlash(path)
 		currentDepth := strings.Count(p, "/")
 		if depth < currentDepth {
@@ -180,16 +197,39 @@ func GetChildDocDepth(treeAbsPath string) (ret int) {
 }
 
 func NormalizeConcurrentReqs(concurrentReqs int, provider int) int {
-	if 1 > concurrentReqs {
-		if 2 == provider { // S3
-			return 8
-		} else if 3 == provider { // WebDAV
-			return 1
+	switch provider {
+	case 0: // SiYuan
+		switch {
+		case concurrentReqs < 1:
+			concurrentReqs = 8
+		case concurrentReqs > 16:
+			concurrentReqs = 16
+		default:
 		}
-		return 8
-	}
-	if 16 < concurrentReqs {
-		return 16
+	case 2: // S3
+		switch {
+		case concurrentReqs < 1:
+			concurrentReqs = 8
+		case concurrentReqs > 16:
+			concurrentReqs = 16
+		default:
+		}
+	case 3: // WebDAV
+		switch {
+		case concurrentReqs < 1:
+			concurrentReqs = 1
+		case concurrentReqs > 16:
+			concurrentReqs = 16
+		default:
+		}
+	case 4: // Local File System
+		switch {
+		case concurrentReqs < 1:
+			concurrentReqs = 16
+		case concurrentReqs > 1024:
+			concurrentReqs = 1024
+		default:
+		}
 	}
 	return concurrentReqs
 }
@@ -215,6 +255,18 @@ func NormalizeEndpoint(endpoint string) string {
 	if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
 		endpoint = "http://" + endpoint
 	}
+	if !strings.HasSuffix(endpoint, "/") {
+		endpoint = endpoint + "/"
+	}
+	return endpoint
+}
+
+func NormalizeLocalPath(endpoint string) string {
+	endpoint = strings.TrimSpace(endpoint)
+	if "" == endpoint {
+		return ""
+	}
+	endpoint = filepath.ToSlash(filepath.Clean(endpoint))
 	if !strings.HasSuffix(endpoint, "/") {
 		endpoint = endpoint + "/"
 	}
@@ -261,7 +313,7 @@ func IsAssetLinkDest(dest []byte) bool {
 
 var (
 	SiYuanAssetsImage = []string{".apng", ".ico", ".cur", ".jpg", ".jpe", ".jpeg", ".jfif", ".pjp", ".pjpeg", ".png", ".gif", ".webp", ".bmp", ".svg", ".avif"}
-	SiYuanAssetsAudio = []string{".mp3", ".wav", ".ogg", ".m4a"}
+	SiYuanAssetsAudio = []string{".mp3", ".wav", ".ogg", ".m4a", ".flac"}
 	SiYuanAssetsVideo = []string{".mov", ".weba", ".mkv", ".mp4", ".webm"}
 )
 
@@ -293,4 +345,37 @@ func GetAbsPathInWorkspace(relPath string) (string, error) {
 		return absPath, nil
 	}
 	return "", os.ErrPermission
+}
+
+func IsAbsPathInWorkspace(absPath string) bool {
+	return IsSubPath(WorkspaceDir, absPath)
+}
+
+// IsWorkspaceDir 判断指定目录是否是工作空间目录。
+func IsWorkspaceDir(dir string) bool {
+	conf := filepath.Join(dir, "conf", "conf.json")
+	data, err := os.ReadFile(conf)
+	if nil != err {
+		return false
+	}
+	return strings.Contains(string(data), "kernelVersion")
+}
+
+// IsRootPath checks if the given path is a root path.
+func IsRootPath(path string) bool {
+	if path == "" {
+		return false
+	}
+
+	// Clean the path to remove any trailing slashes
+	cleanPath := filepath.Clean(path)
+
+	// Check if the path is the root path based on the operating system
+	if runtime.GOOS == "windows" {
+		// On Windows, root paths are like "C:\", "D:\", etc.
+		return len(cleanPath) == 3 && cleanPath[1] == ':' && cleanPath[2] == '\\'
+	} else {
+		// On Unix-like systems, the root path is "/"
+		return cleanPath == "/"
+	}
 }

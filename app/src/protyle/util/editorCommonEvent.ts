@@ -31,6 +31,10 @@ import {zoomOut} from "../../menus/protyle";
 /// #if !BROWSER
 import {webUtils} from "electron";
 /// #endif
+import {addDragFill, getTypeByCellElement} from "../render/av/cell";
+import {processClonePHElement} from "../render/util";
+import {insertGalleryItemAnimation} from "../render/av/gallery/item";
+import {clearSelect} from "./clearSelect";
 
 const moveToNew = (protyle: IProtyle, sourceElements: Element[], targetElement: Element, newSourceElement: Element,
                    isSameDoc: boolean, isBottom: boolean, isCopy: boolean) => {
@@ -61,6 +65,13 @@ const moveToNew = (protyle: IProtyle, sourceElements: Element[], targetElement: 
             topSourceElement = getTopAloneElement(item);
             if (topSourceElement.isSameNode(item)) {
                 topSourceElement = undefined;
+                // 单个缩放或反链面板中的列表项拖拽到包含该列表的编辑器中会导致残留的 list
+                Array.from(protyle.wysiwyg.element.querySelectorAll(`[data-node-id="${item.getAttribute("data-node-id")}"]`)).find((targetItem: HTMLElement) => {
+                    if (!isInEmbedBlock(targetItem) && targetItem.parentElement.querySelectorAll(".li").length === 1) {
+                        topSourceElement = targetItem.parentElement;
+                        return true;
+                    }
+                });
             }
         }
         const copyId = Lute.NewNodeID();
@@ -519,23 +530,24 @@ const dragSb = async (protyle: IProtyle, sourceElements: Element[], targetElemen
     if (!isCopy && oldSourceParentElement && oldSourceParentElement.classList.contains("sb") && oldSourceParentElement.childElementCount === 2) {
         // 拖拽后，sb 只剩下一个元素
         if (isSameDoc) {
-            const sbData = cancelSB(protyle, oldSourceParentElement);
+            const sbData = await cancelSB(protyle, oldSourceParentElement);
             doOperations.push(sbData.doOperations[0], sbData.doOperations[1]);
             undoOperations.splice(0, 0, sbData.undoOperations[0], sbData.undoOperations[1]);
         } else {
             /// #if !MOBILE
             const otherProtyleElement = hasClosestByClassName(oldSourceParentElement, "protyle", true);
             if (otherProtyleElement) {
-                getAllEditor().find(item => {
-                    if (item.protyle.element.isSameNode(otherProtyleElement)) {
-                        const otherSbData = cancelSB(item.protyle, oldSourceParentElement);
+                const allEditor = getAllEditor();
+                for (let i = 0; i < allEditor.length; i++) {
+                    if (allEditor[i].protyle.element.isSameNode(otherProtyleElement)) {
+                        const otherSbData = await cancelSB(allEditor[i].protyle, oldSourceParentElement);
                         doOperations.push(otherSbData.doOperations[0], otherSbData.doOperations[1]);
                         undoOperations.splice(0, 0, otherSbData.undoOperations[0], otherSbData.undoOperations[1]);
                         // 需清空操作栈，否则撤销到移动出去的块的操作会抛异常
-                        item.protyle.undo.clear();
+                        allEditor[i].protyle.undo.clear();
                         return true;
                     }
-                });
+                }
             }
             /// #endif
         }
@@ -721,23 +733,23 @@ const dragSame = async (protyle: IProtyle, sourceElements: Element[], targetElem
     if (!isCopy && oldSourceParentElement && oldSourceParentElement.classList.contains("sb") && oldSourceParentElement.childElementCount === 2) {
         // 拖拽后，sb 只剩下一个元素
         if (isSameDoc) {
-            const sbData = cancelSB(protyle, oldSourceParentElement);
+            const sbData = await cancelSB(protyle, oldSourceParentElement);
             doOperations.push(sbData.doOperations[0], sbData.doOperations[1]);
             undoOperations.splice(0, 0, sbData.undoOperations[0], sbData.undoOperations[1]);
         } else {
             /// #if !MOBILE
             const otherProtyleElement = hasClosestByClassName(oldSourceParentElement, "protyle", true);
             if (otherProtyleElement) {
-                getAllEditor().find(item => {
-                    if (item.protyle.element.isSameNode(otherProtyleElement)) {
-                        const otherSbData = cancelSB(item.protyle, oldSourceParentElement);
+                const allEditor = getAllEditor();
+                for (let i = 0; i < allEditor.length; i++) {
+                    if (allEditor[i].protyle.element.isSameNode(otherProtyleElement)) {
+                        const otherSbData = await cancelSB(allEditor[i].protyle, oldSourceParentElement);
                         doOperations.push(otherSbData.doOperations[0], otherSbData.doOperations[1]);
                         undoOperations.splice(0, 0, otherSbData.undoOperations[0], otherSbData.undoOperations[1]);
                         // 需清空操作栈，否则撤销到移动出去的块的操作会抛异常
-                        item.protyle.undo.clear();
-                        return true;
+                        allEditor[i].protyle.undo.clear();
                     }
-                });
+                }
             }
             /// #endif
         }
@@ -797,17 +809,40 @@ const dragSame = async (protyle: IProtyle, sourceElements: Element[], targetElem
 
 export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
     editorElement.addEventListener("dragstart", (event) => {
-        const target = event.target as HTMLElement;
+        if (protyle.disabled) {
+            event.preventDefault();
+            event.stopPropagation();
+            return;
+        }
+        let target = event.target as HTMLElement;
+        if (target.classList.contains("av__gallery-img")) {
+            target = hasClosestByClassName(target, "av__gallery-item") as HTMLElement;
+        }
+        if (!target) {
+            return;
+        }
         if (target.tagName === "IMG") {
             window.siyuan.dragElement = undefined;
             event.preventDefault();
             return;
         }
+
         if (target.classList) {
             if (hasClosestByClassName(target, "protyle-wysiwyg__embed")) {
                 window.siyuan.dragElement = undefined;
                 event.preventDefault();
             } else if (target.classList.contains("protyle-action")) {
+                target.parentElement.classList.add("protyle-wysiwyg--select");
+                const ghostElement = document.createElement("div");
+                ghostElement.className = protyle.wysiwyg.element.className;
+                ghostElement.append(processClonePHElement(target.parentElement.cloneNode(true) as Element));
+                ghostElement.setAttribute("style", `position:fixed;opacity:.1;width:${target.parentElement.clientWidth}px;padding:0;`);
+                document.body.append(ghostElement);
+                event.dataTransfer.setDragImage(ghostElement, 0, 0);
+                setTimeout(() => {
+                    ghostElement.remove();
+                });
+
                 window.siyuan.dragElement = protyle.wysiwyg.element;
                 event.dataTransfer.setData(`${Constants.SIYUAN_DROP_GUTTER}NodeListItem${Constants.ZWSP}${target.parentElement.getAttribute("data-subtype")}${Constants.ZWSP}${[target.parentElement.getAttribute("data-node-id")]}`,
                     protyle.wysiwyg.element.innerHTML);
@@ -816,6 +851,36 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
                 window.siyuan.dragElement = target;
                 event.dataTransfer.setData(`${Constants.SIYUAN_DROP_GUTTER}NodeAttributeView${Constants.ZWSP}Col${Constants.ZWSP}${[target.getAttribute("data-col-id")]}`,
                     target.outerHTML);
+                return;
+            } else if (target.classList.contains("av__gallery-item")) {
+                const blockElement = hasClosestBlock(target);
+                if (blockElement) {
+                    target.classList.add("av__gallery-item--select");
+                    const ghostElement = document.createElement("div");
+                    ghostElement.className = "protyle-wysiwyg protyle-wysiwyg--attr " + target.parentElement.className;
+                    blockElement.querySelectorAll(".av__gallery-item--select").forEach(item => {
+                        const cloneItem = processClonePHElement(item.cloneNode(true) as Element);
+                        cloneItem.setAttribute("style", `width:${item.clientWidth}px;;height:${item.clientHeight}px;`);
+                        cloneItem.querySelector(".av__gallery-fields").setAttribute("style", "background-color: var(--b3-theme-background)");
+                        ghostElement.append(cloneItem);
+                    });
+                    ghostElement.setAttribute("style", "top:100vh;position:fixed;opacity:.1;padding:0");
+                    document.body.append(ghostElement);
+                    event.dataTransfer.setDragImage(ghostElement, -10, -10);
+                    setTimeout(() => {
+                        ghostElement.remove();
+                    });
+                    window.siyuan.dragElement = target;
+                    const selectIds: string[] = [];
+                    blockElement.querySelectorAll(".av__gallery-item--select").forEach(item => {
+                        selectIds.push(item.getAttribute("data-id"));
+                    });
+                    if (selectIds.length === 0) {
+                        selectIds.push(target.getAttribute("data-id"));
+                    }
+                    event.dataTransfer.setData(`${Constants.SIYUAN_DROP_GUTTER}NodeAttributeView${Constants.ZWSP}GalleryItem${Constants.ZWSP}${selectIds}`,
+                        ghostElement.outerHTML);
+                }
                 return;
             }
         }
@@ -841,7 +906,7 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
         }
         const targetElement = editorElement.querySelector(".dragover__left, .dragover__right, .dragover__bottom, .dragover__top");
         if (targetElement) {
-            targetElement.classList.remove("protyle-wysiwyg--select", "dragover");
+            targetElement.classList.remove("dragover");
             targetElement.removeAttribute("select-start");
             targetElement.removeAttribute("select-end");
         }
@@ -866,7 +931,7 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
                 let html = "";
                 for (let i = 0; i < selectedIds.length; i++) {
                     const response = await fetchSyncPost("/api/block/getRefText", {id: selectedIds[i]});
-                    html += `((${selectedIds[i]} '${response.data}')) `;
+                    html += protyle.lute.Md2BlockDOM(`((${selectedIds[i]} '${response.data}'))`);
                 }
                 insertHTML(html, protyle);
             } else if (event.shiftKey) {
@@ -887,7 +952,9 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
                             sourceElements.push(elementItem);
                         }
                     });
-                } else {    // 跨窗口拖拽
+                } else if (window.siyuan.config.system.workspaceDir.toLowerCase() === gutterTypes[3]) {
+                    // 跨窗口拖拽
+                    // 不能跨工作区域拖拽 https://github.com/siyuan-note/siyuan/issues/13582
                     const targetProtyleElement = document.createElement("template");
                     targetProtyleElement.innerHTML = `<div>${event.dataTransfer.getData(gutterType)}</div>`;
                     targetProtyleElement.content.querySelectorAll(queryClass.substring(0, queryClass.length - 1)).forEach(elementItem => {
@@ -900,7 +967,7 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
                 const sourceIds: string [] = [];
                 const srcs: IOperationSrcs[] = [];
                 sourceElements.forEach(item => {
-                    item.classList.remove("protyle-wysiwyg--select", "protyle-wysiwyg--hl");
+                    item.classList.remove("protyle-wysiwyg--hl");
                     item.removeAttribute("select-start");
                     item.removeAttribute("select-end");
                     // 反链提及有高亮，如果拖拽到正文的话，应移除
@@ -965,7 +1032,7 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
                         }
                     }
                 } else if (targetElement.classList.contains("av__row")) {
-                    // 拖拽到属性视图内
+                    // 拖拽到属性视图 table 内
                     const blockElement = hasClosestBlock(targetElement);
                     if (blockElement) {
                         let previousID = "";
@@ -1024,6 +1091,71 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
                             insertAttrViewBlockAnimation(protyle, blockElement, sourceIds, previousID);
                         }
                     }
+                } else if (targetElement.classList.contains("av__gallery-item") || targetElement.classList.contains("av__gallery-add")) {
+                    // 拖拽到属性视图 gallery 内
+                    const blockElement = hasClosestBlock(targetElement);
+                    if (blockElement) {
+                        let previousID = "";
+                        if (targetClass.includes("dragover__right")) {
+                            previousID = targetElement.getAttribute("data-id") || "";
+                        } else {
+                            previousID = targetElement.previousElementSibling?.getAttribute("data-id") || "";
+                        }
+                        const avID = blockElement.getAttribute("data-av-id");
+                        if (gutterTypes[1] === "galleryitem" && gutterTypes[0] === "nodeattributeview") {
+                            // gallery item 内部拖拽
+                            const doOperations: IOperation[] = [];
+                            const undoOperations: IOperation[] = [];
+                            const undoPreviousId = blockElement.querySelector(`.av__gallery-item[data-id="${selectedIds[0]}"]`).previousElementSibling?.getAttribute("data-id") || "";
+                            selectedIds.reverse().forEach(item => {
+                                if (previousID !== item && undoPreviousId !== previousID) {
+                                    doOperations.push({
+                                        action: "sortAttrViewRow",
+                                        avID,
+                                        previousID,
+                                        id: item,
+                                        blockID: blockElement.dataset.nodeId,
+                                    });
+                                    undoOperations.push({
+                                        action: "sortAttrViewRow",
+                                        avID,
+                                        previousID: undoPreviousId,
+                                        id: item,
+                                        blockID: blockElement.dataset.nodeId,
+                                    });
+                                }
+                            });
+                            transaction(protyle, doOperations, undoOperations);
+                        } else {
+                            const newUpdated = dayjs().format("YYYYMMDDHHmmss");
+                            transaction(protyle, [{
+                                action: "insertAttrViewBlock",
+                                avID,
+                                previousID,
+                                srcs,
+                                blockID: blockElement.dataset.nodeId
+                            }, {
+                                action: "doUpdateUpdated",
+                                id: blockElement.dataset.nodeId,
+                                data: newUpdated,
+                            }], [{
+                                action: "removeAttrViewBlock",
+                                srcIDs: sourceIds,
+                                avID,
+                            }, {
+                                action: "doUpdateUpdated",
+                                id: blockElement.dataset.nodeId,
+                                data: blockElement.getAttribute("updated")
+                            }]);
+                            blockElement.setAttribute("updated", newUpdated);
+                            insertGalleryItemAnimation({
+                                protyle,
+                                blockElement,
+                                srcIDs: sourceIds,
+                                previousId: previousID
+                            });
+                        }
+                    }
                 } else if (sourceElements.length > 0) {
                     if (targetElement.parentElement.getAttribute("data-type") === "NodeSuperBlock" &&
                         targetElement.parentElement.getAttribute("data-sb-layout") === "col") {
@@ -1063,7 +1195,10 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
         } else if (event.dataTransfer.getData(Constants.SIYUAN_DROP_FILE)?.split("-").length > 1) {
             // 文件树拖拽
             const ids = event.dataTransfer.getData(Constants.SIYUAN_DROP_FILE).split(",");
-            if (event.altKey) {
+            if (!event.altKey && (!targetElement || (
+                !targetElement.classList.contains("av__row") && !targetElement.classList.contains("av__gallery-item") &&
+                !targetElement.classList.contains("av__gallery-add")
+            ))) {
                 if (event.y > protyle.wysiwyg.element.lastElementChild.getBoundingClientRect().bottom) {
                     insertEmptyBlock(protyle, "afterend", protyle.wysiwyg.element.lastElementChild.getAttribute("data-node-id"));
                 } else {
@@ -1076,21 +1211,33 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
                 }
                 let html = "";
                 for (let i = 0; i < ids.length; i++) {
+                    if (ids.length > 1) {
+                        html += "* ";
+                    }
                     const response = await fetchSyncPost("/api/block/getRefText", {id: ids[i]});
-                    html += `((${ids[i]} '${response.data}')) `;
+                    html += `((${ids[i]} '${response.data}'))`;
+                    if (ids.length > 1 && i !== ids.length - 1) {
+                        html += "\n";
+                    }
                 }
-                insertHTML(html, protyle);
+                insertHTML(protyle.lute.Md2BlockDOM(html), protyle);
             } else if (targetElement && !protyle.options.backlinkData && targetElement.className.indexOf("dragover__") > -1) {
                 const scrollTop = protyle.contentElement.scrollTop;
-                if (targetElement.classList.contains("av__row")) {
+                if (targetElement.classList.contains("av__row") ||
+                    targetElement.classList.contains("av__gallery-item") ||
+                    targetElement.classList.contains("av__gallery-add")) {
                     // 拖拽到属性视图内
                     const blockElement = hasClosestBlock(targetElement);
                     if (blockElement) {
                         let previousID = "";
                         if (targetElement.classList.contains("dragover__bottom")) {
                             previousID = targetElement.getAttribute("data-id") || "";
-                        } else {
+                        } else if (targetElement.classList.contains("dragover__top")) {
                             previousID = targetElement.previousElementSibling?.getAttribute("data-id") || "";
+                        } else if (targetElement.classList.contains("dragover__left")) {
+                            previousID = targetElement.previousElementSibling?.getAttribute("data-id") || "";
+                        } else if (targetElement.classList.contains("dragover__right")) {
+                            previousID = targetElement.getAttribute("data-id") || "";
                         }
                         const avID = blockElement.getAttribute("data-av-id");
                         const newUpdated = dayjs().format("YYYYMMDDHHmmss");
@@ -1124,15 +1271,28 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
                         blockElement.setAttribute("updated", newUpdated);
                     }
                 } else {
-                    for (let i = 0; i < ids.length; i++) {
-                        if (ids[i]) {
-                            await fetchSyncPost("/api/filetree/doc2Heading", {
-                                srcID: ids[i],
-                                after: targetElement.classList.contains("dragover__bottom"),
-                                targetID: targetElement.getAttribute("data-node-id"),
-                            });
+                    if (targetElement.classList.contains("dragover__bottom")) {
+                        for (let i = ids.length - 1; i > -1; i--) {
+                            if (ids[i]) {
+                                await fetchSyncPost("/api/filetree/doc2Heading", {
+                                    srcID: ids[i],
+                                    after: true,
+                                    targetID: targetElement.getAttribute("data-node-id"),
+                                });
+                            }
+                        }
+                    } else {
+                        for (let i = 0; i < ids.length; i++) {
+                            if (ids[i]) {
+                                await fetchSyncPost("/api/filetree/doc2Heading", {
+                                    srcID: ids[i],
+                                    after: false,
+                                    targetID: targetElement.getAttribute("data-node-id"),
+                                });
+                            }
                         }
                     }
+
                     fetchPost("/api/filetree/getDoc", {
                         id: protyle.block.id,
                         size: window.siyuan.config.editor.dynamicLoadBlocks,
@@ -1172,16 +1332,17 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
                 } else {
                     paste(protyle, event);
                 }
+                clearSelect(["av", "img"], protyle.wysiwyg.element);
             } else {
                 const cellElement = hasClosestByClassName(event.target, "av__cell");
                 if (cellElement) {
-                    const cellType = avElement.querySelector(`.av__row--header [data-col-id="${cellElement.dataset.colId}"]`)?.getAttribute("data-dtype");
-                    if (cellType === "mAsset" && event.dataTransfer.types[0] === "Files" && !isBrowser()) {
+                    if (getTypeByCellElement(cellElement) === "mAsset" && event.dataTransfer.types[0] === "Files" && !isBrowser()) {
                         const files: string[] = [];
                         for (let i = 0; i < event.dataTransfer.files.length; i++) {
                             files.push(webUtils.getPathForFile(event.dataTransfer.files[i]));
                         }
                         dragUpload(files, protyle, cellElement);
+                        clearSelect(["cell"], avElement);
                     }
                 }
             }
@@ -1207,8 +1368,26 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
                 behavior: "smooth"
             });
         }
+        let targetElement: HTMLElement | false;
         // 设置了的话 drop 就无法监听 shift/control event.dataTransfer.dropEffect = "move";
         if (event.dataTransfer.types.includes("Files")) {
+            targetElement = hasClosestByClassName(event.target, "av__cell");
+            if (targetElement && targetElement.getAttribute("data-dtype") === "mAsset" &&
+                !targetElement.classList.contains("av__cell--header")) {
+                event.preventDefault(); // 不使用导致无法触发 drop
+                if (dragoverElement && targetElement.isSameNode(dragoverElement)) {
+                    return;
+                }
+                const blockElement = hasClosestBlock(targetElement);
+                if (blockElement) {
+                    clearSelect(["cell", "row"], protyle.wysiwyg.element);
+                    targetElement.classList.add("av__cell--select");
+                    if (blockElement.getAttribute("data-av-type") !== "gallery") {
+                        addDragFill(targetElement);
+                    }
+                    dragoverElement = targetElement;
+                }
+            }
             // 使用 event.preventDefault(); 会导致无光标 https://github.com/siyuan-note/siyuan/issues/12857
             return;
         }
@@ -1223,19 +1402,33 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
             event.preventDefault();
             return;
         }
-        if (event.shiftKey || event.altKey) {
-            const targetElement = hasClosestBlock(event.target);
-            if (targetElement) {
-                targetElement.classList.remove("dragover__top", "protyle-wysiwyg--select", "dragover__bottom", "dragover__left", "dragover__right");
-                targetElement.removeAttribute("select-start");
-                targetElement.removeAttribute("select-end");
+        const fileTreeIds = (event.dataTransfer.types.includes(Constants.SIYUAN_DROP_FILE) && window.siyuan.dragElement) ? window.siyuan.dragElement.innerText : "";
+        if (event.shiftKey || (event.altKey && fileTreeIds.indexOf("-") === -1)) {
+            const targetAssetElement = hasClosestBlock(event.target);
+            if (targetAssetElement) {
+                targetAssetElement.classList.remove("dragover__top", "protyle-wysiwyg--select", "dragover__bottom", "dragover__left", "dragover__right");
+                targetAssetElement.removeAttribute("select-start");
+                targetAssetElement.removeAttribute("select-end");
+            } else {
+                // https://github.com/siyuan-note/siyuan/issues/14177
+                editorElement.querySelectorAll(".dragover__top, .protyle-wysiwyg--select, .dragover__bottom, .dragover__left, .dragover__right").forEach((item: HTMLElement) => {
+                    item.classList.remove("dragover__top", "protyle-wysiwyg--select", "dragover__bottom", "dragover__left", "dragover__right");
+                    item.removeAttribute("select-start");
+                    item.removeAttribute("select-end");
+                });
             }
             event.preventDefault();
             return;
         }
         // 编辑器内文字拖拽或资源文件拖拽或按住 alt/shift 拖拽反链图标进入编辑器时不能运行 event.preventDefault()， 否则无光标; 需放在 !window.siyuan.dragElement 之后
         event.preventDefault();
-        let targetElement = hasClosestByClassName(event.target, "av__row") || hasClosestByClassName(event.target, "av__row--util") || hasClosestBlock(event.target);
+        targetElement = hasClosestByClassName(event.target, "av__gallery-item") || hasClosestByClassName(event.target, "av__gallery-add") ||
+            hasClosestByClassName(event.target, "av__row") || hasClosestByClassName(event.target, "av__row--util") ||
+            hasClosestBlock(event.target);
+        if (targetElement && targetElement.getAttribute("data-av-type") === "gallery" && event.target.classList.contains("av__gallery")) {
+            // 拖拽到属性视图 gallery 内，但没选中 item
+            return;
+        }
         const point = {x: event.clientX, y: event.clientY, className: ""};
 
         // 超级块中有a，b两个段落块，移动到 ab 之间的间隙 targetElement 会变为超级块，需修正为 a
@@ -1301,14 +1494,28 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
         } else if (targetElement && gutterType && gutterType.startsWith(`${Constants.SIYUAN_DROP_GUTTER}NodeAttributeViewRowMenu${Constants.ZWSP}`.toLowerCase())) {
             // 行只能拖拽当前 av 中
             if ((!targetElement.classList.contains("av__row") && !targetElement.classList.contains("av__row--util")) ||
-                !window.siyuan.dragElement.contains(targetElement)) {
+                (window.siyuan.dragElement && !window.siyuan.dragElement.contains(targetElement))) {
                 targetElement = false;
             }
+        } else if (targetElement && gutterType && gutterType.startsWith(`${Constants.SIYUAN_DROP_GUTTER}NodeAttributeView${Constants.ZWSP}GalleryItem${Constants.ZWSP}`.toLowerCase())) {
+            // gallery item 只能拖拽当前 av 中
+            const galleryElement = hasClosestByClassName(event.target, "av__gallery");
+            if (targetElement.classList.contains("av") || !galleryElement ||
+                !galleryElement.contains(window.siyuan.dragElement) || targetElement.isSameNode(window.siyuan.dragElement)) {
+                targetElement = false;
+                editorElement.querySelectorAll(".dragover__left, .dragover__right").forEach((item: HTMLElement) => {
+                    item.classList.remove("dragover__left", "dragover__right");
+                });
+            }
         }
+
         if (!targetElement) {
             return;
         }
-        const fileTreeIds = (event.dataTransfer.types.includes(Constants.SIYUAN_DROP_FILE) && window.siyuan.dragElement) ? window.siyuan.dragElement.innerText : "";
+        const isNotAvItem = !targetElement.classList.contains("av__row") &&
+            !targetElement.classList.contains("av__row--util") &&
+            !targetElement.classList.contains("av__gallery-item") &&
+            !targetElement.classList.contains("av__gallery-add");
         if (targetElement && dragoverElement && targetElement.isSameNode(dragoverElement)) {
             // 性能优化，目标为同一个元素不再进行校验
             const nodeRect = targetElement.getBoundingClientRect();
@@ -1317,6 +1524,14 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
                 item.removeAttribute("select-start");
                 item.removeAttribute("select-end");
             });
+            // 文档树拖拽限制
+            if (fileTreeIds.indexOf("-") > -1 && isNotAvItem) {
+                if (!event.altKey) {
+                    return;
+                } else if (fileTreeIds.split(",").includes(protyle.block.rootID) && event.altKey) {
+                    return;
+                }
+            }
             if (targetElement.getAttribute("data-type") === "NodeAttributeView" && hasClosestByTag(event.target, "TD")) {
                 return;
             }
@@ -1325,7 +1540,8 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
                 addDragover(targetElement);
                 return;
             }
-            if (targetElement.getAttribute("data-type") === "NodeListItem" || fileTreeIds.indexOf("-") > -1) {
+            // 忘记为什么要限定文档树的拖拽了，先放开 https://github.com/siyuan-note/siyuan/pull/13284#issuecomment-2503853135
+            if (targetElement.getAttribute("data-type") === "NodeListItem") {
                 if (event.clientY > nodeRect.top + nodeRect.height / 2) {
                     targetElement.classList.add("dragover__bottom");
                     addDragover(targetElement);
@@ -1350,6 +1566,21 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
                 }
                 return;
             }
+            // gallery
+            if (targetElement.classList.contains("av__gallery-item")) {
+                const midLeft = nodeRect.left + nodeRect.width / 2;
+                if (event.clientX < midLeft && event.clientX > nodeRect.left - 13) {
+                    targetElement.classList.add("dragover__left");
+                } else if (event.clientX > midLeft && event.clientX <= nodeRect.right + 13) {
+                    targetElement.classList.add("dragover__right");
+                }
+                return;
+            }
+            if (targetElement.classList.contains("av__gallery-add")) {
+                targetElement.classList.add("dragover__left");
+                return;
+            }
+
             if (event.clientX < nodeRect.left + 32 && event.clientX >= nodeRect.left - 1 &&
                 !targetElement.classList.contains("av__row")) {
                 targetElement.classList.add("dragover__left");
@@ -1373,30 +1604,34 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
             }
             return;
         }
+
         if (fileTreeIds.indexOf("-") > -1) {
-            if (fileTreeIds.split(",").includes(protyle.block.rootID) && !targetElement.classList.contains("av__row")) {
+            if (fileTreeIds.split(",").includes(protyle.block.rootID) && isNotAvItem && event.altKey) {
                 dragoverElement = undefined;
+                editorElement.querySelectorAll(".dragover__left, .dragover__right, .dragover__bottom, .dragover__top, .dragover").forEach((item: HTMLElement) => {
+                    item.classList.remove("dragover__top", "dragover__bottom", "dragover__left", "dragover__right", "dragover");
+                    item.removeAttribute("select-start");
+                    item.removeAttribute("select-end");
+                });
             } else {
                 dragoverElement = targetElement;
             }
             return;
         }
+
         if (gutterType) {
             disabledPosition = "";
-            // https://github.com/siyuan-note/siyuan/issues/12651
-            if (dragoverElement) {
-                dragoverElement.classList.remove("dragover__top", "dragover__bottom", "dragover__left", "dragover__right", "dragover");
-                dragoverElement = undefined;
-            }
             // gutter 文档内拖拽限制
             // 排除自己及子孙
             const gutterTypes = gutterType.replace(Constants.SIYUAN_DROP_GUTTER, "").split(Constants.ZWSP);
             if (gutterTypes[0] === "nodeattributeview" && gutterTypes[1] === "col" && targetElement.getAttribute("data-id") === gutterTypes[2]) {
                 // 表头不能拖到自己上
+                clearDragoverElement(dragoverElement);
                 return;
             }
             if (gutterTypes[0] === "nodeattributeviewrowmenu" && gutterTypes[2] === targetElement.getAttribute("data-id")) {
                 // 行不能拖到自己上
+                clearDragoverElement(dragoverElement);
                 return;
             }
             const isSelf = gutterTypes[2].split(",").find((item: string) => {
@@ -1404,21 +1639,25 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
                     return true;
                 }
             });
-            if (isSelf) {
+            if (isSelf && "nodeattributeviewrowmenu" !== gutterTypes[0]) {
+                clearDragoverElement(dragoverElement);
                 return;
             }
             if (isInEmbedBlock(targetElement)) {
                 // 不允许托入嵌入块
+                clearDragoverElement(dragoverElement);
                 return;
             }
             if (gutterTypes[0] === "nodelistitem" &&
                 gutterTypes[1] !== targetElement.getAttribute("data-subtype") &&
                 "NodeListItem" === targetElement.getAttribute("data-type")) {
                 // 排除类型不同的列表项
+                clearDragoverElement(dragoverElement);
                 return;
             }
             if (gutterTypes[0] !== "nodelistitem" && targetElement.getAttribute("data-type") === "NodeListItem") {
                 // 非列表项不能拖入列表项周围
+                clearDragoverElement(dragoverElement);
                 return;
             }
             if (gutterTypes[0] === "nodelistitem" && targetElement.parentElement.classList.contains("li") &&
@@ -1464,5 +1703,13 @@ const addDragover = (element: HTMLElement) => {
         element.classList.contains("list") ||
         element.classList.contains("bq")) {
         element.classList.add("dragover");
+    }
+};
+
+// https://github.com/siyuan-note/siyuan/issues/12651
+const clearDragoverElement = (element: Element) => {
+    if (element) {
+        element.classList.remove("dragover__top", "dragover__bottom", "dragover__left", "dragover__right", "dragover");
+        element = undefined;
     }
 };

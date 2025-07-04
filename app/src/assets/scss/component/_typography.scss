@@ -1,6 +1,7 @@
 @font-face {
   font-family: 'JetBrainsMono-Regular';
-  src: url(../fonts/JetBrainsMono-1.0.3/JetBrainsMono-Regular.woff) format('woff');
+  /*! /* webpackIgnore: true */
+  src: url(../../../appearance/fonts/JetBrainsMono-2.304/JetBrainsMono-Regular.woff2) format('woff2');
 }
 
 .b3-typography,
@@ -8,6 +9,7 @@
   font-variant-ligatures: no-common-ligatures;
   display: flex;
   flex-direction: column;
+  font-size: var(--b3-font-size-editor);
   font-family: var(--b3-font-family-protyle);
 
   img {
@@ -81,17 +83,6 @@
     // https://ld246.com/article/1636204769623  test $\rightarrow$ test
   }
 
-  mark,
-  span[data-type~="mark"] {
-    background-color: var(--b3-protyle-inline-mark-background);
-    color: var(--b3-protyle-inline-mark-color);
-
-    &.mark--hl {
-      background-color: var(--b3-theme-primary-lighter);
-      box-shadow: 0 0 0 .5px var(--b3-theme-on-background);
-    }
-  }
-
   kbd,
   span[data-type~="kbd"] {
     padding: 2px 4px;
@@ -105,9 +96,13 @@
     box-shadow: inset 0 -1px 0 var(--b3-theme-surface-lighter);
   }
 
+  u {
+    text-decoration: none;
+    border-bottom: 1px solid;
+  }
+
   u,
   span[data-type~="u"] {
-    text-decoration: none;
     border-bottom: 1px solid;
     color: var(--b3-protyle-inline-u-color);
   }
@@ -117,42 +112,73 @@
     border-bottom: 2px solid var(--b3-card-info-color);
   }
 
+  mark,
+  span[data-type~="mark"] {
+    background-color: var(--b3-protyle-inline-mark-background);
+    color: var(--b3-protyle-inline-mark-color);
+
+    &.mark--hl {
+      background-color: var(--b3-theme-primary-lighter);
+      box-shadow: 0 0 0 .5px var(--b3-theme-on-background);
+    }
+  }
+
+  blockquote {
+    position: relative;
+  }
+
   blockquote,
   .bq {
-    padding: 4px;
+    &::before {
+      content: '';
+      background-color: var(--b3-theme-surface-lighter);
+      width: .25em;
+      border-radius: var(--b3-border-radius);
+      position: absolute;
+      left: 2px;
+      top: 6px;
+      bottom: 6px;
+    }
+
+    padding-left: calc(0.25em + 6px);
     color: var(--b3-theme-on-surface);
-    border-left: .25em solid var(--b3-theme-surface-lighter);
     background-color: var(--b3-bq-background);
-    margin: 4px 0;
+    display: flex;
+    flex-direction: column;
   }
 
-  .h1,
   h1,
-  .h2,
   h2,
-  .h3,
   h3,
-  .h4,
   h4,
-  .h5,
   h5,
-  .h6,
   h6 {
     padding: 4px;
-    margin: 4px 0;
-    font-weight: 600;
-    line-height: 1.25;
+    margin: 2px 0;
   }
 
   .h1,
-  h1 {
-    padding: .3em 4px;
+  .h2,
+  .h3,
+  .h4,
+  .h5,
+  .h6,
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-weight: 600;
+  }
+
+  h1,
+  .h1 {
     font-size: 1.75em;
   }
 
-  .h2,
-  h2 {
-    padding: .3em 4px;
+  h2,
+  .h2 {
     font-size: 1.55em;
   }
 
@@ -248,12 +274,14 @@
     display: inline-block !important;
     position: absolute !important;
     width: 1px !important;
-    right: 8px !important;
+    left: 0 !important;
     outline: 0 !important;
     background: 0 0 !important;
     text-decoration: initial !important;
     text-shadow: initial !important;
     color: var(--b3-theme-background);
+    font-size: 12px !important;
+    overflow: hidden !important;
   }
 
   pre.code-block {
@@ -261,8 +289,7 @@
   }
 
   .code-block:not(pre) {
-    padding: 2em 1em 1.6em;
-    margin: 1em 0;
+    margin: 2px 0;
     box-sizing: border-box;
 
     .protyle-action {
@@ -278,10 +305,13 @@
         color: var(--b3-theme-on-surface);
         margin-top: -4px;
         align-self: center;
+        margin-left: 1em;
+        opacity: 0;
+        transition: var(--b3-transition);
+        line-height: calc(1.625 / 0.85);
       }
 
-      .protyle-icon,
-      .protyle-action__language {
+      .protyle-icon {
         opacity: 0;
         transition: var(--b3-transition);
       }
@@ -304,6 +334,7 @@
   }
 
   div.hljs {
+    padding: 2em 1em 1.6em;
     flex: 1;
     display: flex;
     position: relative;
@@ -330,7 +361,7 @@
       display: flex;
       align-items: baseline; // https://ld246.com/article/1645933216334
 
-      &:before {
+      &::before {
         content: "";
         flex: 1;
       }
@@ -360,12 +391,7 @@
     [contenteditable="false"] svg {
       border-radius: var(--b3-border-radius);
       max-width: 100%; // https://github.com/siyuan-note/siyuan/issues/11181
-
-      /* 由于会覆盖颜色，先移除看看有没有副作用 https://github.com/siyuan-note/siyuan/issues/7735
-      polygon {
-        fill: var(--b3-theme-on-primary);
-      }
-      */
+      height: 100%; // https://github.com/siyuan-note/siyuan/issues/13852
     }
   }
 
@@ -384,6 +410,8 @@
     text-align: center;
   }
 
+  [data-subtype="flowchart"] > [spin="1"],
+  [data-subtype="plantuml"] > [spin="1"],
   [data-subtype="mermaid"] > [spin="1"] {
     // 不能加到上一级，否则属性会跟随滚动
     overflow: auto;
@@ -408,7 +436,6 @@
     vertical-align: top; // https://ld246.com/article/1647522074722
     margin: 0 auto;
     max-width: 100%;
-    user-select: none;
     word-break: keep-all;
     white-space: nowrap;
 
@@ -423,24 +450,30 @@
       position: relative;
       display: inline-block;
       min-width: 22px;
+
+      &[style^=width] img {
+        width: 100%;
+      }
     }
 
     .protyle-action__title {
-      width: 100%;
-      display: block;
+      display: flex;
       font-size: 85%;
       color: var(--b3-theme-on-surface);
       word-break: break-word;
       white-space: break-spaces;
       line-height: normal;
       padding: 4px 0;
+
+      & > span {
+        flex-grow: 1;
+        width: 0;
+      }
     }
   }
 
   .iframe {
     text-align: center;
-    padding: 4px;
-    margin: 4px 0;
   }
 }
 
@@ -470,6 +503,20 @@
 
   table {
     margin: 1em 0;
+
+    &[style*="direction: rtl"]:not([style*="text-align: left"]),
+    &[style*="text-align: right"] {
+      margin-left: auto;
+    }
+
+    &[style*="text-align: center"] {
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    &[style*="direction: ltr"]:not([style*="text-align: right"]) {
+      margin-left: initial;
+    }
   }
 
   div[data-subtype="math"] {

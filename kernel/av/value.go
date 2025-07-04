@@ -221,6 +221,10 @@ func (value *Value) IsEdited() bool {
 }
 
 func (value *Value) IsEmpty() bool {
+	if nil == value {
+		return true
+	}
+
 	switch value.Type {
 	case KeyTypeBlock:
 		if nil == value.Block {
@@ -371,6 +375,7 @@ func (value *Value) GetValByType(typ KeyType) (ret interface{}) {
 
 type ValueBlock struct {
 	ID      string `json:"id"`
+	Icon    string `json:"icon"`
 	Content string `json:"content"`
 	Created int64  `json:"created"`
 	Updated int64  `json:"updated"`
@@ -730,6 +735,18 @@ func (r *ValueRollup) RenderContents(calc *RollupCalc, destKey *Key) {
 		if 0 < len(r.Contents) {
 			r.Contents = []*Value{{Type: KeyTypeNumber, Number: NewFormattedValueNumber(float64(countNonEmpty)/float64(len(r.Contents)), NumberFormatPercent)}}
 		}
+	case CalcOperatorPercentUniqueValues:
+		countUniqueValues := 0
+		uniqueValues := map[string]bool{}
+		for _, v := range r.Contents {
+			if _, ok := uniqueValues[v.String(true)]; !ok {
+				uniqueValues[v.String(true)] = true
+				countUniqueValues++
+			}
+		}
+		if 0 < len(r.Contents) {
+			r.Contents = []*Value{{Type: KeyTypeNumber, Number: NewFormattedValueNumber(float64(countUniqueValues)/float64(len(r.Contents)), NumberFormatPercent)}}
+		}
 	case CalcOperatorSum:
 		sum := 0.0
 		for _, v := range r.Contents {
@@ -928,7 +945,7 @@ func GetAttributeViewDefaultValue(valueID, keyID, blockID string, typ KeyType) (
 	case KeyTypeNumber:
 		ret.Number = &ValueNumber{}
 	case KeyTypeDate:
-		ret.Date = &ValueDate{}
+		ret.Date = &ValueDate{IsNotTime: true}
 	case KeyTypeSelect:
 		ret.MSelect = []*ValueSelect{}
 	case KeyTypeMSelect:

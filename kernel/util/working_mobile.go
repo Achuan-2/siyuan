@@ -25,6 +25,7 @@ import (
 
 	"github.com/88250/gulu"
 	figure "github.com/common-nighthawk/go-figure"
+	"github.com/siyuan-note/filelock"
 	"github.com/siyuan-note/httpclient"
 	"github.com/siyuan-note/logging"
 )
@@ -36,6 +37,7 @@ func BootMobile(container, appDir, workspaceBaseDir, lang string) {
 	initHttpClient()
 	ServerPort = FixedPort
 	Container = container
+	filelock.Container = Container
 	UserAgent = UserAgent + " " + Container + "/" + runtime.GOOS
 	httpclient.SetUserAgent(UserAgent)
 	Lang = lang
@@ -162,6 +164,7 @@ func initWorkspaceDirMobile(workspaceBaseDir string) {
 	AssetContentDBPath = filepath.Join(TempDir, "asset_content.db")
 	BlockTreeDBPath = filepath.Join(TempDir, "blocktree.db")
 	SnippetsPath = filepath.Join(DataDir, "snippets")
+	ShortcutsPath = filepath.Join(userHomeConfDir, "shortcuts")
 
 	AppearancePath = filepath.Join(ConfDir, "appearance")
 	ThemesPath = filepath.Join(AppearancePath, "themes")

@@ -1,6 +1,6 @@
 import {fetchPost} from "../../../util/fetch";
 import {addCol, getColIconByType} from "./col";
-import {escapeAttr} from "../../../util/escape";
+import {escapeAriaLabel, escapeAttr, escapeHtml} from "../../../util/escape";
 import * as dayjs from "dayjs";
 import {popTextCell, updateCellsValue} from "./cell";
 import {hasClosestBlock, hasClosestByAttribute, hasClosestByClassName} from "../../util/hasClosest";
@@ -9,8 +9,13 @@ import {transaction} from "../../wysiwyg/transaction";
 import {openMenuPanel} from "./openMenuPanel";
 import {uploadFiles} from "../../upload";
 import {openLink} from "../../../editor/openLink";
-import {editAssetItem} from "./asset";
-import {previewImage} from "../../preview/image";
+import {dragUpload, editAssetItem} from "./asset";
+import {previewImages} from "../../preview/image";
+/// #if !BROWSER
+import {webUtils} from "electron";
+/// #endif
+import {isBrowser} from "../../../util/functions";
+import {Constants} from "../../../constants";
 
 const genAVRollupHTML = (value: IAVCellValue) => {
     let html = "";
@@ -56,19 +61,22 @@ export const genAVValueHTML = (value: IAVCellValue) => {
     let html = "";
     switch (value.type) {
         case "block":
-            html = `<div class="fn__flex-1">${value.block.content}</div>`;
+            html = `<input value="${escapeAttr(value.block.content)}" type="text" class="b3-text-field b3-text-field--text fn__flex-1" placeholder="${window.siyuan.languages.empty}">`;
             break;
         case "text":
-            html = `<textarea style="resize: vertical" rows="${value.text.content.split("\n").length}" class="b3-text-field b3-text-field--text fn__flex-1">${value.text.content}</textarea>`;
+            html = `<textarea style="resize: vertical" rows="${(value.text?.content || "").split("\n").length}" class="b3-text-field b3-text-field--text fn__flex-1" placeholder="${window.siyuan.languages.empty}">${value.text?.content || ""}</textarea>`;
             break;
         case "number":
-            html = `<input value="${value.number.isNotEmpty ? value.number.content : ""}" type="number" class="b3-text-field b3-text-field--text fn__flex-1">
+            html = `<input value="${value.number.isNotEmpty ? value.number.content : ""}" type="number" class="b3-text-field b3-text-field--text fn__flex-1" placeholder="${window.siyuan.languages.empty}">
 <span class="fn__space"></span><span class="fn__flex-center ft__on-surface b3-tooltips__w b3-tooltips" aria-label="${window.siyuan.languages.format}">${value.number.formattedContent}</span><span class="fn__space"></span>`;
             break;
         case "mSelect":
         case "select":
-            value.mSelect?.forEach(item => {
-                html += `<span class="b3-chip b3-chip--middle" style="background-color:var(--b3-font-background${item.color});color:var(--b3-font-color${item.color})">${item.content}</span>`;
+            value.mSelect?.forEach((item, index) => {
+                if (value.type === "select" && index > 0) {
+                    return;
+                }
+                html += `<span class="b3-chip b3-chip--middle" style="background-color:var(--b3-font-background${item.color});color:var(--b3-font-color${item.color})">${escapeHtml(item.content)}</span>`;
             });
             break;
         case "mAsset":
@@ -81,7 +89,7 @@ export const genAVValueHTML = (value: IAVCellValue) => {
             });
             break;
         case "date":
-            html = `<span class="av__celltext" data-value='${JSON.stringify(value[value.type])}'>`;
+            html = `<span class="av__celltext" data-value='${JSON.stringify(value[value.type])}' placeholder="${window.siyuan.languages.empty}">`;
             if (value[value.type] && value[value.type].isNotEmpty) {
                 html += dayjs(value[value.type].content).format(value[value.type].isNotTime ? "YYYY-MM-DD" : "YYYY-MM-DD HH:mm");
             }
@@ -97,37 +105,39 @@ export const genAVValueHTML = (value: IAVCellValue) => {
             }
             break;
         case "url":
-            html = `<input value="${value.url.content}" class="b3-text-field b3-text-field--text fn__flex-1">
+            html = `<input value="${value.url.content}" class="b3-text-field b3-text-field--text fn__flex-1" placeholder="${window.siyuan.languages.empty}">
 <span class="fn__space"></span>
-<a href="${value.url.content}" target="_blank" aria-label="${window.siyuan.languages.openBy}" class="block__icon block__icon--show fn__flex-center b3-tooltips__w b3-tooltips"><svg><use xlink:href="#iconLink"></use></svg></a>`;
+<a ${value.url.content ? `href="${value.url.content}"` : ""} target="_blank" aria-label="${window.siyuan.languages.openBy}" class="block__icon block__icon--show fn__flex-center b3-tooltips__w b3-tooltips"><svg><use xlink:href="#iconLink"></use></svg></a>`;
             break;
         case "phone":
-            html = `<input value="${value.phone.content}" class="b3-text-field b3-text-field--text fn__flex-1">
+            html = `<input value="${value.phone.content}" class="b3-text-field b3-text-field--text fn__flex-1" placeholder="${window.siyuan.languages.empty}">
 <span class="fn__space"></span>
-<a href="tel:${value.phone.content}" target="_blank" aria-label="${window.siyuan.languages.openBy}" class="block__icon block__icon--show fn__flex-center b3-tooltips__w b3-tooltips"><svg><use xlink:href="#iconPhone"></use></svg></a>`;
+<a ${value.phone.content ? `href="tel:${value.phone.content}"` : ""} target="_blank" aria-label="${window.siyuan.languages.openBy}" class="block__icon block__icon--show fn__flex-center b3-tooltips__w b3-tooltips"><svg><use xlink:href="#iconPhone"></use></svg></a>`;
             break;
         case "checkbox":
             html = `<svg class="av__checkbox"><use xlink:href="#icon${value.checkbox.checked ? "Check" : "Uncheck"}"></use></svg>`;
             break;
         case "template":
-            html = `<div class="fn__flex-1">${value.template.content}</div>`;
+            html = `<div class="fn__flex-1" placeholder="${window.siyuan.languages.empty}">${value.template.content}</div>`;
             break;
         case "email":
-            html = `<input value="${value.email.content}" class="b3-text-field b3-text-field--text fn__flex-1">
+            html = `<input value="${value.email.content}" class="b3-text-field b3-text-field--text fn__flex-1" placeholder="${window.siyuan.languages.empty}">
 <span class="fn__space"></span>
-<a href="mailto:${value.email.content}" target="_blank" aria-label="${window.siyuan.languages.openBy}" class="block__icon block__icon--show fn__flex-center b3-tooltips__w b3-tooltips"><svg><use xlink:href="#iconEmail"></use></svg></a>`;
+<a ${value.email.content ? `href="mailto:${value.email.content}"` : ""} target="_blank" aria-label="${window.siyuan.languages.openBy}" class="block__icon block__icon--show fn__flex-center b3-tooltips__w b3-tooltips"><svg><use xlink:href="#iconEmail"></use></svg></a>`;
             break;
         case "relation":
             value?.relation?.contents?.forEach((item) => {
-                if (item) {
-                    const rollupText = genAVRollupHTML(item);
-                    if (rollupText) {
-                        html += rollupText + ",&nbsp;";
+                if (item && item.block) {
+                    if (item?.isDetached) {
+                        html += `<span class="av__cell--relation"><span>➖ </span><span class="av__celltext" data-id="${item.block?.id}">${Lute.EscapeHTMLStr(item.block.content || window.siyuan.languages.untitled)}</span></span>`;
+                    } else {
+                        // data-block-id 用于更新 emoji
+                        html += `<span class="av__cell--relation" data-block-id="${item.block.id}"><span class="b3-menu__avemoji" data-unicode="${item.block.icon || ""}">${unicode2Emoji(item.block.icon || window.siyuan.storage[Constants.LOCAL_IMAGES].file)}</span><span data-type="block-ref" data-id="${item.block.id}" data-subtype="s" class="av__celltext av__celltext--ref">${Lute.EscapeHTMLStr(item.block.content || window.siyuan.languages.untitled)}</span></span>`;
                     }
                 }
             });
-            if (html && html.endsWith(",&nbsp;")) {
-                html = html.substring(0, html.length - 7);
+            if (html && html.endsWith(", ")) {
+                html = html.substring(0, html.length - 2);
             }
             break;
         case "rollup":
@@ -153,6 +163,7 @@ export const renderAVAttribute = (element: HTMLElement, id: string, protyle: IPr
                 key: {
                     type: TAVCol,
                     name: string,
+                    desc: string,
                     icon: string,
                     id: string,
                     options?: {
@@ -171,31 +182,31 @@ export const renderAVAttribute = (element: HTMLElement, id: string, protyle: IPr
             avID: string
             avName: string
         }) => {
-            let innerHTML = `<div class="custom-attr__avheader block__logo popover__block" data-id='${JSON.stringify(table.blockIDs)}'>
+            let innerHTML = `<div class="custom-attr__avheader">
+    <div class="block__logo popover__block" style="max-width:calc(100% - 40px)" data-id='${JSON.stringify(table.blockIDs)}'>
+        <svg class="block__logoicon"><use xlink:href="#iconDatabase"></use></svg>
+        <span class="fn__ellipsis">${table.avName || window.siyuan.languages.database}</span>
+    </div>
     <div class="fn__flex-1"></div>
-    <svg class="block__logoicon"><use xlink:href="#iconDatabase"></use></svg><span>${table.avName || window.siyuan.languages.database}</span>
-    <div class="fn__flex-1"></div>
+    <span data-type="remove" class="block__icon block__icon--warning block__icon--show b3-tooltips__w b3-tooltips" aria-label="${window.siyuan.languages.removeAV}"><svg><use xlink:href="#iconTrashcan"></use></svg></span>
 </div>`;
             table.keyValues?.forEach(item => {
                 innerHTML += `<div class="block__icons av__row" data-id="${id}" data-col-id="${item.key.id}">
     <div class="block__icon" draggable="true"><svg><use xlink:href="#iconDrag"></use></svg></div>
-    <div class="block__logo ariaLabel fn__pointer" data-type="editCol" data-position="parentW" aria-label="${escapeAttr(item.key.name)}">
+    <div class="block__logo ariaLabel fn__pointer" data-type="editCol" data-position="parentW" aria-label="${escapeAriaLabel(item.key.name)}<div class='ft__on-surface'>${escapeAriaLabel(item.key.desc)}</div>">
         ${item.key.icon ? unicode2Emoji(item.key.icon, "block__logoicon", true) : `<svg class="block__logoicon"><use xlink:href="#${getColIconByType(item.key.type)}"></use></svg>`}
-        <span>${item.key.name}</span>
+        <span>${escapeHtml(item.key.name)}</span>
     </div>
     <div data-av-id="${table.avID}" data-col-id="${item.values[0].keyID}" data-block-id="${item.values[0].blockID}" data-id="${item.values[0].id}" data-type="${item.values[0].type}" 
-data-options="${item.key?.options ? escapeAttr(JSON.stringify(item.key.options)) : "[]"}"
-class="fn__flex-1 fn__flex${["url", "text", "number", "email", "phone", "block"].includes(item.values[0].type) ? "" : " custom-attr__avvalue"}">
-        ${genAVValueHTML(item.values[0])}
-    </div>
+data-options="${item.key?.options ? escapeAttr(JSON.stringify(item.key.options)) : "[]"}" 
+${["text", "number", "date", "url", "phone", "template", "email"].includes(item.values[0].type) ? "" : `placeholder="${window.siyuan.languages.empty}"`}  
+class="fn__flex-1 fn__flex${["url", "text", "number", "email", "phone", "block"].includes(item.values[0].type) ? "" : " custom-attr__avvalue"}${["created", "updated"].includes(item.values[0].type) ? " custom-attr__avvalue--readonly" : ""}">${genAVValueHTML(item.values[0])}</div>
 </div>`;
             });
             innerHTML += `<div class="fn__hr"></div>
-<div class="fn__flex">
-    <div class="fn__space"></div><div class="fn__space"></div>
-    <button data-type="addColumn" class="b3-button b3-button--outline"><svg><use xlink:href="#iconAdd"></use></svg>${window.siyuan.languages.addAttr}</button>
-</div><div class="fn__hr--b"></div>`;
-            html += `<div data-av-id="${table.avID}" data-node-id="${id}" data-type="NodeAttributeView">${innerHTML}</div>`;
+<button data-type="addColumn" class="b3-button b3-button--cancel"><svg><use xlink:href="#iconAdd"></use></svg>${window.siyuan.languages.newCol}</button>
+<div class="fn__hr--b"></div><div class="fn__hr--b"></div>`;
+            html += `<div data-av-id="${table.avID}" data-av-type="table" data-node-id="${id}" data-type="NodeAttributeView">${innerHTML}</div>`;
 
             if (element.innerHTML) {
                 // 防止 blockElement 找不到
@@ -207,7 +218,7 @@ class="fn__flex-1 fn__flex${["url", "text", "number", "email", "phone", "block"]
             element.addEventListener("dragstart", (event: DragEvent) => {
                 const target = event.target as HTMLElement;
                 window.siyuan.dragElement = target.parentElement;
-                window.siyuan.dragElement.style.opacity = ".1";
+                window.siyuan.dragElement.style.opacity = ".38";
                 dragBlockElement = hasClosestBlock(window.siyuan.dragElement) as HTMLElement;
 
                 const ghostElement = document.createElement("div");
@@ -220,9 +231,13 @@ class="fn__flex-1 fn__flex${["url", "text", "number", "email", "phone", "block"]
                     ghostElement.remove();
                 });
             });
-            element.addEventListener("drop", () => {
+            element.addEventListener("drop", (event) => {
                 counter = 0;
-                window.siyuan.dragElement.style.opacity = "";
+                if (protyle.disabled) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    return;
+                }
                 const targetElement = element.querySelector(".dragover__bottom, .dragover__top") as HTMLElement;
                 if (targetElement && dragBlockElement) {
                     const isBottom = targetElement.classList.contains("dragover__bottom");
@@ -247,12 +262,38 @@ class="fn__flex-1 fn__flex${["url", "text", "number", "email", "phone", "block"]
                         }
                     }
                     targetElement.classList.remove("dragover__bottom", "dragover__top");
+                } else if (!window.siyuan.dragElement && event.dataTransfer.types[0] === "Files") {
+                    const cellElement = element.querySelector(".custom-attr__avvalue--active") as HTMLElement;
+                    if (cellElement) {
+                        if (event.dataTransfer.types[0] === "Files" && !isBrowser()) {
+                            const files: string[] = [];
+                            for (let i = 0; i < event.dataTransfer.files.length; i++) {
+                                files.push(webUtils.getPathForFile(event.dataTransfer.files[i]));
+                            }
+                            dragUpload(files, protyle, cellElement);
+                        }
+                    }
                 }
-                window.siyuan.dragElement = null;
+                if (window.siyuan.dragElement) {
+                    window.siyuan.dragElement.style.opacity = "";
+                    window.siyuan.dragElement = undefined;
+                }
             });
             element.addEventListener("dragover", (event: DragEvent) => {
                 const target = event.target as HTMLElement;
-                let targetElement = hasClosestByClassName(target, "av__row");
+                let targetElement: HTMLElement | false;
+                if (event.dataTransfer.types.includes("Files")) {
+                    element.querySelectorAll(".custom-attr__avvalue--active").forEach((item: HTMLElement) => {
+                        item.classList.remove("custom-attr__avvalue--active");
+                    });
+                    targetElement = hasClosestByClassName(target, "custom-attr__avvalue");
+                    if (targetElement && targetElement.getAttribute("data-type") === "mAsset") {
+                        targetElement.classList.add("custom-attr__avvalue--active");
+                        event.preventDefault();
+                    }
+                    return;
+                }
+                targetElement = hasClosestByClassName(target, "av__row");
                 if (!targetElement) {
                     targetElement = hasClosestByClassName(document.elementFromPoint(event.clientX, event.clientY - 1), "av__row");
                 }
@@ -311,6 +352,32 @@ class="fn__flex-1 fn__flex${["url", "text", "number", "email", "phone", "block"]
                 }
             });
             element.addEventListener("click", (event) => {
+                const removeElement = hasClosestByAttribute(event.target as HTMLElement, "data-type", "remove");
+                if (removeElement) {
+                    const blockElement = hasClosestBlock(removeElement);
+                    if (blockElement) {
+                        transaction(protyle, [{
+                            action: "removeAttrViewBlock",
+                            srcIDs: [id],
+                            avID: blockElement.dataset.avId,
+                        }, {
+                            action: "doUpdateUpdated",
+                            id,
+                            data: dayjs().format("YYYYMMDDHHmmss"),
+                        }]);
+                        blockElement.remove();
+                        if (!element.innerHTML) {
+                            window.siyuan.dialogs.find(item => {
+                                if (item.element.getAttribute("data-key") === Constants.DIALOG_ATTR) {
+                                    item.destroy();
+                                    return true;
+                                }
+                            });
+                        }
+                    }
+                    event.stopPropagation();
+                    return;
+                }
                 openEdit(protyle, element, event);
             });
             element.addEventListener("contextmenu", (event) => {
@@ -329,7 +396,12 @@ class="fn__flex-1 fn__flex${["url", "text", "number", "email", "phone", "block"]
                         }
                     };
                     if (type !== "text") {
-                        item.parentElement.querySelector("a").setAttribute("href", (type === "url" ? "" : (type === "email" ? "mailto:" : "tel:")) + item.value);
+                        const linkElement = item.parentElement.querySelector("a");
+                        if (item.value) {
+                            linkElement.setAttribute("href", (type === "url" ? "" : (type === "email" ? "mailto:" : "tel:")) + item.value);
+                        } else {
+                            linkElement.removeAttribute("href");
+                        }
                     }
                 } else if (type === "number") {
                     if ("undefined" === item.value || !item.value) {
@@ -347,6 +419,14 @@ class="fn__flex-1 fn__flex${["url", "text", "number", "email", "phone", "block"]
                             }
                         };
                     }
+                } else if (type === "block") {
+                    value = {
+                        block: {
+                            content: item.value,
+                            id: item.parentElement.dataset.blockId,
+                        },
+                        isDetached: false
+                    };
                 }
                 fetchPost("/api/av/setAttributeViewBlockAttr", {
                     avID: item.parentElement.dataset.avId,
@@ -356,6 +436,8 @@ class="fn__flex-1 fn__flex${["url", "text", "number", "email", "phone", "block"]
                 }, (setResponse) => {
                     if (type === "number") {
                         item.parentElement.querySelector(".fn__flex-center").textContent = setResponse.data.value.number.formattedContent;
+                    } else if (type === "block" && !item.value) {
+                        item.value = setResponse.data.value.block.content;
                     }
                 });
             });
@@ -395,7 +477,7 @@ const openEdit = (protyle: IProtyle, element: HTMLElement, event: MouseEvent) =>
                 });
             } else {
                 if (target.tagName === "IMG") {
-                    previewImage(target.getAttribute("src"));
+                    previewImages([target.getAttribute("src")]);
                 } else {
                     openLink(protyle, target.dataset.url, event, event.ctrlKey || event.metaKey);
                 }

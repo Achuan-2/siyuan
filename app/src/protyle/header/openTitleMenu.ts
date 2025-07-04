@@ -10,7 +10,7 @@ import * as path from "path";
 import {Constants} from "../../constants";
 import {openCardByData} from "../../card/openCard";
 import {viewCards} from "../../card/viewCards";
-import {getDisplayName, getNotebookName, pathPosix, showFileInFolder} from "../../util/pathName";
+import {getDisplayName, getNotebookName, pathPosix, useShell} from "../../util/pathName";
 import {makeCard, quickMakeCard} from "../../card/makeCard";
 import {emitOpenMenu} from "../../plugin/EventBus";
 import * as dayjs from "dayjs";
@@ -42,7 +42,7 @@ export const openTitleMenu = (protyle: IProtyle, position: IPosition) => {
             label: window.siyuan.languages.copy,
             icon: "iconCopy",
             type: "submenu",
-            submenu: copySubMenu(protyle.block.rootID)
+            submenu: copySubMenu([protyle.block.rootID])
         }).element);
         if (!protyle.disabled) {
             window.siyuan.menus.menu.append(movePathToMenu([protyle.path]));
@@ -118,14 +118,16 @@ export const openTitleMenu = (protyle: IProtyle, position: IPosition) => {
             }
         }).element);
         if (!window.siyuan.config.readonly) {
-            window.siyuan.menus.menu.append(new MenuItem({
-                id: "wechatReminder",
-                label: window.siyuan.languages.wechatReminder,
-                icon: "iconMp",
-                click() {
-                    openFileWechatNotify(protyle);
-                }
-            }).element);
+            if (window.siyuan.config.cloudRegion === 0) {
+                window.siyuan.menus.menu.append(new MenuItem({
+                    id: "wechatReminder",
+                    label: window.siyuan.languages.wechatReminder,
+                    icon: "iconMp",
+                    click() {
+                        openFileWechatNotify(protyle);
+                    }
+                }).element);
+            }
             const riffCardMenu: IMenu[] = [{
                 id: "spaceRepetition",
                 iconHTML: "",
@@ -242,7 +244,7 @@ export const openTitleMenu = (protyle: IProtyle, position: IPosition) => {
             icon: "iconFolder",
             label: window.siyuan.languages.showInFolder,
             click: () => {
-                showFileInFolder(path.join(window.siyuan.config.system.dataDir, protyle.notebookId, protyle.path));
+                useShell("showItemInFolder", path.join(window.siyuan.config.system.dataDir, protyle.notebookId, protyle.path));
             }
         }).element);
         /// #endif

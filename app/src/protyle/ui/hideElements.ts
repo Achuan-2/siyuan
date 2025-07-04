@@ -4,9 +4,9 @@ import {getAllEditor} from "../../layout/getAll";
 export const hideElements = (panels: string[], protyle?: IProtyle, focusHide = false) => {
     if (!protyle) {
         if (panels.includes("dialog")) {
-            for (let i = 0; i < window.siyuan.dialogs.length; i++) {
+            const dialogLength = window.siyuan.dialogs.length;
+            for (let i = 0; i < dialogLength; i++) {
                 window.siyuan.dialogs[i].destroy();
-                i--;
             }
         }
         return;
@@ -62,10 +62,13 @@ export const hideAllElements = (types: string[]) => {
     if (types.includes("util")) {
         getAllEditor().forEach(item => {
             if (item.protyle.toolbar) {
-                item.protyle.toolbar.subElement.classList.add("fn__none");
-                if (item.protyle.toolbar.subElementCloseCB) {
-                    item.protyle.toolbar.subElementCloseCB();
-                    item.protyle.toolbar.subElementCloseCB = undefined;
+                const pinElement = item.protyle.toolbar.subElement.querySelector('[data-type="pin"]');
+                if (!pinElement || (pinElement && pinElement.getAttribute("aria-label") === window.siyuan.languages.pin)) {
+                    item.protyle.toolbar.subElement.classList.add("fn__none");
+                    if (item.protyle.toolbar.subElementCloseCB) {
+                        item.protyle.toolbar.subElementCloseCB();
+                        item.protyle.toolbar.subElementCloseCB = undefined;
+                    }
                 }
             }
         });

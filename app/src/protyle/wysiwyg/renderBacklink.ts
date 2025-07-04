@@ -46,7 +46,7 @@ export const foldPassiveType = (expand: boolean, element: HTMLElement | Document
         Array.from(element.children).forEach((item, index) => {
             if ((expand && index > 2) || (!expand && index > 1)) {
                 if ((expand && index === 3) || (!expand && index === 2)) {
-                    item.insertAdjacentHTML("beforebegin", '<div style="max-width: 100%;justify-content: center;" contenteditable="false" class="protyle-breadcrumb__item"><svg><use xlink:href="#iconMore"></use></svg></div>');
+                    item.insertAdjacentHTML("beforebegin", '<div style="max-width: 100%;justify-content: center;" contenteditable="false" class="protyle-breadcrumb__item"><svg style="transform: rotate(90deg);"><use xlink:href="#iconMore"></use></svg></div>');
                 }
                 item.classList.add("fn__none");
             }
@@ -112,7 +112,7 @@ export const genBreadcrumb = (blockPaths: IBreadcrumb[], renderFirst: boolean, p
         }
         html += `<span class="protyle-breadcrumb__item${index === blockPaths.length - 1 ? " protyle-breadcrumb__item--active" : ""}" data-id="${item.id}">
     <svg class="popover__block" data-id="${item.id}"><use xlink:href="#${getIconByType(item.type, item.subType)}"></use></svg>
-    <span class="protyle-breadcrumb__text" title="${item.name}">${item.name}</span>
+    ${item.name ? `<span class="protyle-breadcrumb__text" title="${item.name}">${item.name}</span>` : ""}
 </span>`;
         if (index !== blockPaths.length - 1) {
             html += '<svg class="protyle-breadcrumb__arrow"><use xlink:href="#iconRight"></use></svg>';

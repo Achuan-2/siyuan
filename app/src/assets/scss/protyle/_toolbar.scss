@@ -1,7 +1,7 @@
 .protyle {
   &-toolbar {
     background-color: var(--b3-theme-background);
-    z-index: 4; // https://ld246.com/article/1697096086017
+    z-index: 5; // higher than .layout__resize--lr
     position: fixed;
     box-shadow: var(--b3-point-shadow);
     border-radius: var(--b3-border-radius);
@@ -62,7 +62,7 @@
     background-color: var(--b3-menu-background);
     z-index: 5;
     overflow: auto;
-    max-height: 402px;
+    max-height: min(402px, 40vh);
     // 不能使用，否则 hint emoji 出现双滚动条 box-sizing: border-box;
     padding: 8px 0;
     display: flex;
@@ -95,6 +95,7 @@
     max-width: 248px;
     overflow: auto;
     max-height: calc(80vh - 24px);
+    scrollbar-gutter: stable;
 
     &__style {
       background-color: var(--b3-theme-background);

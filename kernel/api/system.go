@@ -22,18 +22,55 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/88250/gulu"
 	"github.com/88250/lute"
+	"github.com/88250/lute/html"
 	"github.com/gin-gonic/gin"
-	"github.com/jinzhu/copier"
+	"github.com/siyuan-note/filelock"
 	"github.com/siyuan-note/logging"
 	"github.com/siyuan-note/siyuan/kernel/conf"
 	"github.com/siyuan-note/siyuan/kernel/model"
 	"github.com/siyuan-note/siyuan/kernel/util"
 )
+
+func addMicrosoftDefenderExclusion(c *gin.Context) {
+	ret := gulu.Ret.NewResult()
+	defer c.JSON(http.StatusOK, ret)
+
+	if !gulu.OS.IsWindows() {
+		return
+	}
+
+	err := model.AddMicrosoftDefenderExclusion()
+	if nil != err {
+		ret.Code = -1
+		ret.Msg = err.Error()
+	}
+}
+
+func ignoreAddMicrosoftDefenderExclusion(c *gin.Context) {
+	ret := gulu.Ret.NewResult()
+	defer c.JSON(http.StatusOK, ret)
+
+	if !gulu.OS.IsWindows() {
+		return
+	}
+
+	model.Conf.System.MicrosoftDefenderExcluded = true
+	model.Conf.Save()
+}
+
+func getWorkspaceInfo(c *gin.Context) {
+	ret := gulu.Ret.NewResult()
+	defer c.JSON(http.StatusOK, ret)
+
+	ret.Data = map[string]any{
+		"workspaceDir": util.WorkspaceDir,
+		"siyuanVer":    util.Ver,
+	}
+}
 
 func getNetwork(c *gin.Context) {
 	ret := gulu.Ret.NewResult()
@@ -123,7 +160,7 @@ func getEmojiConf(c *gin.Context) {
 	items := []map[string]interface{}{}
 	custom["items"] = items
 	if gulu.File.IsDir(customConfDir) {
-		model.CustomEmojis = sync.Map{}
+		model.ClearCustomEmojis()
 		customEmojis, err := os.ReadDir(customConfDir)
 		if err != nil {
 			logging.LogErrorf("read custom emojis failed: %s", err)
@@ -132,6 +169,17 @@ func getEmojiConf(c *gin.Context) {
 				name := customEmoji.Name()
 				if strings.HasPrefix(name, ".") {
 					continue
+				}
+
+				if !util.IsValidUploadFileName(html.UnescapeString(name)) {
+					emojiFullName := filepath.Join(customConfDir, name)
+					name = util.FilterUploadEmojiFileName(name)
+					fullPathFilteredName := filepath.Join(customConfDir, name)
+					// XSS through emoji name https://github.com/siyuan-note/siyuan/issues/15034
+					logging.LogWarnf("renaming invalid custom emoji file [%s] to [%s]", name, fullPathFilteredName)
+					if removeErr := filelock.Rename(emojiFullName, fullPathFilteredName); nil != removeErr {
+						logging.LogErrorf("renaming invalid custom emoji file to [%s] failed: %s", fullPathFilteredName, removeErr)
+					}
 				}
 
 				if customEmoji.IsDir() {
@@ -147,12 +195,22 @@ func getEmojiConf(c *gin.Context) {
 							continue
 						}
 
-						name = subCustomEmoji.Name()
-						if strings.HasPrefix(name, ".") {
+						subName := subCustomEmoji.Name()
+						if strings.HasPrefix(subName, ".") {
 							continue
 						}
 
-						addCustomEmoji(customEmoji.Name()+"/"+name, &items)
+						if !util.IsValidUploadFileName(html.UnescapeString(subName)) {
+							emojiFullName := filepath.Join(customConfDir, name, subName)
+							fullPathFilteredName := filepath.Join(customConfDir, name, util.FilterUploadEmojiFileName(subName))
+							// XSS through emoji name https://github.com/siyuan-note/siyuan/issues/15034
+							logging.LogWarnf("renaming invalid custom emoji file [%s] to [%s]", subName, fullPathFilteredName)
+							if removeErr := filelock.Rename(emojiFullName, fullPathFilteredName); nil != removeErr {
+								logging.LogErrorf("renaming invalid custom emoji file to [%s] failed: %s", fullPathFilteredName, removeErr)
+							}
+						}
+
+						addCustomEmoji(name+"/"+subName, &items)
 					}
 					continue
 				}
@@ -181,7 +239,7 @@ func addCustomEmoji(name string, items *[]map[string]interface{}) {
 	*items = append(*items, emoji)
 
 	imgSrc := "/emojis/" + name
-	model.CustomEmojis.Store(nameWithoutExt, imgSrc)
+	model.AddCustomEmoji(nameWithoutExt, imgSrc)
 }
 
 func checkUpdate(c *gin.Context) {
@@ -222,8 +280,15 @@ func exportConf(c *gin.Context) {
 		return
 	}
 
+	data, err := gulu.JSON.MarshalJSON(model.Conf)
+	if err != nil {
+		logging.LogErrorf("export conf failed: %s", err)
+		ret.Code = -1
+		ret.Msg = err.Error()
+		return
+	}
 	clonedConf := &model.AppConf{}
-	if err := copier.CopyWithOption(clonedConf, model.Conf, copier.Option{IgnoreEmpty: false, DeepCopy: true}); err != nil {
+	if err = gulu.JSON.UnmarshalJSON(data, clonedConf); err != nil {
 		logging.LogErrorf("export conf failed: %s", err)
 		ret.Code = -1
 		ret.Msg = err.Error()
@@ -251,6 +316,7 @@ func exportConf(c *gin.Context) {
 		clonedConf.System.Container = ""
 		clonedConf.System.IsMicrosoftStore = false
 		clonedConf.System.IsInsider = false
+		clonedConf.System.MicrosoftDefenderExcluded = false
 	}
 	clonedConf.Sync = nil
 	clonedConf.Stat = nil
@@ -260,7 +326,7 @@ func exportConf(c *gin.Context) {
 	clonedConf.CloudRegion = 0
 	clonedConf.DataIndexState = 0
 
-	data, err := gulu.JSON.MarshalIndentJSON(clonedConf, "", "  ")
+	data, err = gulu.JSON.MarshalIndentJSON(clonedConf, "", "  ")
 	if err != nil {
 		logging.LogErrorf("export conf failed: %s", err)
 		ret.Code = -1
@@ -363,10 +429,24 @@ func importConf(c *gin.Context) {
 	}
 
 	tmpDir := filepath.Join(importDir, "conf")
-	if err = gulu.Zip.Unzip(tmp, tmpDir); err != nil {
-		logging.LogErrorf("import conf failed: %s", err)
+	os.RemoveAll(tmpDir)
+	if strings.HasSuffix(strings.ToLower(tmp), ".zip") {
+		if err = gulu.Zip.Unzip(tmp, tmpDir); err != nil {
+			logging.LogErrorf("import conf failed: %s", err)
+			ret.Code = -1
+			ret.Msg = err.Error()
+			return
+		}
+	} else if strings.HasSuffix(strings.ToLower(tmp), ".json") {
+		if err = gulu.File.CopyFile(tmp, filepath.Join(tmpDir, f.Filename)); err != nil {
+			logging.LogErrorf("import conf failed: %s", err)
+			ret.Code = -1
+			ret.Msg = err.Error()
+		}
+	} else {
+		logging.LogErrorf("invalid conf package")
 		ret.Code = -1
-		ret.Msg = err.Error()
+		ret.Msg = "invalid conf package"
 		return
 	}
 
@@ -402,12 +482,19 @@ func importConf(c *gin.Context) {
 		return
 	}
 
-	if err = copier.CopyWithOption(model.Conf, importedConf, copier.Option{IgnoreEmpty: true, DeepCopy: true}); err != nil {
-		logging.LogErrorf("import conf failed: %s", err)
-		ret.Code = -1
-		ret.Msg = err.Error()
-		return
-	}
+	model.Conf.FileTree = importedConf.FileTree
+	model.Conf.Tag = importedConf.Tag
+	model.Conf.Editor = importedConf.Editor
+	model.Conf.Export = importedConf.Export
+	model.Conf.Graph = importedConf.Graph
+	model.Conf.UILayout = importedConf.UILayout
+	model.Conf.System = importedConf.System
+	model.Conf.Keymap = importedConf.Keymap
+	model.Conf.Search = importedConf.Search
+	model.Conf.Flashcard = importedConf.Flashcard
+	model.Conf.AI = importedConf.AI
+	model.Conf.Bazaar = importedConf.Bazaar
+	model.Conf.Save()
 
 	logging.LogInfof("imported conf")
 }
@@ -505,6 +592,9 @@ func setAccessAuthCode(c *gin.Context) {
 		aac = model.Conf.AccessAuthCode
 	}
 
+	aac = strings.TrimSpace(aac)
+	aac = util.RemoveInvalid(aac)
+
 	model.Conf.AccessAuthCode = aac
 	model.Conf.Save()
 
@@ -538,7 +628,7 @@ func setFollowSystemLockScreen(c *gin.Context) {
 func getSysFonts(c *gin.Context) {
 	ret := gulu.Ret.NewResult()
 	defer c.JSON(http.StatusOK, ret)
-	ret.Data = util.GetSysFonts(model.Conf.Lang)
+	ret.Data = util.LoadSysFonts()
 }
 
 func version(c *gin.Context) {
@@ -597,37 +687,6 @@ func setNetworkServe(c *gin.Context) {
 
 	networkServe := arg["networkServe"].(bool)
 	model.Conf.System.NetworkServe = networkServe
-	model.Conf.Save()
-
-	util.PushMsg(model.Conf.Language(42), 1000*15)
-	time.Sleep(time.Second * 3)
-}
-
-func setGoogleAnalytics(c *gin.Context) {
-	ret := gulu.Ret.NewResult()
-	defer c.JSON(http.StatusOK, ret)
-
-	arg, ok := util.JsonArg(c, ret)
-	if !ok {
-		return
-	}
-
-	googleAnalytics := arg["googleAnalytics"].(bool)
-	model.Conf.System.DisableGoogleAnalytics = !googleAnalytics
-	model.Conf.Save()
-}
-
-func setUploadErrLog(c *gin.Context) {
-	ret := gulu.Ret.NewResult()
-	defer c.JSON(http.StatusOK, ret)
-
-	arg, ok := util.JsonArg(c, ret)
-	if !ok {
-		return
-	}
-
-	uploadErrLog := arg["uploadErrLog"].(bool)
-	model.Conf.System.UploadErrLog = uploadErrLog
 	model.Conf.Save()
 
 	util.PushMsg(model.Conf.Language(42), 1000*15)

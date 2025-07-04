@@ -18,16 +18,18 @@ package model
 
 import (
 	"bytes"
-	"github.com/88250/lute/editor"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/88250/gulu"
 	"github.com/88250/lute"
 	"github.com/88250/lute/ast"
+	"github.com/88250/lute/editor"
 	"github.com/88250/lute/html"
 	"github.com/88250/lute/parse"
 	"github.com/88250/lute/render"
+	"github.com/siyuan-note/siyuan/kernel/av"
 	"github.com/siyuan-note/siyuan/kernel/sql"
 	"github.com/siyuan-note/siyuan/kernel/treenode"
 	"github.com/siyuan-note/siyuan/kernel/util"
@@ -102,14 +104,17 @@ func renderOutline(heading *ast.Node, luteEngine *lute.Lute) (ret string) {
 	return
 }
 
-func renderBlockText(node *ast.Node, excludeTypes []string) (ret string) {
+func renderBlockText(node *ast.Node, excludeTypes []string, removeLineBreak bool) (ret string) {
 	if nil == node {
 		return
 	}
 
 	ret = sql.NodeStaticContent(node, excludeTypes, false, false, false)
 	ret = strings.TrimSpace(ret)
-	ret = strings.ReplaceAll(ret, "\n", "")
+	if removeLineBreak {
+		ret = strings.ReplaceAll(ret, "\n", "")
+	}
+	ret = util.UnescapeHTML(ret)
 	ret = util.EscapeHTML(ret)
 	ret = strings.TrimSpace(ret)
 	if "" == ret {
@@ -140,13 +145,55 @@ func renderBlockText(node *ast.Node, excludeTypes []string) (ret string) {
 	return
 }
 
+func fillBlockRefCount(nodes []*ast.Node) {
+	var defIDs []string
+	for _, n := range nodes {
+		ast.Walk(n, func(n *ast.Node, entering bool) ast.WalkStatus {
+			if !entering {
+				return ast.WalkContinue
+			}
+
+			if n.IsBlock() {
+				defIDs = append(defIDs, n.ID)
+			}
+			return ast.WalkContinue
+		})
+	}
+	defIDs = gulu.Str.RemoveDuplicatedElem(defIDs)
+	refCount := sql.QueryRefCount(defIDs)
+	for _, n := range nodes {
+		ast.Walk(n, func(n *ast.Node, entering bool) ast.WalkStatus {
+			if !entering || !n.IsBlock() {
+				return ast.WalkContinue
+			}
+
+			if cnt := refCount[n.ID]; 0 < cnt {
+				n.SetIALAttr("refcount", strconv.Itoa(cnt))
+			}
+			return ast.WalkContinue
+		})
+	}
+}
+
 func renderBlockDOMByNodes(nodes []*ast.Node, luteEngine *lute.Lute) string {
 	tree := &parse.Tree{Root: &ast.Node{Type: ast.NodeDocument}, Context: &parse.Context{ParseOption: luteEngine.ParseOptions}}
 	blockRenderer := render.NewProtyleRenderer(tree, luteEngine.RenderOptions)
-	for _, n := range nodes {
-		ast.Walk(n, func(node *ast.Node, entering bool) ast.WalkStatus {
-			rendererFunc := blockRenderer.RendererFuncs[node.Type]
-			return rendererFunc(node, entering)
+	for _, node := range nodes {
+		ast.Walk(node, func(n *ast.Node, entering bool) ast.WalkStatus {
+			if entering {
+				if n.IsBlock() {
+					if avs := n.IALAttr(av.NodeAttrNameAvs); "" != avs {
+						// 填充属性视图角标 Display the database title on the block superscript https://github.com/siyuan-note/siyuan/issues/10545
+						avNames := getAvNames(n.IALAttr(av.NodeAttrNameAvs))
+						if "" != avNames {
+							n.SetIALAttr(av.NodeAttrViewNames, avNames)
+						}
+					}
+				}
+			}
+
+			rendererFunc := blockRenderer.RendererFuncs[n.Type]
+			return rendererFunc(n, entering)
 		})
 	}
 	h := strings.TrimSpace(blockRenderer.Writer.String())
@@ -309,6 +356,20 @@ func resolveEmbedR(n *ast.Node, blockEmbedMode int, luteEngine *lute.Lute, resol
 					for subNode := subTree.Root.FirstChild; nil != subNode; subNode = subNode.Next {
 						if ast.NodeKramdownBlockIAL != subNode.Type {
 							inserts = append(inserts, subNode)
+						}
+					}
+					if 2 < len(n.KramdownIAL) && 0 < len(inserts) {
+						if bookmark := n.IALAttr("bookmark"); "" != bookmark {
+							inserts[0].SetIALAttr("bookmark", bookmark)
+						}
+						if name := n.IALAttr("name"); "" != name {
+							inserts[0].SetIALAttr("name", name)
+						}
+						if alias := n.IALAttr("alias"); "" != alias {
+							inserts[0].SetIALAttr("alias", alias)
+						}
+						if memo := n.IALAttr("memo"); "" != memo {
+							inserts[0].SetIALAttr("memo", memo)
 						}
 					}
 					for _, insert := range inserts {

@@ -6,7 +6,7 @@
 .protyle-scroll {
   --b3-dynamicscroll-width: 200px;
   position: absolute;
-  right: 10px;
+  right: 12px;
   top: 30px;
   width: 16px;
   bottom: 9px; // 下图标 hover 时，需要留出一定的空间
@@ -58,6 +58,12 @@
 
       &::-webkit-slider-runnable-track,
       &::-webkit-slider-thumb {
+        background-color: var(--b3-border-color);
+        box-shadow: none;
+      }
+
+      &::-moz-range-track,
+      &::-moz-range-thumb {
         background-color: var(--b3-border-color);
         box-shadow: none;
       }
@@ -251,7 +257,8 @@
       transition: padding .3s cubic-bezier(.25, .46, .45, .94) 0ms;
     }
 
-    .protyle-title {
+    .protyle-title,
+    .protyle-background__ia {
       transition: margin .3s cubic-bezier(.25, .46, .45, .94) 0ms;
     }
   }
@@ -266,6 +273,10 @@
 
 .protyle-background {
   position: relative;
+
+  &:not(.protyle-background--enable) .protyle-background__img .protyle-icons {
+    display: none;
+  }
 
   &--enable {
     .protyle-background__img:hover .protyle-icons,
@@ -284,16 +295,12 @@
   &__action {
     transition: opacity 150ms linear;
     opacity: 0;
-
-    .b3-button {
-      margin-top: 8px;
-    }
   }
 
   &__icon {
     height: 80px;
     width: 80px;
-    transition: var(--b3-transition);
+    transition: opacity 150ms linear;
     cursor: pointer;
     font-size: 68px; // 🔪显示不完整
     line-height: 80px;
@@ -301,7 +308,7 @@
     font-family: var(--b3-font-family-emoji);
     z-index: 1;
     position: relative;
-    margin-top: -40px;
+    margin-top: -48px;
     margin-bottom: 8px;
 
     img, svg {
@@ -318,6 +325,7 @@
 
   &__img {
     width: 100%;
+    margin-bottom: 8px;
 
     img {
       object-fit: cover;
@@ -346,16 +354,17 @@
 .protyle-title {
   margin: 34px 16px 0 24px;
   position: relative;
-  font-size: 16px;
-  border-radius: var(--b3-border-radius);
+  font-size: var(--b3-font-size-editor);
   font-family: var(--b3-font-family-protyle);
+  padding-left: 2px;
+  border-radius: var(--b3-border-radius);
 
   &:hover .protyle-title__icon {
     opacity: 1;
   }
 
   &[custom-riff-decks] {
-    box-shadow: 3px 0 0 -1px var(--b3-protyle-inline-mark-background) inset;
+    box-shadow: 2px 0 0 0 var(--b3-protyle-inline-mark-background) inset;
   }
 
   &__icon {
@@ -389,10 +398,10 @@
     font-size: 2em;
     font-weight: bold;
     line-height: 1.625;
-    padding: 0 4px;
+    padding: 0 4px 0 2px;
     white-space: break-spaces;
 
-    &:empty:after {
+    &:empty::after {
       content: attr(data-tip);
       color: var(--b3-theme-on-surface-light);
       cursor: text;
@@ -404,11 +413,11 @@
   }
 }
 
-table[contenteditable="false"] + .protyle-action__table {
+table[contenteditable="false"] + .protyle-action__table > .table__resize {
   display: none;
 }
 
-table[contenteditable="true"] + .protyle-action__table {
+table + .protyle-action__table {
   position: absolute;
   top: 4px;
   height: 0;
@@ -422,11 +431,11 @@ table[contenteditable="true"] + .protyle-action__table {
     cursor: col-resize;
     z-index: 2;
 
-    &:hover:after {
+    &:hover::after {
       background-color: var(--b3-theme-primary-light);
     }
 
-    &:after {
+    &::after {
       top: 0;
       width: 2px;
       left: 2px;

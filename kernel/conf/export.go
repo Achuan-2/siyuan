@@ -22,9 +22,9 @@ type Export struct {
 	// 内容块引用导出模式
 	//   2：锚文本块链
 	//   3：仅锚文本
-	//   4：块引转脚注
-	//   5：锚点哈希 https://github.com/siyuan-note/siyuan/issues/10265
-	//  （0：使用原始文本，1：使用 Blockquote。0 和 1 都已经废弃 https://github.com/siyuan-note/siyuan/issues/3155）
+	//   4：块引转脚注+锚点哈希
+	//  （5：锚点哈希 https://github.com/siyuan-note/siyuan/issues/10265 已经废弃 https://github.com/siyuan-note/siyuan/issues/13331）
+	//  （0：使用原始文本，1：使用 Blockquote，都已经废弃 https://github.com/siyuan-note/siyuan/issues/3155）
 	BlockRefMode          int    `json:"blockRefMode"`
 	BlockEmbedMode        int    `json:"blockEmbedMode"`        // 内容块引用导出模式，0：使用原始文本，1：使用 Blockquote
 	BlockRefTextLeft      string `json:"blockRefTextLeft"`      // 内容块引用导出锚文本左侧符号，默认留空
@@ -34,6 +34,7 @@ type Export struct {
 	FileAnnotationRefMode int    `json:"fileAnnotationRefMode"` // 文件标注引用导出模式，0：文件名 - 页码 - 锚文本，1：仅锚文本
 	PandocBin             string `json:"pandocBin"`             // Pandoc 可执行文件路径
 	MarkdownYFM           bool   `json:"markdownYFM"`           // Markdown 导出时是否添加 YAML Front Matter https://github.com/siyuan-note/siyuan/issues/7727
+	InlineMemo            bool   `json:"inlineMemo"`            // 是否导出行级备忘录 https://github.com/siyuan-note/siyuan/issues/14605
 	PDFFooter             string `json:"pdfFooter"`             // PDF 导出时页脚内容
 	DocxTemplate          string `json:"docxTemplate"`          // Docx 导出时模板文件路径
 	PDFWatermarkStr       string `json:"pdfWatermarkStr"`       // PDF 导出时水印文本或水印文件路径
@@ -55,6 +56,7 @@ func NewExport() *Export {
 		FileAnnotationRefMode:   0,
 		PandocBin:               "",
 		MarkdownYFM:             false,
+		InlineMemo:              false,
 		PDFFooter:               "%page / %pages",
 	}
 }

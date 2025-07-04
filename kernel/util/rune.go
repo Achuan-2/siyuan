@@ -17,10 +17,14 @@
 package util
 
 import (
+	"os"
+	"path/filepath"
 	"regexp"
+	"strings"
 	"unicode"
 
 	"github.com/88250/gulu"
+	"github.com/siyuan-note/logging"
 )
 
 func ContainsCJK(text string) bool {
@@ -56,6 +60,47 @@ var emojiRegex = regexp.MustCompile(`/([0-9#][\x{20E3}])|` +
 
 func RemoveEmojiInvisible(text string) (ret string) {
 	ret = emojiRegex.ReplaceAllString(text, "")
-	ret = gulu.Str.RemoveInvisible(ret)
+	ret = RemoveInvalid(ret)
+	return
+}
+
+func RemoveInvalid(text string) (ret string) {
+	ret = gulu.Str.RemoveInvisible(text)
+	ret = gulu.Str.RemovePUA(ret)
+	return
+}
+
+func RemoveInvalidRetainCtrl(text string) (ret string) {
+	ret = strings.ReplaceAll(text, "\u00A0", " ") // NBSP 转换为普通空格
+	ret = gulu.Str.RemoveZeroWidthNoBreakSpace(ret)
+	ret = gulu.Str.RemoveZeroWidthSpace(ret)
+	// 不要移除零宽连字符，因为 emoji 需要 https://github.com/siyuan-note/siyuan/issues/14272
+	ret = gulu.Str.RemovePUA(ret)
+	return
+}
+
+var NativeEmojiChars = map[string]bool{}
+
+func InitEmojiChars() {
+	builtConfPath := filepath.Join(AppearancePath, "emojis", "conf.json")
+	data, err := os.ReadFile(builtConfPath)
+	if err != nil {
+		logging.LogErrorf("read emojis conf.json failed: %s", err)
+		return
+	}
+
+	var conf []map[string]interface{}
+	if err = gulu.JSON.UnmarshalJSON(data, &conf); err != nil {
+		logging.LogErrorf("unmarshal emojis conf.json failed: %s", err)
+		return
+	}
+
+	for _, emoji := range conf {
+		items := emoji["items"].([]interface{})
+		for _, item := range items {
+			e := item.(map[string]interface{})
+			NativeEmojiChars[e["unicode"].(string)] = true
+		}
+	}
 	return
 }

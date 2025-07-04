@@ -1,4 +1,3 @@
-import {log} from "../util/log";
 import {focusBlock, focusByWbr} from "../util/selection";
 import {Constants} from "../../constants";
 import * as dayjs from "dayjs";
@@ -23,7 +22,7 @@ export const input = async (protyle: IProtyle, blockElement: HTMLElement, range:
     if (blockElement.classList.contains("av")) {
         const avCursorElement = hasClosestByClassName(range.startContainer, "av__cursor");
         if (avCursorElement) {
-            range.startContainer.textContent = Constants.ZWSP;
+            avCursorElement.textContent = Constants.ZWSP;
         } else {
             updateAVName(protyle, blockElement);
         }
@@ -67,7 +66,17 @@ export const input = async (protyle: IProtyle, blockElement: HTMLElement, range:
         // https://github.com/siyuan-note/siyuan/issues/12468
         if ((event.inputType === "deleteContentBackward" || event.inputType === "deleteContentForward") &&
             wbrNextElement && wbrNextElement.nodeType === 1 && wbrNextElement.tagName === "BR") {
-            wbrNextElement.remove();
+            // https://github.com/siyuan-note/siyuan/issues/13190
+            const brNextElement = hasNextSibling(wbrNextElement);
+            if (brNextElement && brNextElement.nodeType === 1 &&
+                (brNextElement as HTMLElement).getAttribute("data-type")?.indexOf("inline-math") > -1) {
+                wbrNextElement.remove();
+            }
+            // https://github.com/siyuan-note/siyuan/issues/14290
+            if (event.inputType === "deleteContentBackward" &&
+                wbrNextElement.previousSibling.previousSibling?.textContent.endsWith("\n")) {
+                wbrNextElement.outerHTML = "\n";
+            }
         }
     }
     const id = blockElement.getAttribute("data-node-id");
@@ -93,8 +102,11 @@ export const input = async (protyle: IProtyle, blockElement: HTMLElement, range:
         brElement.remove();
     }
 
-    if (type !== "NodeHeading" &&
-        (editElement.innerHTML.startsWith("》<wbr>") || editElement.innerHTML.indexOf("\n》<wbr>") > -1)) {
+    if (type !== "NodeHeading" && (
+        editElement.innerHTML.startsWith("》<wbr>") ||
+        editElement.innerHTML.startsWith(Constants.ZWSP + "》<wbr>") ||
+        editElement.innerHTML.indexOf("\n》<wbr>") > -1
+    )) {
         editElement.innerHTML = editElement.innerHTML.replace("》<wbr>", "><wbr>");
     }
     const trimStartText = editElement.innerHTML.trimStart();
@@ -109,12 +121,14 @@ export const input = async (protyle: IProtyle, blockElement: HTMLElement, range:
         return;
     }
     // https://github.com/siyuan-note/siyuan/issues/9015
-    if (trimStartText === "¥¥<wbr>" || trimStartText === "￥￥<wbr>") {
-        editElement.innerHTML = "$$<wbr>";
-    } else if (trimStartText.indexOf("\n¥¥<wbr>") > -1 || trimStartText.indexOf("\n￥￥<wbr>") > -1) {
+    if (type === "NodeParagraph" && (
+        editElement.innerHTML.startsWith("¥¥<wbr>") || editElement.innerHTML.startsWith("￥￥<wbr>") ||
         // https://ld246.com/article/1730020516427
-        editElement.innerHTML = trimStartText.replace("\n¥¥<wbr>", "\n$$$$<wbr>").replace("\n￥￥<wbr>", "\n$$$$<wbr>");
+        trimStartText.indexOf("\n¥¥<wbr>") > -1 || trimStartText.indexOf("\n￥￥<wbr>") > -1
+    )) {
+        editElement.innerHTML = editElement.innerHTML.replace("¥¥<wbr>", "$$$$<wbr>").replace("￥￥<wbr>", "$$$$<wbr>");
     }
+
     const refElement = hasClosestByAttribute(range.startContainer, "data-type", "block-ref");
     if (refElement && refElement.getAttribute("data-subtype") === "d") {
         const response = await fetchSyncPost("/api/block/getRefText", {id: refElement.getAttribute("data-id")});
@@ -145,7 +159,7 @@ export const input = async (protyle: IProtyle, blockElement: HTMLElement, range:
             if (trimStartText.indexOf("\n") === -1 && trimStartText.replace(/·|~/g, "`").replace(/^`{3,}/g, "").indexOf("`") > -1) {
                 // ```test` 不处理，正常渲染为段落块
             } else {
-                let replaceInnerHTML = editElement.innerHTML.replace(/^(~|·|`){3,}/g, "```").replace(/\n(~|·|`){3,}/g, "\n```").trim();
+                let replaceInnerHTML = editElement.innerHTML.trim().replace(/^(~|·|`){3,}/g, "```").replace(/\n(~|·|`){3,}/g, "\n```").trim();
                 if (!replaceInnerHTML.endsWith("\n```")) {
                     replaceInnerHTML = replaceInnerHTML.replace("<wbr>", "") + "<wbr>\n```";
                 }
@@ -169,8 +183,6 @@ export const input = async (protyle: IProtyle, blockElement: HTMLElement, range:
         ) &&
         !(tempElement.content.childElementCount === 1 && tempElement.content.firstElementChild.classList.contains("code-block") && type === "NodeCodeBlock")
     ) {
-        log("SpinBlockDOM", blockElement.outerHTML, "argument", protyle.options.debugger);
-        log("SpinBlockDOM", html, "result", protyle.options.debugger);
         if (blockElement.getAttribute("data-type") === "NodeHeading" && blockElement.getAttribute("fold") === "1" &&
             tempElement.content.firstElementChild.getAttribute("data-subtype") !== blockElement.dataset.subtype) {
             setFold(protyle, blockElement, undefined, undefined, false);
@@ -203,6 +215,7 @@ export const input = async (protyle: IProtyle, blockElement: HTMLElement, range:
                 }
             });
         }
+        html = "";
         Array.from(tempElement.content.children).forEach((item, index) => {
             const tempId = item.getAttribute("data-node-id");
             let realElement;
@@ -229,13 +242,15 @@ export const input = async (protyle: IProtyle, blockElement: HTMLElement, range:
                 protyle.toolbar.showRender(protyle, realElement);
             } else if (realType === "NodeBlockQueryEmbed") {
                 blockRender(protyle, realElement);
-                protyle.toolbar.showRender(protyle, realElement);
+                if (!realElement.getAttribute("data-content")) {
+                    protyle.toolbar.showRender(protyle, realElement);
+                }
                 hideElements(["hint"], protyle);
             } else if (realType === "NodeThematicBreak" && focusHR) {
                 focusBlock(blockElement);
             } else {
                 // https://github.com/siyuan-note/siyuan/issues/6087
-                realElement.querySelectorAll('[data-type="block-ref"][data-subtype="d"]').forEach(refItem => {
+                realElement.querySelectorAll('[data-type~="block-ref"][data-subtype="d"]').forEach(refItem => {
                     if (refItem.textContent === "") {
                         fetchPost("/api/block/getRefText", {id: refItem.getAttribute("data-id")}, (response) => {
                             refItem.innerHTML = response.data;
@@ -260,6 +275,8 @@ export const input = async (protyle: IProtyle, blockElement: HTMLElement, range:
                     }
                 }
             }
+            // https://github.com/siyuan-note/siyuan/issues/14766
+            html += realElement.outerHTML;
         });
     } else if (blockElement.getAttribute("data-type") === "NodeCodeBlock") {
         editElement.parentElement.removeAttribute("data-render");
@@ -293,6 +310,7 @@ const updateInput = (html: string, protyle: IProtyle, id: string) => {
                 data: protyle.wysiwyg.lastHTMLs[id],
                 action: "update"
             });
+            protyle.wysiwyg.lastHTMLs[id] = item.outerHTML;
         } else {
             let firstElement;
             if (index === 0) {

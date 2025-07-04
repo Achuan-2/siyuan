@@ -41,12 +41,16 @@ const appVer = app.getVersion();
 const confDir = path.join(app.getPath("home"), ".config", "siyuan");
 const windowStatePath = path.join(confDir, "windowState.json");
 let bootWindow;
+let latestActiveWindow;
 let firstOpen = false;
-let workspaces = []; // workspaceDir, id, browserWindow, tray
+let workspaces = []; // workspaceDir, id, browserWindow, tray, hideShortcut
 let kernelPort = 6806;
 let resetWindowStateOnRestart = false;
 
 remote.initialize();
+
+app.setPath("userData", app.getPath("userData") + "-Electron"); // `~/.config` 下 Electron 相关文件夹名称改为 `SiYuan-Electron` https://github.com/siyuan-note/siyuan/issues/3349
+fs.rmSync(app.getPath("appData") + "/" + app.name, {recursive: true}); // 删除自动创建的应用目录 https://github.com/siyuan-note/siyuan/issues/13150
 
 if (!app.requestSingleInstanceLock()) {
     app.quit();
@@ -244,6 +248,7 @@ const initMainWindow = () => {
     try {
         oldWindowState = JSON.parse(fs.readFileSync(windowStatePath, "utf8"));
     } catch (e) {
+        writeLog("read window state failed: " + e);
         fs.writeFileSync(windowStatePath, "{}");
     }
     let defaultWidth;
@@ -254,7 +259,7 @@ const initMainWindow = () => {
         defaultHeight = Math.floor(screen.getPrimaryDisplay().workAreaSize.height * 0.8);
         workArea = screen.getPrimaryDisplay().workArea;
     } catch (e) {
-        console.error(e);
+        writeLog("get screen size failed: " + e);
     }
     const windowState = Object.assign({}, {
         isMaximized: false,
@@ -266,32 +271,48 @@ const initMainWindow = () => {
         height: defaultHeight,
     }, oldWindowState);
 
-    writeLog("windowStat [x=" + windowState.x + ", y=" + windowState.y + ", width=" + windowState.width + ", height=" + windowState.height + "], default [width=" + defaultWidth + ", height=" + defaultHeight + "], workArea [width=" + workArea.width + ", height=" + workArea.height + "]");
+    writeLog("window stat [x=" + windowState.x + ", y=" + windowState.y + ", width=" + windowState.width + ", height=" + windowState.height + "], " +
+        "default [x=0, y=0, width=" + defaultWidth + ", height=" + defaultHeight + "], " +
+        "old [x=" + oldWindowState.x + ", y=" + oldWindowState.y + ", width=" + oldWindowState.width + ", height=" + oldWindowState.height + "], " +
+        "workArea [width=" + workArea.width + ", height=" + workArea.height + "]");
 
     let resetToCenter = false;
     let x = windowState.x;
+    if (-32 < x && 0 > x) {
+        x = 0;
+    }
     let y = windowState.y;
+    if (-32 < y && 0 > y) {
+        y = 0;
+    }
     if (workArea) {
         // 窗口大于 workArea 时缩小会隐藏到左下角，这里使用最小值重置
-        if (windowState.width > workArea.width || windowState.height > workArea.height) { // 重启后窗口大小恢复默认问题 https://github.com/siyuan-note/siyuan/issues/7755
+        if (windowState.width > workArea.width + 32 || windowState.height > workArea.height + 32) {
+            // 重启后窗口大小恢复默认问题 https://github.com/siyuan-note/siyuan/issues/7755 https://github.com/siyuan-note/siyuan/issues/13732
+            // 这里 +32 是因为在某种情况下窗口大小会比 workArea 大几个像素导致恢复默认，+32 可以避免这种特殊情况
             windowState.width = Math.min(defaultWidth, workArea.width);
             windowState.height = Math.min(defaultHeight, workArea.height);
+            writeLog("reset window size [width=" + windowState.width + ", height=" + windowState.height + "]");
         }
 
         if (x >= workArea.width * 0.8 || y >= workArea.height * 0.8) {
             resetToCenter = true;
+            writeLog("reset window to center cause x or y >= 80% of workArea");
         }
     }
 
     if (x < 0 || y < 0) {
         resetToCenter = true;
+        writeLog("reset window to center cause x or y < 0");
     }
 
     if (windowState.width < 493) {
         windowState.width = 493;
+        writeLog("reset window width [493]");
     }
     if (windowState.height < 376) {
         windowState.height = 376;
+        writeLog("reset window height [376]");
     }
 
     // 创建主窗体
@@ -317,7 +338,12 @@ const initMainWindow = () => {
     });
     remote.enable(currentWindow.webContents);
 
-    resetToCenter ? currentWindow.center() : currentWindow.setPosition(x, y);
+    if (resetToCenter) {
+        currentWindow.center();
+    } else {
+        writeLog("window position [x=" + x + ", y=" + y + "]");
+        currentWindow.setPosition(x, y);
+    }
     currentWindow.webContents.userAgent = "SiYuan/" + appVer + " https://b3log.org/siyuan Electron " + currentWindow.webContents.userAgent;
 
     // set proxy
@@ -621,12 +647,12 @@ const initKernel = (workspace, port, lang) => {
 };
 
 app.setAsDefaultProtocolClient("siyuan");
-app.setPath("userData", app.getPath("userData") + "-Electron"); // `~/.config` 下 Electron 相关文件夹名称改为 `SiYuan-Electron` https://github.com/siyuan-note/siyuan/issues/3349
 
 app.commandLine.appendSwitch("disable-web-security");
 app.commandLine.appendSwitch("auto-detect", "false");
 app.commandLine.appendSwitch("no-proxy-server");
 app.commandLine.appendSwitch("enable-features", "PlatformHEVCDecoderSupport");
+app.commandLine.appendSwitch("xdg-portal-required-version", "4");
 
 // Support set Chromium command line arguments on the desktop https://github.com/siyuan-note/siyuan/issues/9696
 writeLog("app is packaged [" + app.isPackaged + "], command line args [" + process.argv.join(", ") + "]");
@@ -694,7 +720,10 @@ app.whenReady().then(() => {
     const hideWindow = (wnd) => {
         // 通过 `Alt+M` 最小化后焦点回到先前的窗口 https://github.com/siyuan-note/siyuan/issues/7275
         wnd.minimize();
-        wnd.hide();
+        // Mac 隐藏后无法再 Dock 中显示
+        if ("win32" === process.platform || "linux" === process.platform) {
+            wnd.hide();
+        }
     };
     const showHideWindow = (tray, lang, mainWindow) => {
         if (!mainWindow.isVisible()) {
@@ -732,9 +761,6 @@ app.whenReady().then(() => {
         })];
         const menu = Menu.buildFromTemplate(template);
         menu.popup({window: BrowserWindow.fromWebContents(event.sender)});
-    });
-    ipcMain.on("siyuan-open-folder", (event, filePath) => {
-        shell.showItemInFolder(filePath);
     });
     ipcMain.on("siyuan-first-quit", () => {
         app.exit();
@@ -809,8 +835,10 @@ app.whenReady().then(() => {
         if (!currentWindow) {
             return;
         }
+        latestActiveWindow = currentWindow;
         currentWindow.on("focus", () => {
             event.sender.send("siyuan-event", "focus");
+            latestActiveWindow = currentWindow;
         });
         currentWindow.on("blur", () => {
             event.sender.send("siyuan-event", "blur");
@@ -841,6 +869,12 @@ app.whenReady().then(() => {
         }
         const currentWindow = getWindowByContentId(webContentsId);
         switch (cmd) {
+            case "showItemInFolder":
+                shell.showItemInFolder(data.filePath);
+                break;
+            case "openPath":
+                shell.openPath(data.filePath);
+                break;
             case "openDevTools":
                 event.sender.openDevTools({mode: "bottom"});
                 break;
@@ -848,6 +882,15 @@ app.whenReady().then(() => {
                 if (data.accelerator) {
                     globalShortcut.unregister(hotKey2Electron(data.accelerator));
                 }
+                break;
+            case "setTrafficLightPosition":
+                if (!currentWindow || !currentWindow.setWindowButtonPosition) {
+                    return;
+                }
+                if (new URL(currentWindow.getURL()).pathname === "/stage/build/app/window.html") {
+                    data.position.y += 5 * data.zoom;
+                }
+                currentWindow.setWindowButtonPosition(data.position);
                 break;
             case "show":
                 if (!currentWindow) {
@@ -986,6 +1029,17 @@ app.whenReady().then(() => {
     ipcMain.on("siyuan-quit", (event, port) => {
         exitApp(port);
     });
+    ipcMain.on("siyuan-show-window", (event) => {
+        const mainWindow = getWindowByContentId(event.sender.id);
+        if (!mainWindow) {
+            return;
+        }
+
+        if (mainWindow.isMinimized()) {
+            mainWindow.restore();
+        }
+        mainWindow.show();
+    });
     ipcMain.on("siyuan-open-window", (event, data) => {
         const mainWindow = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
         const mainBounds = mainWindow.getBounds();
@@ -1086,6 +1140,12 @@ app.whenReady().then(() => {
         if (!data.hotkeys || data.hotkeys.length === 0) {
             return;
         }
+        workspaces.find(workspaceItem => {
+            if (event.sender.id === workspaceItem.browserWindow.webContents.id) {
+                workspaceItem.hotkeys = data.hotkeys;
+                return true;
+            }
+        });
         data.hotkeys.forEach((item, index) => {
             const shortcut = hotKey2Electron(item);
             if (!shortcut) {
@@ -1096,29 +1156,43 @@ app.whenReady().then(() => {
             }
             if (index === 0) {
                 globalShortcut.register(shortcut, () => {
+                    let currentWorkspace;
+                    const currentWebContentsId = (latestActiveWindow && !latestActiveWindow.isDestroyed()) ? latestActiveWindow.webContents.id : undefined;
                     workspaces.find(workspaceItem => {
-                        const mainWindow = workspaceItem.browserWindow;
-                        if (event.sender.id === mainWindow.webContents.id) {
-                            if (mainWindow.isMinimized()) {
-                                mainWindow.restore();
-                                mainWindow.show(); // 按 `Alt+M` 后隐藏窗口，再次按 `Alt+M` 显示窗口后会卡住不能编辑 https://github.com/siyuan-note/siyuan/issues/8456
-                            } else {
-                                if (mainWindow.isVisible()) {
-                                    if (!mainWindow.isFocused()) {
-                                        mainWindow.show();
-                                    } else {
-                                        hideWindow(mainWindow);
-                                    }
-                                } else {
-                                    mainWindow.show();
-                                }
-                            }
-                            if ("win32" === process.platform || "linux" === process.platform) {
-                                resetTrayMenu(workspaceItem.tray, data.languages, mainWindow);
-                            }
+                        if (currentWebContentsId === workspaceItem.browserWindow.webContents.id && workspaceItem.hotkeys[0] === item) {
+                            currentWorkspace = workspaceItem;
                             return true;
                         }
                     });
+                    if (!currentWorkspace) {
+                        workspaces.find(workspaceItem => {
+                            if (workspaceItem.hotkeys[0] === item && event.sender.id === workspaceItem.browserWindow.webContents.id) {
+                                currentWorkspace = workspaceItem;
+                                return true;
+                            }
+                        });
+                    }
+                    if (!currentWorkspace) {
+                        return;
+                    }
+                    const mainWindow = currentWorkspace.browserWindow;
+                    if (mainWindow.isMinimized()) {
+                        mainWindow.restore();
+                        mainWindow.show(); // 按 `Alt+M` 后隐藏窗口，再次按 `Alt+M` 显示窗口后会卡住不能编辑 https://github.com/siyuan-note/siyuan/issues/8456
+                    } else {
+                        if (mainWindow.isVisible()) {
+                            if (!mainWindow.isFocused()) {
+                                mainWindow.show();
+                            } else {
+                                hideWindow(mainWindow);
+                            }
+                        } else {
+                            mainWindow.show();
+                        }
+                    }
+                    if ("win32" === process.platform || "linux" === process.platform) {
+                        resetTrayMenu(currentWorkspace.tray, data.languages, mainWindow);
+                    }
                 });
             } else {
                 globalShortcut.register(shortcut, () => {
@@ -1325,7 +1399,7 @@ app.on("second-instance", (event, argv) => {
 
 app.on("activate", () => {
     if (workspaces.length > 0) {
-        const mainWindow = workspaces[0].browserWindow;
+        const mainWindow = (latestActiveWindow && !latestActiveWindow.isDestroyed()) ? latestActiveWindow : workspaces[0].browserWindow;
         if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.show();
         }

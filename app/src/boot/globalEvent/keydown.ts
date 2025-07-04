@@ -51,7 +51,7 @@ import {openCard, openCardByData} from "../../card/openCard";
 import {lockScreen} from "../../dialog/processSystem";
 import {isWindow} from "../../util/functions";
 import {reloadProtyle} from "../../protyle/util/reload";
-import {fullscreen, updateReadonly} from "../../protyle/breadcrumb/action";
+import {fullscreen} from "../../protyle/breadcrumb/action";
 import {openRecentDocs} from "../../business/openRecentDocs";
 import {App} from "../../index";
 import {openBacklink, openGraph, openOutline, toggleDockBar} from "../../layout/dock/util";
@@ -72,6 +72,10 @@ import {setReadOnly} from "../../config/util/setReadOnly";
 import {copyPNGByLink} from "../../menus/util";
 import {globalCommand} from "./command/global";
 import {duplicateCompletely} from "../../protyle/render/av/action";
+import {copyTextByType} from "../../protyle/toolbar/util";
+import {onlyProtyleCommand} from "./command/protyle";
+import {cancelDrag} from "./dragover";
+import {bindAVPanelKeydown} from "../../protyle/render/av/keydown";
 
 const switchDialogEvent = (app: App, event: MouseEvent) => {
     event.preventDefault();
@@ -376,9 +380,23 @@ const editKeydown = (app: App, event: KeyboardEvent) => {
     }
     if (matchHotKey(window.siyuan.config.keymap.editor.general.switchReadonly.custom, event)) {
         event.preventDefault();
-        updateReadonly(protyle.breadcrumb.element.parentElement.querySelector('.block__icon[data-type="readonly"]'), protyle);
+        onlyProtyleCommand({
+            protyle,
+            command: "switchReadonly",
+            previousRange: range,
+        });
         return true;
     }
+    if (matchHotKey(window.siyuan.config.keymap.editor.general.switchAdjust.custom, event)) {
+        event.preventDefault();
+        onlyProtyleCommand({
+            protyle,
+            command: "switchAdjust",
+            previousRange: range,
+        });
+        return true;
+    }
+
     if (matchHotKey(window.siyuan.config.keymap.editor.general.backlinks.custom, event)) {
         event.preventDefault();
         if (range) {
@@ -487,41 +505,35 @@ const editKeydown = (app: App, event: KeyboardEvent) => {
         event.preventDefault();
         return true;
     }
-    if (matchHotKey(window.siyuan.config.keymap.editor.general.copyBlockRef.custom, event)) {
+    if (range && !isFileFocus && matchHotKey(window.siyuan.config.keymap.editor.general.copyBlockRef.custom, event)) {
         event.preventDefault();
         event.stopPropagation();
         if (hasClosestByClassName(range.startContainer, "protyle-title")) {
-            fetchPost("/api/block/getRefText", {id: protyle.block.rootID}, (response) => {
-                writeText(`((${protyle.block.rootID} '${response.data}'))`);
-            });
+            copyTextByType([protyle.block.rootID], "ref");
         } else {
             const nodeElement = hasClosestBlock(range.startContainer);
             if (!nodeElement) {
                 return false;
             }
-            const selectElements = protyle.wysiwyg.element.querySelectorAll(".protyle-wysiwyg--select");
-            let actionElement;
-            if (selectElements.length === 1) {
-                actionElement = selectElements[0];
-            } else {
-                const selectImgElement = nodeElement.querySelector(".img--select");
-                if (selectImgElement) {
-                    copyPNGByLink(selectImgElement.querySelector("img").getAttribute("src"));
-                    return true;
-                }
-                actionElement = nodeElement;
+            const selectImgElement = nodeElement.querySelector(".img--select");
+            if (selectImgElement) {
+                copyPNGByLink(selectImgElement.querySelector("img").getAttribute("src"));
+                return true;
             }
-            const actionElementId = actionElement.getAttribute("data-node-id");
+            const ids = Array.from(protyle.wysiwyg.element.querySelectorAll(".protyle-wysiwyg--select")).map(item => item.getAttribute("data-node-id"));
+            if (ids.length > 0) {
+                copyTextByType(ids, "ref");
+                return true;
+            }
             if (range.toString() !== "") {
                 getContentByInlineHTML(range, (content) => {
-                    writeText(`((${actionElementId} "${content.trim()}"))`);
+                    writeText(`((${nodeElement.getAttribute("data-node-id")} "${content.trim()}"))`);
                 });
             } else {
-                fetchPost("/api/block/getRefText", {id: actionElementId}, (response) => {
-                    writeText(`((${actionElementId} '${response.data}'))`);
-                });
+                copyTextByType([nodeElement.getAttribute("data-node-id")], "ref");
             }
         }
+        return true;
     }
     if (hasClosestByClassName(target, "protyle-title__input")) {
         return false;
@@ -546,6 +558,9 @@ const fileTreeKeydown = (app: App, event: KeyboardEvent) => {
         return false;
     }
     const files = dockFile.data.file as Files;
+    if (typeof dockFile.data.file === "boolean") {
+        return true;
+    }
 
     if (matchHotKey(window.siyuan.config.keymap.general.selectOpen1.custom, event)) {
         event.preventDefault();
@@ -592,6 +607,12 @@ const fileTreeKeydown = (app: App, event: KeyboardEvent) => {
     const notebookId = topULElement.getAttribute("data-url");
     const pathString = liElements[0].getAttribute("data-path");
     const isFile = liElements[0].getAttribute("data-type") === "navigation-file";
+    const ids: string[] = [];
+    liElements.forEach(item => {
+        if (item.getAttribute("data-type") === "navigation-file") {
+            ids.push(item.getAttribute("data-node-id"));
+        }
+    });
 
     if (matchHotKey(window.siyuan.config.keymap.editor.general.spaceRepetition.custom, event) && !window.siyuan.config.readonly) {
         if (isFile) {
@@ -604,25 +625,20 @@ const fileTreeKeydown = (app: App, event: KeyboardEvent) => {
                 openCardByData(app, response.data, "notebook", notebookId, getNotebookName(notebookId));
             });
         }
+        event.preventDefault();
+        return true;
     }
 
     if (matchHotKey(window.siyuan.config.keymap.editor.general.quickMakeCard.custom, event)) {
-        const blockIDs: string[] = [];
-        liElements.forEach(item => {
-            const id = item.getAttribute("data-node-id");
-            if (id) {
-                blockIDs.push(id);
-            }
-        });
-        if (blockIDs.length > 0) {
+        if (ids.length > 0) {
             transaction(undefined, [{
                 action: "addFlashcards",
                 deckID: Constants.QUICK_DECK_ID,
-                blockIDs,
+                blockIDs: ids,
             }], [{
                 action: "removeFlashcards",
                 deckID: Constants.QUICK_DECK_ID,
-                blockIDs,
+                blockIDs: ids,
             }]);
         }
         event.preventDefault();
@@ -664,12 +680,54 @@ const fileTreeKeydown = (app: App, event: KeyboardEvent) => {
         return true;
     }
 
-    if (isFile && !event.repeat && matchHotKey(window.siyuan.config.keymap.editor.general.duplicate.custom, event)) {
+    if (!event.repeat && matchHotKey(window.siyuan.config.keymap.editor.general.duplicate.custom, event)) {
         event.preventDefault();
         event.stopPropagation();
-        fetchPost("/api/filetree/duplicateDoc", {
-            id: liElements[0].getAttribute("data-node-id"),
+        ids.forEach(item => {
+            fetchPost("/api/filetree/duplicateDoc", {
+                id: item,
+            });
         });
+        return true;
+    }
+
+    if (!event.repeat && matchHotKey(window.siyuan.config.keymap.editor.general.copyBlockRef.custom, event)) {
+        event.preventDefault();
+        event.stopPropagation();
+        copyTextByType(ids, "ref");
+        return true;
+    }
+
+    if (!event.repeat && matchHotKey(window.siyuan.config.keymap.editor.general.copyBlockEmbed.custom, event)) {
+        event.preventDefault();
+        event.stopPropagation();
+        copyTextByType(ids, "blockEmbed");
+        return true;
+    }
+
+    if (!event.repeat && matchHotKey(window.siyuan.config.keymap.editor.general.copyProtocol.custom, event)) {
+        event.preventDefault();
+        event.stopPropagation();
+        copyTextByType(ids, "protocol");
+        return true;
+    }
+
+    if (!event.repeat && matchHotKey(window.siyuan.config.keymap.editor.general.copyProtocolInMd.custom, event)) {
+        event.preventDefault();
+        event.stopPropagation();
+        copyTextByType(ids, "protocolMd");
+        return true;
+    }
+    if (!event.repeat && matchHotKey(window.siyuan.config.keymap.editor.general.copyHPath.custom, event)) {
+        event.preventDefault();
+        event.stopPropagation();
+        copyTextByType(ids, "hPath");
+        return true;
+    }
+    if (!event.repeat && matchHotKey(window.siyuan.config.keymap.editor.general.copyID.custom, event)) {
+        event.preventDefault();
+        event.stopPropagation();
+        copyTextByType(ids, "id");
         return true;
     }
 
@@ -876,6 +934,9 @@ const fileTreeKeydown = (app: App, event: KeyboardEvent) => {
     }
     if (event.key === "Delete" || (event.key === "Backspace" && isMac())) {
         window.siyuan.menus.menu.remove();
+        if (document.querySelector(`.b3-dialog--open[data-key="${Constants.DIALOG_CONFIRM}"]`)) {
+            return;
+        }
         deleteFiles(liElements);
         return true;
     }
@@ -1216,6 +1277,11 @@ export const windowKeyDown = (app: App, event: KeyboardEvent) => {
         return;
     }
 
+    if (bindAVPanelKeydown(event)) {
+        event.preventDefault();
+        return;
+    }
+
     if (["Home", "End", "ArrowUp", "ArrowDown"].includes(event.key)) {
         let matchDialog: Dialog;
         // 需找到最顶层的，因此不能用 find
@@ -1326,20 +1392,21 @@ export const windowKeyDown = (app: App, event: KeyboardEvent) => {
         return;
     }
     // https://github.com/siyuan-note/siyuan/issues/8913#issuecomment-1679720605
-    const confirmElement = document.querySelector("#confirmDialogConfirmBtn");
-    if (confirmElement) {
+    const confirmDialogElement = document.querySelector('.b3-dialog--open[data-key="dialog-confirm"]');
+    if (confirmDialogElement) {
         if (event.key === "Enter") {
-            confirmElement.dispatchEvent(new CustomEvent("click"));
+            confirmDialogElement.dispatchEvent(new CustomEvent("click", {detail: event.key}));
             event.preventDefault();
             return;
         } else if (event.key === "Escape") {
-            confirmElement.previousElementSibling.previousElementSibling.dispatchEvent(new CustomEvent("click"));
+            confirmDialogElement.dispatchEvent(new CustomEvent("click", {detail: event.key}));
             event.preventDefault();
             return;
         }
     }
 
     if (event.key === "Escape" && !event.isComposing) {
+        cancelDrag();
         const imgPreviewElement = document.querySelector(".protyle-img");
         if (imgPreviewElement) {
             imgPreviewElement.remove();
@@ -1351,7 +1418,7 @@ export const windowKeyDown = (app: App, event: KeyboardEvent) => {
                 window.siyuan.menus.menu.element.style.zIndex < (window.siyuan.dialogs[0].element.querySelector(".b3-dialog") as HTMLElement).style.zIndex) {
                 // 窗口高于菜单时，先关闭窗口，如 av 修改列 icon 时
             } else {
-                window.siyuan.menus.menu.remove();
+                window.siyuan.menus.menu.remove(true);
                 return;
             }
         }
@@ -1365,6 +1432,12 @@ export const windowKeyDown = (app: App, event: KeyboardEvent) => {
                 focusBlock(hasClosestBlock(selectCellElement) as HTMLElement);
             }
             avElement.remove();
+            return;
+        }
+
+        // 闪卡长按 Esc 光标定位到闪卡按钮上 https://github.com/siyuan-note/siyuan/issues/12989
+        // https://github.com/siyuan-note/siyuan/issues/14730
+        if (event.repeat && document.activeElement && hasClosestByClassName(document.activeElement, "card__action")) {
             return;
         }
 
@@ -1402,16 +1475,12 @@ export const windowKeyDown = (app: App, event: KeyboardEvent) => {
         }
 
         // 光标在文档树等面板中，按 Esc 回到编辑器中 https://github.com/siyuan-note/siyuan/issues/4289
-        let range;
         if (getSelection().rangeCount > 0) {
-            range = getSelection().getRangeAt(0);
-            const protypleElement = hasClosestByClassName(range.startContainer, "protyle-content", true);
-            if (protypleElement) {
+            const range = getSelection().getRangeAt(0);
+            if (hasClosestByClassName(range.startContainer, "protyle-content", true)) {
                 focusByRange(range);
                 return;
             }
-        } else {
-            range = document.createRange();
         }
         const lastBackStack = window.siyuan.backStack[window.siyuan.backStack.length - 1];
         if (lastBackStack && lastBackStack.protyle.toolbar.range) {
@@ -1663,6 +1732,26 @@ export const sendGlobalShortcut = (app: App) => {
     ipcRenderer.send(Constants.SIYUAN_HOTKEY, {
         languages: window.siyuan.languages["_trayMenu"],
         hotkeys
+    });
+    /// #endif
+};
+
+
+export const sendUnregisterGlobalShortcut = (app: App) => {
+    /// #if !BROWSER
+    ipcRenderer.send(Constants.SIYUAN_CMD, {
+        cmd: "unregisterGlobalShortcut",
+        accelerator: window.siyuan.config.keymap.general.toggleWin.custom
+    });
+    app.plugins.forEach(plugin => {
+        plugin.commands.forEach(command => {
+            if (command.globalCallback) {
+                ipcRenderer.send(Constants.SIYUAN_CMD, {
+                    cmd: "unregisterGlobalShortcut",
+                    accelerator: command.customHotkey
+                });
+            }
+        });
     });
     /// #endif
 };

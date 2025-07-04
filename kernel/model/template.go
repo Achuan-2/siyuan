@@ -34,15 +34,17 @@ import (
 	"github.com/siyuan-note/filelock"
 	"github.com/siyuan-note/logging"
 	"github.com/siyuan-note/siyuan/kernel/av"
+	"github.com/siyuan-note/siyuan/kernel/filesys"
 	"github.com/siyuan-note/siyuan/kernel/search"
 	"github.com/siyuan-note/siyuan/kernel/sql"
 	"github.com/siyuan-note/siyuan/kernel/treenode"
 	"github.com/siyuan-note/siyuan/kernel/util"
+	"github.com/xrash/smetrics"
 )
 
 func RenderGoTemplate(templateContent string) (ret string, err error) {
 	tmpl := template.New("")
-	tplFuncMap := treenode.BuiltInTemplateFuncs()
+	tplFuncMap := filesys.BuiltInTemplateFuncs()
 	sql.SQLTemplateFuncs(&tplFuncMap)
 	tmpl = tmpl.Funcs(tplFuncMap)
 	tpl, err := tmpl.Parse(templateContent)
@@ -86,54 +88,88 @@ func SearchTemplate(keyword string) (ret []*Block) {
 		return util.PinYinCompare(filepath.Base(groups[i].Name()), filepath.Base(groups[j].Name()))
 	})
 
-	k := strings.ToLower(keyword)
+	keyword = strings.TrimSpace(keyword)
+	type result struct {
+		block *Block
+		score float64
+	}
+	var results []*result
+	keywords := strings.Fields(keyword)
 	for _, group := range groups {
 		if strings.HasPrefix(group.Name(), ".") {
 			continue
 		}
 
 		if group.IsDir() {
-			var templateBlocks []*Block
 			templateDir := filepath.Join(templates, group.Name())
-			filelock.Walk(templateDir, func(path string, info fs.FileInfo, err error) error {
-				name := strings.ToLower(info.Name())
+			filelock.Walk(templateDir, func(path string, d fs.DirEntry, err error) error {
+				name := strings.ToLower(d.Name())
 				if strings.HasPrefix(name, ".") {
-					if info.IsDir() {
+					if d.IsDir() {
 						return filepath.SkipDir
 					}
 					return nil
 				}
 
-				if !strings.HasSuffix(name, ".md") || strings.HasPrefix(name, "readme") || !strings.Contains(name, k) {
+				if !strings.HasSuffix(name, ".md") || strings.HasPrefix(name, "readme") {
 					return nil
 				}
 
 				content := strings.TrimPrefix(path, templates)
 				content = strings.TrimSuffix(content, ".md")
-				content = filepath.ToSlash(content)
-				content = strings.TrimPrefix(content, "/")
-				_, content = search.MarkText(content, keyword, 32, Conf.Search.CaseSensitive)
-				b := &Block{Path: path, Content: content}
-				templateBlocks = append(templateBlocks, b)
+				p := filepath.Join(group.Name(), content)
+				score := 0.0
+				hit := true
+				for _, k := range keywords {
+					if strings.Contains(strings.ToLower(p), strings.ToLower(k)) {
+						score += smetrics.JaroWinkler(name, k, 0.7, 4)
+					} else {
+						hit = false
+						break
+					}
+				}
+				if hit {
+					content = strings.TrimPrefix(path, templates)
+					content = strings.TrimSuffix(content, ".md")
+					content = filepath.ToSlash(content)
+					_, content = search.MarkText(content, strings.Join(keywords, search.TermSep), 32, Conf.Search.CaseSensitive)
+					b := &Block{Path: path, Content: content}
+					results = append(results, &result{block: b, score: score})
+				}
 				return nil
 			})
-			sort.Slice(templateBlocks, func(i, j int) bool {
-				return util.PinYinCompare(filepath.Base(templateBlocks[i].Path), filepath.Base(templateBlocks[j].Path))
-			})
-			ret = append(ret, templateBlocks...)
 		} else {
 			name := strings.ToLower(group.Name())
-			if strings.HasPrefix(name, ".") || !strings.HasSuffix(name, ".md") || "readme.md" == name || !strings.Contains(name, k) {
+			if strings.HasPrefix(name, ".") || !strings.HasSuffix(name, ".md") || "readme.md" == name {
 				continue
 			}
 
 			content := group.Name()
 			content = strings.TrimSuffix(content, ".md")
-			content = filepath.ToSlash(content)
-			_, content = search.MarkText(content, keyword, 32, Conf.Search.CaseSensitive)
-			b := &Block{Path: filepath.Join(templates, group.Name()), Content: content}
-			ret = append(ret, b)
+			score := 0.0
+			hit := true
+			for _, k := range keywords {
+				if strings.Contains(strings.ToLower(content), strings.ToLower(k)) {
+					score += smetrics.JaroWinkler(name, k, 0.7, 4)
+				} else {
+					hit = false
+					break
+				}
+			}
+			if hit {
+				content = filepath.ToSlash(content)
+				_, content = search.MarkText(content, strings.Join(keywords, search.TermSep), 32, Conf.Search.CaseSensitive)
+				b := &Block{Path: filepath.Join(templates, group.Name()), Content: content}
+				results = append(results, &result{block: b, score: score})
+			}
 		}
+	}
+
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].score > results[j].score
+	})
+	for _, r := range results {
+		ret = append(ret, r.block)
 	}
 	return
 }
@@ -152,11 +188,15 @@ func DocSaveAsTemplate(id, name string, overwrite bool) (code int, err error) {
 			return ast.WalkContinue
 		}
 
-		// Code content in templates is not properly escaped https://github.com/siyuan-note/siyuan/issues/9649
+		// Content in templates is not properly escaped
+		// https://github.com/siyuan-note/siyuan/issues/9649
+		// https://github.com/siyuan-note/siyuan/issues/13701
 		switch n.Type {
 		case ast.NodeCodeBlockCode:
 			n.Tokens = bytes.ReplaceAll(n.Tokens, []byte("&quot;"), []byte("\""))
 		case ast.NodeCodeSpanContent:
+			n.Tokens = bytes.ReplaceAll(n.Tokens, []byte("&quot;"), []byte("\""))
+		case ast.NodeBlockQueryEmbedScript:
 			n.Tokens = bytes.ReplaceAll(n.Tokens, []byte("&quot;"), []byte("\""))
 		case ast.NodeTextMark:
 			if n.IsTextMarkType("code") {
@@ -193,6 +233,51 @@ func DocSaveAsTemplate(id, name string, overwrite bool) (code int, err error) {
 	return
 }
 
+func RenderDynamicIconContentTemplate(content, id string) (ret string) {
+	tree, err := LoadTreeByBlockID(id)
+	if err != nil {
+		return
+	}
+
+	node := treenode.GetNodeInTree(tree, id)
+	if nil == node {
+		return
+	}
+	block := sql.BuildBlockFromNode(node, tree)
+	if nil == block {
+		return
+	}
+
+	dataModel := map[string]string{}
+	title := block.Name
+	if "d" == block.Type {
+		title = block.Content
+	}
+	dataModel["title"] = title
+	dataModel["id"] = block.ID
+	dataModel["name"] = block.Name
+	dataModel["alias"] = block.Alias
+
+	goTpl := template.New("").Delims(".action{", "}")
+	tplFuncMap := filesys.BuiltInTemplateFuncs()
+	sql.SQLTemplateFuncs(&tplFuncMap)
+	goTpl = goTpl.Funcs(tplFuncMap)
+	tpl, err := goTpl.Funcs(tplFuncMap).Parse(content)
+	if err != nil {
+		err = errors.New(fmt.Sprintf(Conf.Language(44), err.Error()))
+		return
+	}
+
+	buf := &bytes.Buffer{}
+	buf.Grow(4096)
+	if err = tpl.Execute(buf, dataModel); err != nil {
+		err = errors.New(fmt.Sprintf(Conf.Language(44), err.Error()))
+		return
+	}
+	ret = buf.String()
+	return
+}
+
 func RenderTemplate(p, id string, preview bool) (tree *parse.Tree, dom string, err error) {
 	tree, err = LoadTreeByBlockID(id)
 	if err != nil {
@@ -224,7 +309,7 @@ func RenderTemplate(p, id string, preview bool) (tree *parse.Tree, dom string, e
 	}
 
 	goTpl := template.New("").Delims(".action{", "}")
-	tplFuncMap := treenode.BuiltInTemplateFuncs()
+	tplFuncMap := filesys.BuiltInTemplateFuncs()
 	sql.SQLTemplateFuncs(&tplFuncMap)
 	goTpl = goTpl.Funcs(tplFuncMap)
 	tpl, err := goTpl.Funcs(tplFuncMap).Parse(gulu.Str.FromBytes(md))
@@ -270,14 +355,24 @@ func RenderTemplate(p, id string, preview bool) (tree *parse.Tree, dom string, e
 			nodesNeedAppendChild = append(nodesNeedAppendChild, n)
 		}
 
-		// 块引缺失锚文本情况下自动补全 https://github.com/siyuan-note/siyuan/issues/6087
 		if n.IsTextMarkType("block-ref") {
 			if refText := n.Text(); "" == refText {
-				refText = sql.GetRefText(n.TextMarkBlockRefID)
+				refText = strings.TrimSpace(sql.GetRefText(n.TextMarkBlockRefID))
 				if "" != refText {
 					treenode.SetDynamicBlockRefText(n, refText)
 				} else {
 					unlinks = append(unlinks, n)
+				}
+			}
+		} else if ast.NodeBlockRef == n.Type {
+			if refText := n.Text(); "" == refText {
+				if refID := n.ChildByType(ast.NodeBlockRefID); nil != refID {
+					refText = strings.TrimSpace(sql.GetRefText(refID.TokensStr()))
+					if "" != refText {
+						treenode.SetDynamicBlockRefText(n, refText)
+					} else {
+						unlinks = append(unlinks, n)
+					}
 				}
 			}
 		} else if n.IsTextMarkType("inline-math") {
@@ -293,7 +388,7 @@ func RenderTemplate(p, id string, preview bool) (tree *parse.Tree, dom string, e
 			if nil != parseErr {
 				logging.LogErrorf("parse attribute view [%s] failed: %s", n.AttributeViewID, parseErr)
 			} else {
-				cloned := attrView.ShallowClone()
+				cloned := attrView.Clone()
 				if nil == cloned {
 					logging.LogErrorf("clone attribute view [%s] failed", n.AttributeViewID)
 					return ast.WalkContinue
@@ -314,7 +409,7 @@ func RenderTemplate(p, id string, preview bool) (tree *parse.Tree, dom string, e
 						return ast.WalkContinue
 					}
 
-					table := sql.RenderAttributeViewTable(attrView, view, "")
+					table := getAttrViewTable(attrView, view, "")
 
 					var aligns []int
 					for range table.Columns {
@@ -341,9 +436,9 @@ func RenderTemplate(p, id string, preview bool) (tree *parse.Tree, dom string, e
 	})
 	for _, n := range nodesNeedAppendChild {
 		if ast.NodeBlockquote == n.Type {
-			n.FirstChild.InsertAfter(treenode.NewParagraph())
+			n.FirstChild.InsertAfter(treenode.NewParagraph(""))
 		} else {
-			n.AppendChild(treenode.NewParagraph())
+			n.AppendChild(treenode.NewParagraph(""))
 		}
 	}
 	for _, n := range unlinks {
@@ -361,6 +456,13 @@ func RenderTemplate(p, id string, preview bool) (tree *parse.Tree, dom string, e
 		}
 		return ast.WalkContinue
 	})
+
+	icon := tree.Root.IALAttr("icon")
+	if "" != icon {
+		// 动态图标需要反转义 https://github.com/siyuan-note/siyuan/issues/13211
+		icon = util.UnescapeHTML(icon)
+		tree.Root.SetIALAttr("icon", icon)
+	}
 
 	luteEngine := NewLute()
 	dom = luteEngine.Tree2BlockDOM(tree, luteEngine.RenderOptions)

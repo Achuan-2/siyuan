@@ -5,7 +5,6 @@ import {resizeTabs} from "./tabUtil";
 /// #if MOBILE
 // 检测移动端是否引入了桌面端的代码
 console.error("Need remove unused code");
-
 /// #endif
 
 export class Layout {
@@ -40,9 +39,6 @@ export class Layout {
             this.element.classList.add("fn__flex-column");
         } else {
             this.element.classList.add("fn__flex");
-        }
-        if (mergedOptions.type === "left") {
-            this.element.classList.add("fn__flex-shrink");
         }
     }
 

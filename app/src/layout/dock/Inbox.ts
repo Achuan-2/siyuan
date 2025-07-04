@@ -4,7 +4,7 @@ import {setPanelFocus} from "../util";
 import {getDockByType} from "../tabUtil";
 /// #endif
 import {fetchPost} from "../../util/fetch";
-import {updateHotkeyTip} from "../../protyle/util/compatibility";
+import {updateHotkeyAfterTip} from "../../protyle/util/compatibility";
 import {Model} from "../Model";
 import {needSubscribe} from "../../util/needSubscribe";
 import {MenuItem} from "../../menus/Menu";
@@ -68,7 +68,7 @@ export class Inbox extends Model {
     <span class="fn__space"></span>
     <span data-type="more" data-menu="true" class="block__icon b3-tooltips b3-tooltips__w" aria-label="${window.siyuan.languages.more}"><svg><use xlink:href="#iconMore"></use></svg></span>
     <span class="fn__space"></span>
-    <span data-type="min" class="block__icon b3-tooltips b3-tooltips__w" aria-label="${window.siyuan.languages.min} ${updateHotkeyTip(window.siyuan.config.keymap.general.closeTab.custom)}"><svg><use xlink:href="#iconMin"></use></svg></span>
+    <span data-type="min" class="block__icon b3-tooltips b3-tooltips__w" aria-label="${window.siyuan.languages.min}${updateHotkeyAfterTip(window.siyuan.config.keymap.general.closeTab.custom)}"><svg><use xlink:href="#iconMin"></use></svg></span>
 </div>
 <div class="fn__loading fn__none">
     <img width="64px" src="/stage/loading-pure.svg"></div>
@@ -97,7 +97,7 @@ export class Inbox extends Model {
                 }
                 const type = target.getAttribute("data-type");
                 if (type === "min") {
-                    getDockByType("inbox").toggleModel("inbox");
+                    getDockByType("inbox").toggleModel("inbox", false, true);
                     event.preventDefault();
                     break;
                 } else if (type === "selectall") {
@@ -213,7 +213,7 @@ ${data.shorthandContent}
     </div>
     ${linkHTML}
 </div>
-<div class="b3-typography b3-typography--default" style="padding: 0 8px 8px;user-select: text">
+<div class="b3-typography b3-typography--default" style="padding: 0 8px 8px;user-select: text" data-type="textMenu">
 ${data.shorthandContent}
 </div>`;
         /// #endif
@@ -339,11 +339,16 @@ ${data.shorthandContent}
                     id: item
                 }, (response) => {
                     this.data[response.data.oId] = response.data;
+                    let md = response.data.shorthandMd;
+                    if ("" === md && "" === response.data.shorthandContent && "" != response.data.shorthandURL) {
+                        md = "[" + response.data.shorthandTitle + "](" + response.data.shorthandURL + ")";
+                    }
                     fetchPost("/api/filetree/createDoc", {
                         notebook: toNotebook[0],
                         path: pathPosix().join(getDisplayName(toPath[0], false, true), Lute.NewNodeID() + ".sy"),
                         title: replaceFileName(response.data.shorthandTitle),
-                        md: response.data.shorthandMd,
+                        md: md,
+                        listDocTree: true,
                     }, () => {
                         this.remove(item);
                     });
@@ -360,7 +365,7 @@ ${data.shorthandContent}
         ${window.siyuan.languages.inboxTip}
     </li>
     <li class="b3-list--empty">
-        ${window.siyuan.config.system.container === "ios" ? window.siyuan.languages._kernel[122] : window.siyuan.languages._kernel[29].replace("${url}", getCloudURL("subscribe/siyuan"))}
+        ${window.siyuan.config.system.container === "ios" ? window.siyuan.languages._kernel[122] : window.siyuan.languages._kernel[29].replaceAll("${accountServer}", getCloudURL(""))}
     </li>
 </ul>`;
             loadingElement.classList.add("fn__none");

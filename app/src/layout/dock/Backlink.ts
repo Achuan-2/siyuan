@@ -5,11 +5,12 @@ import {setPanelFocus} from "../util";
 import {getDockByType} from "../tabUtil";
 import {fetchPost} from "../../util/fetch";
 import {Constants} from "../../constants";
-import {updateHotkeyTip} from "../../protyle/util/compatibility";
+import {updateHotkeyAfterTip} from "../../protyle/util/compatibility";
 import {openFileById} from "../../editor/util";
 import {Protyle} from "../../protyle";
 import {MenuItem} from "../../menus/Menu";
 import {App} from "../../index";
+import {isSupportCSSHL, searchMarkRender} from "../../protyle/render/searchMarkRender";
 
 export class Backlink extends Model {
     public element: HTMLElement;
@@ -93,15 +94,15 @@ export class Backlink extends Model {
     <span class="fn__space"></span>
     <span data-type="sort" data-sort="3" class="block__icon b3-tooltips b3-tooltips__sw" aria-label="${window.siyuan.languages.sort}"><svg><use xlink:href='#iconSort'></use></svg></span>
     <span class="fn__space"></span>
-    <span data-type="expand" class="block__icon b3-tooltips b3-tooltips__sw" aria-label="${window.siyuan.languages.expand} ${updateHotkeyTip(window.siyuan.config.keymap.editor.general.expand.custom)}">
+    <span data-type="expand" class="block__icon b3-tooltips b3-tooltips__sw" aria-label="${window.siyuan.languages.expand}${updateHotkeyAfterTip(window.siyuan.config.keymap.editor.general.expand.custom)}">
         <svg><use xlink:href="#iconExpand"></use></svg>
     </span>
     <span class="fn__space"></span>
-    <span data-type="collapse" class="block__icon b3-tooltips b3-tooltips__sw" aria-label="${window.siyuan.languages.collapse} ${updateHotkeyTip(window.siyuan.config.keymap.editor.general.collapse.custom)}">
+    <span data-type="collapse" class="block__icon b3-tooltips b3-tooltips__sw" aria-label="${window.siyuan.languages.collapse}${updateHotkeyAfterTip(window.siyuan.config.keymap.editor.general.collapse.custom)}">
         <svg><use xlink:href="#iconContract"></use></svg>
     </span>
     <span class="${this.type === "local" ? "fn__none " : ""}fn__space"></span>
-    <span data-type="min" class="${this.type === "local" ? "fn__none " : ""}block__icon b3-tooltips b3-tooltips__sw" aria-label="${window.siyuan.languages.min} ${updateHotkeyTip(window.siyuan.config.keymap.general.closeTab.custom)}"><svg><use xlink:href='#iconMin'></use></svg></span>
+    <span data-type="min" class="${this.type === "local" ? "fn__none " : ""}block__icon b3-tooltips b3-tooltips__sw" aria-label="${window.siyuan.languages.min}${updateHotkeyAfterTip(window.siyuan.config.keymap.general.closeTab.custom)}"><svg><use xlink:href='#iconMin'></use></svg></span>
 </div>
 <div class="backlinkList fn__flex-1"></div>
 <div class="block__icons">
@@ -135,6 +136,14 @@ export class Backlink extends Model {
             item.addEventListener("blur", (event: KeyboardEvent) => {
                 const inputElement = event.target as HTMLInputElement;
                 inputElement.classList.add("fn__none");
+                const filterIconElement = inputElement.nextElementSibling;
+                if (inputElement.value) {
+                    filterIconElement.classList.add("block__icon--active");
+                    filterIconElement.setAttribute("aria-label", window.siyuan.languages.filter + " " + inputElement.value);
+                } else {
+                    filterIconElement.classList.remove("block__icon--active");
+                    filterIconElement.setAttribute("aria-label", window.siyuan.languages.filter);
+                }
             });
             item.addEventListener("keydown", (event: KeyboardEvent) => {
                 if (!event.isComposing && event.key === "Enter") {
@@ -291,7 +300,7 @@ export class Backlink extends Model {
                             });
                             break;
                         case "min":
-                            getDockByType("backlink").toggleModel("backlink");
+                            getDockByType("backlink").toggleModel("backlink", false, true);
                             break;
                         case "search":
                             target.previousElementSibling.classList.remove("fn__none");
@@ -433,10 +442,12 @@ export class Backlink extends Model {
             });
             svgElement.removeAttribute("disabled");
         } else {
+            const keyword = isMention ? this.inputsElement[1].value : this.inputsElement[0].value;
             fetchPost(isMention ? "/api/ref/getBackmentionDoc" : "/api/ref/getBacklinkDoc", {
                 defID: this.blockId,
                 refTreeID: docId,
-                keyword: isMention ? this.inputsElement[1].value : this.inputsElement[0].value,
+                highlight: !isSupportCSSHL(),
+                keyword,
             }, (response) => {
                 svgElement.removeAttribute("disabled");
                 svgElement.classList.add("b3-list-item__arrow--open");
@@ -456,19 +467,17 @@ export class Backlink extends Model {
                     }
                 });
                 editor.protyle.notebookId = liElement.getAttribute("data-notebook-id");
+                searchMarkRender(editor.protyle, response.data.keywords);
                 this.editors.push(editor);
             });
         }
     }
 
     public refresh() {
-        if (!this.blockId) {
+        const element = this.element.querySelector('.block__icon[data-type="refresh"] svg');
+        if (!this.blockId || element.classList.contains("fn__rotate")) {
             return;
         }
-        this.editors.forEach(item => {
-            item.destroy();
-        });
-        const element = this.element.querySelector('.block__icon[data-type="refresh"] svg');
         element.classList.add("fn__rotate");
         fetchPost("/api/ref/refreshBacklink", {
             id: this.blockId,

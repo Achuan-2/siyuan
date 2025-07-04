@@ -35,6 +35,57 @@ import (
 	"github.com/siyuan-note/siyuan/kernel/util"
 )
 
+func moveLocalShorthands(c *gin.Context) {
+	ret := gulu.Ret.NewResult()
+	defer c.JSON(http.StatusOK, ret)
+
+	arg, ok := util.JsonArg(c, ret)
+	if !ok {
+		return
+	}
+
+	notebook := arg["notebook"].(string)
+	if util.InvalidIDPattern(notebook, ret) {
+		return
+	}
+
+	var parentID string
+	parentIDArg := arg["parentID"]
+	if nil != parentIDArg {
+		parentID = parentIDArg.(string)
+	}
+
+	var hPath string
+	hPathArg := arg["path"]
+	if nil != hPathArg {
+		hPath = arg["path"].(string)
+		baseName := path.Base(hPath)
+		dir := path.Dir(hPath)
+		r, _ := regexp.Compile("\r\n|\r|\n|\u2028|\u2029|\t|/")
+		baseName = r.ReplaceAllString(baseName, "")
+		if 512 < utf8.RuneCountInString(baseName) {
+			baseName = gulu.Str.SubStr(baseName, 512)
+		}
+		hPath = path.Join(dir, baseName)
+	}
+
+	// TODO: 改造旧方案，去掉 hPath, parentID，改为使用文档树配置项 闪念速记存放位置，参考创建日记实现
+	// https://github.com/siyuan-note/siyuan/issues/14414
+	ids, err := model.MoveLocalShorthands(notebook, hPath, parentID)
+	if err != nil {
+		ret.Code = -1
+		ret.Msg = err.Error()
+		return
+	}
+
+	model.FlushTxQueue()
+	box := model.Conf.Box(notebook)
+	for _, id := range ids {
+		b, _ := model.GetBlock(id, nil)
+		pushCreate(box, b.Path, arg)
+	}
+}
+
 func listDocTree(c *gin.Context) {
 	// Add kernel API `/api/filetree/listDocTree` https://github.com/siyuan-note/siyuan/issues/10482
 
@@ -214,8 +265,15 @@ func heading2Doc(c *gin.Context) {
 
 	srcHeadingID := arg["srcHeadingID"].(string)
 	targetNotebook := arg["targetNoteBook"].(string)
-	targetPath := arg["targetPath"].(string)
-	srcRootBlockID, targetPath, err := model.Heading2Doc(srcHeadingID, targetNotebook, targetPath)
+	var targetPath string
+	if arg["targetPath"] != nil {
+		targetPath = arg["targetPath"].(string)
+	}
+	var previousPath string
+	if arg["previousPath"] != nil {
+		previousPath = arg["previousPath"].(string)
+	}
+	srcRootBlockID, targetPath, err := model.Heading2Doc(srcHeadingID, targetNotebook, targetPath, previousPath)
 	if err != nil {
 		ret.Code = -1
 		ret.Msg = err.Error()
@@ -224,24 +282,12 @@ func heading2Doc(c *gin.Context) {
 	}
 
 	model.FlushTxQueue()
-	luteEngine := util.NewLute()
-	tree, err := filesys.LoadTree(targetNotebook, targetPath, luteEngine)
-	if err != nil {
-		ret.Code = -1
-		ret.Msg = err.Error()
-		return
-	}
 
-	name := path.Base(targetPath)
 	box := model.Conf.Box(targetNotebook)
-	files, _, _ := model.ListDocTree(targetNotebook, path.Dir(targetPath), util.SortModeUnassigned, false, false, model.Conf.FileTree.MaxListCount)
 	evt := util.NewCmdResult("heading2doc", 0, util.PushModeBroadcast)
 	evt.Data = map[string]interface{}{
 		"box":            box,
 		"path":           targetPath,
-		"files":          files,
-		"name":           name,
-		"id":             tree.Root.ID,
 		"srcRootBlockID": srcRootBlockID,
 	}
 	evt.Callback = arg["callback"]
@@ -259,8 +305,15 @@ func li2Doc(c *gin.Context) {
 
 	srcListItemID := arg["srcListItemID"].(string)
 	targetNotebook := arg["targetNoteBook"].(string)
-	targetPath := arg["targetPath"].(string)
-	srcRootBlockID, targetPath, err := model.ListItem2Doc(srcListItemID, targetNotebook, targetPath)
+	var targetPath string
+	if arg["targetPath"] != nil {
+		targetPath = arg["targetPath"].(string)
+	}
+	var previousPath string
+	if arg["previousPath"] != nil {
+		previousPath = arg["previousPath"].(string)
+	}
+	srcRootBlockID, targetPath, err := model.ListItem2Doc(srcListItemID, targetNotebook, targetPath, previousPath)
 	if err != nil {
 		ret.Code = -1
 		ret.Msg = err.Error()
@@ -269,24 +322,12 @@ func li2Doc(c *gin.Context) {
 	}
 
 	model.FlushTxQueue()
-	luteEngine := util.NewLute()
-	tree, err := filesys.LoadTree(targetNotebook, targetPath, luteEngine)
-	if err != nil {
-		ret.Code = -1
-		ret.Msg = err.Error()
-		return
-	}
 
-	name := path.Base(targetPath)
 	box := model.Conf.Box(targetNotebook)
-	files, _, _ := model.ListDocTree(targetNotebook, path.Dir(targetPath), util.SortModeUnassigned, false, false, model.Conf.FileTree.MaxListCount)
 	evt := util.NewCmdResult("li2doc", 0, util.PushModeBroadcast)
 	evt.Data = map[string]interface{}{
 		"box":            box,
 		"path":           targetPath,
-		"files":          files,
-		"name":           name,
-		"id":             tree.Root.ID,
 		"srcRootBlockID": srcRootBlockID,
 	}
 	evt.Callback = arg["callback"]
@@ -378,13 +419,16 @@ func getPathByID(c *gin.Context) {
 		return
 	}
 
-	_path, err := model.GetPathByID(id)
+	p, notebook, err := model.GetPathByID(id)
 	if err != nil {
 		ret.Code = -1
 		ret.Msg = err.Error()
 		return
 	}
-	ret.Data = _path
+	ret.Data = map[string]interface{}{
+		"path":     p,
+		"notebook": notebook,
+	}
 }
 
 func getFullHPathByID(c *gin.Context) {
@@ -458,10 +502,63 @@ func moveDocs(c *gin.Context) {
 	if util.InvalidIDPattern(toNotebook, ret) {
 		return
 	}
-
 	callback := arg["callback"]
-
 	err := model.MoveDocs(fromPaths, toNotebook, toPath, callback)
+	if err != nil {
+		ret.Code = -1
+		ret.Msg = err.Error()
+		ret.Data = map[string]interface{}{"closeTimeout": 7000}
+		return
+	}
+}
+
+func moveDocsByID(c *gin.Context) {
+	ret := gulu.Ret.NewResult()
+	defer c.JSON(http.StatusOK, ret)
+
+	arg, ok := util.JsonArg(c, ret)
+	if !ok {
+		return
+	}
+
+	fromIDsArg := arg["fromIDs"].([]any)
+	var fromIDs []string
+	for _, fromIDArg := range fromIDsArg {
+		fromID := fromIDArg.(string)
+		if util.InvalidIDPattern(fromID, ret) {
+			return
+		}
+		fromIDs = append(fromIDs, fromID)
+	}
+	toID := arg["toID"].(string)
+	if util.InvalidIDPattern(toID, ret) {
+		return
+	}
+
+	var fromPaths []string
+	for _, fromID := range fromIDs {
+		tree, err := model.LoadTreeByBlockID(fromID)
+		if err != nil {
+			ret.Code = -1
+			ret.Msg = err.Error()
+			ret.Data = map[string]interface{}{"closeTimeout": 7000}
+			return
+		}
+		fromPaths = append(fromPaths, tree.Path)
+	}
+	fromPaths = gulu.Str.RemoveDuplicatedElem(fromPaths)
+
+	toTree, err := model.LoadTreeByBlockID(toID)
+	if err != nil {
+		ret.Code = -1
+		ret.Msg = err.Error()
+		ret.Data = map[string]interface{}{"closeTimeout": 7000}
+		return
+	}
+	toNotebook := toTree.Box
+	toPath := toTree.Path
+	callback := arg["callback"]
+	err = model.MoveDocs(fromPaths, toNotebook, toPath, callback)
 	if err != nil {
 		ret.Code = -1
 		ret.Msg = err.Error()
@@ -486,6 +583,31 @@ func removeDoc(c *gin.Context) {
 
 	p := arg["path"].(string)
 	model.RemoveDoc(notebook, p)
+}
+
+func removeDocByID(c *gin.Context) {
+	ret := gulu.Ret.NewResult()
+	defer c.JSON(http.StatusOK, ret)
+
+	arg, ok := util.JsonArg(c, ret)
+	if !ok {
+		return
+	}
+
+	id := arg["id"].(string)
+	if util.InvalidIDPattern(id, ret) {
+		return
+	}
+
+	tree, err := model.LoadTreeByBlockID(id)
+	if err != nil {
+		ret.Code = -1
+		ret.Msg = err.Error()
+		ret.Data = map[string]interface{}{"closeTimeout": 7000}
+		return
+	}
+
+	model.RemoveDoc(tree.Box, tree.Path)
 }
 
 func removeDocs(c *gin.Context) {
@@ -531,6 +653,41 @@ func renameDoc(c *gin.Context) {
 	return
 }
 
+func renameDocByID(c *gin.Context) {
+	ret := gulu.Ret.NewResult()
+	defer c.JSON(http.StatusOK, ret)
+
+	arg, ok := util.JsonArg(c, ret)
+	if !ok {
+		return
+	}
+	if nil == arg["id"] {
+		return
+	}
+
+	id := arg["id"].(string)
+	if util.InvalidIDPattern(id, ret) {
+		return
+	}
+
+	title := arg["title"].(string)
+
+	tree, err := model.LoadTreeByBlockID(id)
+	if err != nil {
+		ret.Code = -1
+		ret.Msg = err.Error()
+		ret.Data = map[string]interface{}{"closeTimeout": 7000}
+		return
+	}
+
+	err = model.RenameDoc(tree.Box, tree.Path, title)
+	if err != nil {
+		ret.Code = -1
+		ret.Msg = err.Error()
+		return
+	}
+}
+
 func duplicateDoc(c *gin.Context) {
 	ret := gulu.Ret.NewResult()
 	defer c.JSON(http.StatusOK, ret)
@@ -552,7 +709,8 @@ func duplicateDoc(c *gin.Context) {
 	notebook := tree.Box
 	box := model.Conf.Box(notebook)
 	model.DuplicateDoc(tree)
-	pushCreate(box, tree.Path, tree.ID, arg)
+	arg["listDocTree"] = true
+	pushCreate(box, tree.Path, arg)
 
 	ret.Data = map[string]interface{}{
 		"id":       tree.Root.ID,
@@ -593,7 +751,7 @@ func createDoc(c *gin.Context) {
 
 	model.FlushTxQueue()
 	box := model.Conf.Box(notebook)
-	pushCreate(box, p, tree.Root.ID, arg)
+	pushCreate(box, p, arg)
 
 	ret.Data = map[string]interface{}{
 		"id": tree.Root.ID,
@@ -641,14 +799,9 @@ func createDailyNote(c *gin.Context) {
 		}
 		evt := util.NewCmdResult("createdailynote", 0, util.PushModeBroadcast)
 		evt.AppId = app
-		name := path.Base(p)
-		files, _, _ := model.ListDocTree(box.ID, path.Dir(p), util.SortModeUnassigned, false, false, model.Conf.FileTree.MaxListCount)
 		evt.Data = map[string]interface{}{
-			"box":   box,
-			"path":  p,
-			"files": files,
-			"name":  name,
-			"id":    tree.Root.ID,
+			"box":  box,
+			"path": p,
 		}
 		evt.Callback = arg["callback"]
 		util.PushEvent(evt)
@@ -711,8 +864,13 @@ func createDocWithMd(c *gin.Context) {
 	if nil != withMathArg {
 		withMath = withMathArg.(bool)
 	}
+	clippingHref := ""
+	clippingHrefArg := arg["clippingHref"]
+	if nil != clippingHrefArg {
+		clippingHref = clippingHrefArg.(string)
+	}
 
-	id, err := model.CreateWithMarkdown(tags, notebook, hPath, markdown, parentID, id, withMath)
+	id, err := model.CreateWithMarkdown(tags, notebook, hPath, markdown, parentID, id, withMath, clippingHref)
 	if err != nil {
 		ret.Code = -1
 		ret.Msg = err.Error()
@@ -723,8 +881,7 @@ func createDocWithMd(c *gin.Context) {
 	model.FlushTxQueue()
 	box := model.Conf.Box(notebook)
 	b, _ := model.GetBlock(id, nil)
-	p := b.Path
-	pushCreate(box, p, id, arg)
+	pushCreate(box, b.Path, arg)
 }
 
 func getDocCreateSavePath(c *gin.Context) {
@@ -982,8 +1139,22 @@ func getDoc(c *gin.Context) {
 	if nil != isBacklinkArg {
 		isBacklink = isBacklinkArg.(bool)
 	}
+	originalRefBlockIDsArg := arg["originalRefBlockIDs"]
+	originalRefBlockIDs := map[string]string{}
+	if nil != originalRefBlockIDsArg {
+		m := originalRefBlockIDsArg.(map[string]interface{})
+		for k, v := range m {
+			originalRefBlockIDs[k] = v.(string)
+		}
+	}
+	highlightArg := arg["highlight"]
+	highlight := true
+	if nil != highlightArg {
+		highlight = highlightArg.(bool)
+	}
 
-	blockCount, content, parentID, parent2ID, rootID, typ, eof, scroll, boxID, docPath, isBacklinkExpand, err := model.GetDoc(startID, endID, id, index, query, queryTypes, queryMethod, mode, size, isBacklink)
+	blockCount, content, parentID, parent2ID, rootID, typ, eof, scroll, boxID, docPath, isBacklinkExpand, keywords, err :=
+		model.GetDoc(startID, endID, id, index, query, queryTypes, queryMethod, mode, size, isBacklink, originalRefBlockIDs, highlight)
 	if model.ErrBlockNotFound == err {
 		ret.Code = 3
 		return
@@ -1013,19 +1184,23 @@ func getDoc(c *gin.Context) {
 		"path":             docPath,
 		"isSyncing":        isSyncing,
 		"isBacklinkExpand": isBacklinkExpand,
+		"keywords":         keywords,
+		"reqId":            arg["reqId"],
 	}
 }
 
-func pushCreate(box *model.Box, p, treeID string, arg map[string]interface{}) {
+func pushCreate(box *model.Box, p string, arg map[string]interface{}) {
 	evt := util.NewCmdResult("create", 0, util.PushModeBroadcast)
-	name := path.Base(p)
-	files, _, _ := model.ListDocTree(box.ID, path.Dir(p), util.SortModeUnassigned, false, false, model.Conf.FileTree.MaxListCount)
+	listDocTree := false
+	listDocTreeArg := arg["listDocTree"]
+	if nil != listDocTreeArg {
+		listDocTree = listDocTreeArg.(bool)
+	}
+
 	evt.Data = map[string]interface{}{
-		"box":   box,
-		"path":  p,
-		"files": files,
-		"name":  name,
-		"id":    treeID,
+		"box":         box,
+		"path":        p,
+		"listDocTree": listDocTree,
 	}
 	evt.Callback = arg["callback"]
 	util.PushEvent(evt)

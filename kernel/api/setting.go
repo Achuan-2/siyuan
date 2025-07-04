@@ -399,14 +399,14 @@ func setFiletree(c *gin.Context) {
 		return
 	}
 
-	fileTree.RefCreateSavePath = strings.TrimSpace(fileTree.RefCreateSavePath)
+	fileTree.RefCreateSavePath = util.TrimSpaceInPath(fileTree.RefCreateSavePath)
 	if "" != fileTree.RefCreateSavePath {
 		if !strings.HasSuffix(fileTree.RefCreateSavePath, "/") {
 			fileTree.RefCreateSavePath += "/"
 		}
 	}
 
-	fileTree.DocCreateSavePath = strings.TrimSpace(fileTree.DocCreateSavePath)
+	fileTree.DocCreateSavePath = util.TrimSpaceInPath(fileTree.DocCreateSavePath)
 
 	if 1 > fileTree.MaxOpenTabCount {
 		fileTree.MaxOpenTabCount = 8
@@ -654,7 +654,12 @@ func setEmoji(c *gin.Context) {
 	argEmoji := arg["emoji"].([]interface{})
 	var emoji []string
 	for _, ae := range argEmoji {
-		emoji = append(emoji, ae.(string))
+		e := ae.(string)
+		if strings.Contains(e, ".") {
+			// XSS through emoji name https://github.com/siyuan-note/siyuan/issues/15034
+			e = util.FilterUploadEmojiFileName(e)
+		}
+		emoji = append(emoji, e)
 	}
 
 	model.Conf.Editor.Emoji = emoji

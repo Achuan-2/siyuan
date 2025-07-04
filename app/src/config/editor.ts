@@ -7,12 +7,11 @@ import {updateHotkeyTip} from "../protyle/util/compatibility";
 import {Constants} from "../constants";
 import {resize} from "../protyle/util/resize";
 import {setReadOnly} from "./util/setReadOnly";
+import {Menu} from "../plugin/Menu";
 
 export const editor = {
     element: undefined as Element,
     genHTML: () => {
-        let fontFamilyHTML = "";
-        fontFamilyHTML = '<select id="fontFamily" class="b3-select fn__flex-center fn__size200"></select>';
         return `<label class="fn__flex b3-label">
     <div class="fn__flex-1">
         ${window.siyuan.languages.fullWidth}
@@ -40,7 +39,7 @@ export const editor = {
 <label class="fn__flex b3-label">
     <div class="fn__flex-1">
         ${window.siyuan.languages.editReadonly} 
-        <code class="fn__code">${updateHotkeyTip(window.siyuan.config.keymap.general.editReadonly.custom)}</code>
+        <code class="fn__code${window.siyuan.config.keymap.general.editReadonly.custom ? "" : " fn__none"}">${updateHotkeyTip(window.siyuan.config.keymap.general.editReadonly.custom)}</code>
         <div class="b3-label__text">${window.siyuan.languages.editReadonlyTip}</div>
     </div>
     <span class="fn__space"></span>
@@ -207,14 +206,24 @@ export const editor = {
     <span class="fn__space"></span>
     <input class="b3-text-field fn__flex-center fn__size200" id="generateHistoryInterval" type="number" min="0" max="120" value="${window.siyuan.config.editor.generateHistoryInterval}"/>
 </div>
-<div class="fn__flex b3-label config__item">
-    <div class="fn__flex-1">
-        ${window.siyuan.languages.historyRetentionDays} 
-        <a href="javascript:void(0)" id="clearHistory">${window.siyuan.languages.clearHistory}</a>
-        <div class="b3-label__text">${window.siyuan.languages.historyRetentionDaysTip}</div>
+<div class="b3-label">
+    <div>
+        ${window.siyuan.languages.historyRetentionDaysTip}
     </div>
-    <span class="fn__space"></span>
-    <input class="b3-text-field fn__flex-center fn__size200" id="historyRetentionDays" type="number" min="0" value="${window.siyuan.config.editor.historyRetentionDays}"/>
+    <div class="fn__hr"></div>
+    <div class="fn__flex config__item">
+        <div class="fn__flex-center fn__flex-1 ft__on-surface">${window.siyuan.languages.clearHistory}</div>
+        <span class="fn__space"></span>
+        <button id="clearHistory" class="b3-button b3-button--outline fn__size200 fn__flex-center">
+            <svg><use xlink:href="#iconTrashcan"></use></svg>${window.siyuan.languages.purge}
+        </button>
+    </div>
+    <div class="fn__hr"></div>
+    <div class="fn__flex config__item">
+        <div class="fn__flex-center fn__flex-1 ft__on-surface">${window.siyuan.languages.historyRetentionDays}</div>
+        <span class="fn__space"></span>
+        <input class="b3-text-field fn__flex-center fn__size200" id="historyRetentionDays" type="number" min="0" value="${window.siyuan.config.editor.historyRetentionDays}"/>
+    </div>
 </div>
 <div class="fn__flex b3-label config__item">
     <div class="fn__flex-1">
@@ -234,7 +243,7 @@ export const editor = {
         <div class="b3-label__text">${window.siyuan.languages.font1}</div>
     </div>
     <span class="fn__space"></span>
-    ${fontFamilyHTML}
+    <input readonly="readonly" placeholder="${window.siyuan.languages.default}" id="fontFamily" class="b3-text-field fn__flex-center fn__size200" style="font-family:'${window.siyuan.config.editor.fontFamily}',var(--b3-font-family);" value="${window.siyuan.config.editor.fontFamily}"/>
 </div>
 <label class="fn__flex b3-label">
     <div class="fn__flex-1">
@@ -335,19 +344,57 @@ export const editor = {
     </div>
     <span class="fn__space"></span>
     <input class="b3-switch fn__flex-center" id="editorMarkdownInlineStrikethrough" type="checkbox"${window.siyuan.config.editor.markdown.inlineStrikethrough ? " checked" : ""}/>
+</label>
+<label class="fn__flex b3-label">
+    <div class="fn__flex-1">
+        ${window.siyuan.languages.editorMarkdownInlineMark}
+        <div class="b3-label__text">${window.siyuan.languages.editorMarkdownInlineMarkTip}</div>
+    </div>
+    <span class="fn__space"></span>
+    <input class="b3-switch fn__flex-center" id="editorMarkdownInlineMark" type="checkbox"${window.siyuan.config.editor.markdown.inlineMark ? " checked" : ""}/>
 </label>`;
     },
     bindEvent: () => {
         const fontFamilyElement = editor.element.querySelector("#fontFamily") as HTMLSelectElement;
-        if (fontFamilyElement.tagName === "SELECT") {
-            let fontFamilyHTML = `<option value="">${window.siyuan.languages.default}</option>`;
+        fontFamilyElement.addEventListener("click", () => {
             fetchPost("/api/system/getSysFonts", {}, (response) => {
-                response.data.forEach((item: string) => {
-                    fontFamilyHTML += `<option value="${item}"${window.siyuan.config.editor.fontFamily === item ? " selected" : ""}>${item}</option>`;
+                const fontMenu = new Menu();
+                fontMenu.addItem({
+                    iconHTML: "",
+                    checked: window.siyuan.config.editor.fontFamily === "",
+                    label: `<div style='var(--b3-font-family);'>${window.siyuan.languages.default}</div>`,
+                    click: () => {
+                        if ("" === window.siyuan.config.editor.fontFamily) {
+                            return;
+                        }
+                        fontFamilyElement.value = "";
+                        fontFamilyElement.style.fontFamily = "";
+                        setEditor();
+                    }
                 });
-                fontFamilyElement.innerHTML = fontFamilyHTML;
+                response.data.forEach((item: string) => {
+                    fontMenu.addItem({
+                        iconHTML: "",
+                        checked: window.siyuan.config.editor.fontFamily === item,
+                        label: `<div style='font-family:"${item}",var(--b3-font-family);'>${item}</div>`,
+                        click: () => {
+                            if (item === window.siyuan.config.editor.fontFamily) {
+                                return;
+                            }
+                            fontFamilyElement.value = item;
+                            fontFamilyElement.style.fontFamily = item + ",var(--b3-font-family)";
+                            setEditor();
+                        }
+                    });
+                });
+                const rect = fontFamilyElement.getBoundingClientRect();
+                fontMenu.open({
+                    x: rect.left,
+                    y: rect.bottom
+                });
             });
-        }
+        });
+
         editor.element.querySelector("#clearHistory").addEventListener("click", () => {
             confirmDialog(window.siyuan.languages.clearHistory, window.siyuan.languages.confirmClearHistory, () => {
                 fetchPost("/api/history/clearWorkspaceHistory", {});
@@ -370,7 +417,8 @@ export const editor = {
                     inlineSub: (editor.element.querySelector("#editorMarkdownInlineSub") as HTMLInputElement).checked,
                     inlineTag: (editor.element.querySelector("#editorMarkdownInlineTag") as HTMLInputElement).checked,
                     inlineMath: (editor.element.querySelector("#editorMarkdownInlineMath") as HTMLInputElement).checked,
-                    inlineStrikethrough: (editor.element.querySelector("#editorMarkdownInlineStrikethrough") as HTMLInputElement).checked
+                    inlineStrikethrough: (editor.element.querySelector("#editorMarkdownInlineStrikethrough") as HTMLInputElement).checked,
+                    inlineMark: (editor.element.querySelector("#editorMarkdownInlineMark") as HTMLInputElement).checked
                 },
                 allowHTMLBLockScript: (editor.element.querySelector("#allowHTMLBLockScript") as HTMLInputElement).checked,
                 justify: (editor.element.querySelector("#justify") as HTMLInputElement).checked,
@@ -414,9 +462,11 @@ export const editor = {
             });
         });
         editor.element.querySelectorAll("textarea.b3-text-field, input.b3-text-field, input.b3-slider").forEach((item) => {
-            item.addEventListener("blur", () => {
-                setEditor();
-            });
+            if (!item.getAttribute("readonly")) {
+                item.addEventListener("blur", () => {
+                    setEditor();
+                });
+            }
         });
         editor.element.querySelectorAll("input.b3-slider").forEach((item) => {
             item.addEventListener("input", (event) => {

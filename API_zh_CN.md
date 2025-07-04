@@ -40,6 +40,7 @@
     * [获取块属性](#获取块属性)
 * [SQL](#SQL)
     * [执行 SQL 查询](#执行-SQL-查询)
+    * [提交事务](#提交事务)
 * [模板](#模板)
     * [渲染模板](#渲染模板)
     * [渲染 Sprig](#渲染-Sprig)
@@ -357,6 +358,31 @@
 
     * `notebook`：笔记本 ID
     * `path`：文档路径
+    * `title`：新标题
+* 返回值
+
+  ```json
+  {
+    "code": 0,
+    "msg": "",
+    "data": null
+  }
+  ```
+
+通过 `id` 重命名文档：
+
+* `/api/filetree/renameDocByID`
+* 参数
+
+  ```json
+  {
+    "id": "20210902210113-0avi12f",
+    "title": "文档新标题"
+  }
+  ```
+
+    * `id`：文档 ID
+    * `title`：新标题
 * 返回值
 
   ```json
@@ -391,6 +417,28 @@
   }
   ```
 
+通过 `id` 删除文档：
+
+* `/api/filetree/removeDocByID`
+* 参数
+
+  ```json
+  {
+    "id": "20210902210113-0avi12f"
+  }
+  ```
+
+    * `id`：文档 ID
+* 返回值
+
+  ```json
+  {
+    "code": 0,
+    "msg": "",
+    "data": null
+  }
+  ```
+
 ### 移动文档
 
 * `/api/filetree/moveDocs`
@@ -407,6 +455,30 @@
     * `fromPaths`：源路径
     * `toNotebook`：目标笔记本 ID
     * `toPath`：目标路径
+* 返回值
+
+  ```json
+  {
+    "code": 0,
+    "msg": "",
+    "data": null
+  }
+  ```
+
+通过 `id` 移动文档：
+
+* `/api/filetree/moveDocsByID`
+* 参数
+
+  ```json
+  {
+    "fromIDs": ["20210917220056-yxtyl7i"],
+    "toID": "20210817205410-2kvfpfn"
+  }
+  ```
+
+    * `fromIDs`：源文档 ID
+    * `toID`：目标父文档 ID
 * 返回值
 
   ```json
@@ -470,18 +542,21 @@
 
   ```json
   {
-    "id": "20210917220056-yxtyl7i"
+    "id": "20210808180320-fqgskfj"
   }
   ```
 
-  * `id`：块 ID
+    * `id`：块 ID
 * 返回值
 
   ```json
   {
     "code": 0,
     "msg": "",
-    "data": "/20210828150719-r8edxl2/20210917220056-yxtyl7i.sy"
+    "data": {
+    "notebook": "20210808180117-czj9bvb",
+    "path": "/20200812220555-lj3enxa/20210808180320-fqgskfj.sy"
+    }
   }
   ```
 
@@ -497,8 +572,8 @@
   }
   ```
 
-  * `path`：人类可读路径
-  * `notebook`：笔记本 ID
+    * `path`：人类可读路径
+    * `notebook`：笔记本 ID
 * 返回值
 
   ```json
@@ -812,7 +887,7 @@
   }
   ```
 
-  * `id`：待折叠块的 ID
+    * `id`：待折叠块的 ID
 * 返回值
 
   ```json
@@ -834,7 +909,7 @@
   }
   ```
 
-  * `id`：待展开块的 ID
+    * `id`：待展开块的 ID
 * 返回值
 
   ```json
@@ -1013,6 +1088,20 @@
     "data": [
       { "列": "值" }
     ]
+  }
+  ```
+
+### 提交事务
+
+* `/api/sqlite/flushTransaction`
+* 不带参
+* 返回值
+
+  ```json
+  {
+    "code": 0,
+    "msg": "",
+    "data": null
   }
   ```
 

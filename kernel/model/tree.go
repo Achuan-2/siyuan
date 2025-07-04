@@ -130,15 +130,19 @@ func resetTree(tree *parse.Tree, titleSuffix string, removeAvBinding bool) {
 func pagedPaths(localPath string, pageSize int) (ret map[int][]string) {
 	ret = map[int][]string{}
 	page := 1
-	filelock.Walk(localPath, func(path string, info fs.FileInfo, err error) error {
-		if info.IsDir() {
-			if strings.HasPrefix(info.Name(), ".") {
+	filelock.Walk(localPath, func(path string, d fs.DirEntry, err error) error {
+		if nil != err || nil == d {
+			return nil
+		}
+
+		if d.IsDir() {
+			if strings.HasPrefix(d.Name(), ".") {
 				return filepath.SkipDir
 			}
 			return nil
 		}
 
-		if !strings.HasSuffix(info.Name(), ".sy") {
+		if !strings.HasSuffix(d.Name(), ".sy") {
 			return nil
 		}
 
@@ -174,8 +178,6 @@ var (
 )
 
 func LoadTreeByBlockIDWithReindex(id string) (ret *parse.Tree, err error) {
-	// 仅提供给 getBlockInfo 接口使用
-
 	if "" == id {
 		logging.LogWarnf("block id is empty")
 		return nil, ErrTreeNotFound
@@ -188,8 +190,9 @@ func LoadTreeByBlockIDWithReindex(id string) (ret *parse.Tree, err error) {
 			return
 		}
 
-		// 尝试从文件系统加载
-		searchTreeInFilesystem(id)
+		// 尝试从文件系统加载并建立索引
+		indexTreeInFilesystem(id)
+
 		bt = treenode.GetBlockTree(id)
 		if nil == bt {
 			if "dev" == util.Mode {
@@ -206,7 +209,8 @@ func LoadTreeByBlockIDWithReindex(id string) (ret *parse.Tree, err error) {
 
 func LoadTreeByBlockID(id string) (ret *parse.Tree, err error) {
 	if !ast.IsNodeIDPattern(id) {
-		logging.LogErrorf("block id is invalid [id=%s]", id)
+		stack := logging.ShortStack()
+		logging.LogErrorf("block id is invalid [id=%s], stack: [%s]", id, stack)
 		return nil, ErrTreeNotFound
 	}
 
@@ -238,7 +242,7 @@ func loadTreeByBlockTree(bt *treenode.BlockTree) (ret *parse.Tree, err error) {
 
 var searchTreeLimiter = rate.NewLimiter(rate.Every(3*time.Second), 1)
 
-func searchTreeInFilesystem(rootID string) {
+func indexTreeInFilesystem(rootID string) {
 	if !searchTreeLimiter.Allow() {
 		return
 	}
@@ -248,15 +252,15 @@ func searchTreeInFilesystem(rootID string) {
 
 	logging.LogWarnf("searching tree on filesystem [rootID=%s]", rootID)
 	var treePath string
-	filepath.Walk(util.DataDir, func(path string, info fs.FileInfo, err error) error {
-		if info.IsDir() {
-			if strings.HasPrefix(info.Name(), ".") {
+	filelock.Walk(util.DataDir, func(path string, d fs.DirEntry, err error) error {
+		if d.IsDir() {
+			if strings.HasPrefix(d.Name(), ".") {
 				return filepath.SkipDir
 			}
 			return nil
 		}
 
-		if !strings.HasSuffix(info.Name(), ".sy") {
+		if !strings.HasSuffix(d.Name(), ".sy") {
 			return nil
 		}
 

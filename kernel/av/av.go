@@ -23,7 +23,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/88250/gulu"
 	"github.com/88250/lute/ast"
@@ -44,10 +43,10 @@ type AttributeView struct {
 	Views     []*View      `json:"views"`     // 视图
 }
 
-// KeyValues 描述了属性视图属性列值的结构。
+// KeyValues 描述了属性视图属性键值列表的结构。
 type KeyValues struct {
-	Key    *Key     `json:"key"`              // 属性视图属性列
-	Values []*Value `json:"values,omitempty"` // 属性视图属性列值
+	Key    *Key     `json:"key"`              // 属性视图属性键
+	Values []*Value `json:"values,omitempty"` // 属性视图属性值列表
 }
 
 func (kValues *KeyValues) GetValue(blockID string) (ret *Value) {
@@ -62,7 +61,7 @@ func (kValues *KeyValues) GetValue(blockID string) (ret *Value) {
 
 func (kValues *KeyValues) GetBlockValue() (ret *Value) {
 	for _, v := range kValues.Values {
-		if KeyTypeBlock != v.Type {
+		if KeyTypeBlock == v.Type {
 			ret = v
 			return
 		}
@@ -179,75 +178,112 @@ type SelectOption struct {
 
 // View 描述了视图的结构。
 type View struct {
-	ID               string `json:"id"`               // 视图 ID
-	Icon             string `json:"icon"`             // 视图图标
-	Name             string `json:"name"`             // 视图名称
-	HideAttrViewName bool   `json:"hideAttrViewName"` // 是否隐藏属性视图名称
-	Desc             string `json:"desc"`             // 视图描述
+	ID               string         `json:"id"`                // 视图 ID
+	Icon             string         `json:"icon"`              // 视图图标
+	Name             string         `json:"name"`              // 视图名称
+	HideAttrViewName bool           `json:"hideAttrViewName"`  // 是否隐藏属性视图名称
+	Desc             string         `json:"desc"`              // 视图描述
+	Filters          []*ViewFilter  `json:"filters,omitempty"` // 过滤规则
+	Sorts            []*ViewSort    `json:"sorts,omitempty"`   // 排序规则
+	Group            *ViewGroup     `json:"group,omitempty"`   // 分组规则
+	PageSize         int            `json:"pageSize"`          // 每页条目数
+	LayoutType       LayoutType     `json:"type"`              // 当前布局类型
+	Table            *LayoutTable   `json:"table,omitempty"`   // 表格布局
+	Gallery          *LayoutGallery `json:"gallery,omitempty"` // 卡片布局
+	ItemIDs          []string       `json:"itemIds,omitempty"` // 项目 ID 列表，用于维护所有项目
 
-	LayoutType LayoutType   `json:"type"`            // 当前布局类型
-	Table      *LayoutTable `json:"table,omitempty"` // 表格布局
+	Groups       []*View  `json:"groups,omitempty"`       // 分组视图列表
+	GroupItemIDs []string `json:"groupItemIds,omitempty"` // 分组项目 ID 列表，用于维护分组中的所有项目
+	GroupCalcSum bool     `json:"groupCalcSum,omitempty"` // 分组是否计算总和
+	GroupName    string   `json:"groupName,omitempty"`    // 分组名称
+	GroupFolded  bool     `json:"groupFolded,omitempty"`  // 分组是否折叠
+	GroupHidden  bool     `json:"groupHidden,omitempty"`  // 分组是否隐藏
+	GroupDefault bool     `json:"groupDefault,omitempty"` // 是否为默认分组
 }
 
-// LayoutType 描述了视图布局的类型。
+// LayoutType 描述了视图布局类型。
 type LayoutType string
 
 const (
-	LayoutTypeTable LayoutType = "table" // 属性视图类型 - 表格
+	LayoutTypeTable   LayoutType = "table"   // 属性视图类型 - 表格
+	LayoutTypeGallery LayoutType = "gallery" // 属性视图类型 - 卡片
+)
+
+const (
+	ViewDefaultPageSize = 50 // 视图默认分页大小
 )
 
 func NewTableView() (ret *View) {
 	ret = &View{
 		ID:         ast.NewNodeID(),
-		Name:       getI18nName("table"),
+		Name:       GetAttributeViewI18n("table"),
+		Filters:    []*ViewFilter{},
+		Sorts:      []*ViewSort{},
+		PageSize:   ViewDefaultPageSize,
 		LayoutType: LayoutTypeTable,
-		Table: &LayoutTable{
-			Spec:     0,
-			ID:       ast.NewNodeID(),
-			Filters:  []*ViewFilter{},
-			Sorts:    []*ViewSort{},
-			PageSize: 50,
-		},
+		Table:      NewLayoutTable(),
 	}
 	return
 }
 
 func NewTableViewWithBlockKey(blockKeyID string) (view *View, blockKey, selectKey *Key) {
-	name := getI18nName("table")
+	name := GetAttributeViewI18n("table")
 	view = &View{
 		ID:         ast.NewNodeID(),
 		Name:       name,
+		Filters:    []*ViewFilter{},
+		Sorts:      []*ViewSort{},
 		LayoutType: LayoutTypeTable,
-		Table: &LayoutTable{
-			Spec:     0,
-			ID:       ast.NewNodeID(),
-			Filters:  []*ViewFilter{},
-			Sorts:    []*ViewSort{},
-			PageSize: 50,
-		},
+		Table:      NewLayoutTable(),
+		PageSize:   ViewDefaultPageSize,
 	}
-	blockKey = NewKey(blockKeyID, getI18nName("key"), "", KeyTypeBlock)
-	view.Table.Columns = []*ViewTableColumn{{ID: blockKeyID}}
+	blockKey = NewKey(blockKeyID, GetAttributeViewI18n("key"), "", KeyTypeBlock)
+	view.Table.Columns = []*ViewTableColumn{{BaseField: &BaseField{ID: blockKeyID}}}
 
-	selectKey = NewKey(ast.NewNodeID(), getI18nName("select"), "", KeyTypeSelect)
-	view.Table.Columns = append(view.Table.Columns, &ViewTableColumn{ID: selectKey.ID})
+	selectKey = NewKey(ast.NewNodeID(), GetAttributeViewI18n("select"), "", KeyTypeSelect)
+	view.Table.Columns = append(view.Table.Columns, &ViewTableColumn{BaseField: &BaseField{ID: selectKey.ID}})
+	return
+}
+
+func NewGalleryView() (ret *View) {
+	ret = &View{
+		ID:         ast.NewNodeID(),
+		Name:       GetAttributeViewI18n("gallery"),
+		Filters:    []*ViewFilter{},
+		Sorts:      []*ViewSort{},
+		PageSize:   ViewDefaultPageSize,
+		LayoutType: LayoutTypeGallery,
+		Gallery:    NewLayoutGallery(),
+	}
 	return
 }
 
 // Viewable 描述了视图的接口。
 type Viewable interface {
-	Filterable
-	Sortable
-	Calculable
 
+	// Filter 根据视图中设置的过滤器进行过滤。
+	Filter(attrView *AttributeView)
+
+	// Sort 根据视图中设置的排序规则进行排序。
+	Sort(attrView *AttributeView)
+
+	// Calc 根据视图中设置的计算规则进行计算。
+	Calc()
+
+	// GetType 获取视图的布局类型。
 	GetType() LayoutType
+
+	// GetID 获取视图的 ID。
 	GetID() string
+
+	// SetGroups 设置视图分组列表。
+	SetGroups(viewables []Viewable)
 }
 
 func NewAttributeView(id string) (ret *AttributeView) {
 	view, blockKey, selectKey := NewTableViewWithBlockKey(ast.NewNodeID())
 	ret = &AttributeView{
-		Spec:      0,
+		Spec:      3,
 		ID:        id,
 		KeyValues: []*KeyValues{{Key: blockKey}, {Key: selectKey}},
 		ViewID:    view.ID,
@@ -366,129 +402,7 @@ func SaveAttributeView(av *AttributeView) (err error) {
 	}
 
 	// 做一些数据兼容和订正处理
-	now := util.CurrentTimeMillis()
-	for _, kv := range av.KeyValues {
-		switch kv.Key.Type {
-		case KeyTypeBlock:
-			// 补全 block 的创建时间和更新时间
-			for _, v := range kv.Values {
-				if 0 == v.Block.Created {
-					logging.LogWarnf("block [%s] created time is empty", v.BlockID)
-					if "" == v.Block.ID {
-						v.Block.ID = v.BlockID
-						if "" == v.Block.ID {
-							v.Block.ID = ast.NewNodeID()
-							v.BlockID = v.Block.ID
-						}
-					}
-
-					createdStr := v.Block.ID[:len("20060102150405")]
-					created, parseErr := time.ParseInLocation("20060102150405", createdStr, time.Local)
-					if nil == parseErr {
-						v.Block.Created = created.UnixMilli()
-					} else {
-						v.Block.Created = now
-					}
-				}
-				if 0 == v.Block.Updated {
-					logging.LogWarnf("block [%s] updated time is empty", v.BlockID)
-					v.Block.Updated = v.Block.Created
-				}
-			}
-		case KeyTypeNumber:
-			for _, v := range kv.Values {
-				if nil != v.Number && 0 != v.Number.Content && !v.Number.IsNotEmpty {
-					v.Number.IsNotEmpty = true
-				}
-			}
-		}
-
-		for _, v := range kv.Values {
-			if "" == kv.Key.ID {
-				kv.Key.ID = ast.NewNodeID()
-				for _, val := range kv.Values {
-					val.KeyID = kv.Key.ID
-				}
-				if "" == v.KeyID {
-					logging.LogWarnf("value [%s] key id is empty", v.ID)
-					v.KeyID = kv.Key.ID
-				}
-
-				// 校验日期 IsNotEmpty
-				if KeyTypeDate == kv.Key.Type {
-					if nil != v.Date && 0 != v.Date.Content && !v.Date.IsNotEmpty {
-						v.Date.IsNotEmpty = true
-					}
-				}
-
-				// 校验数字 IsNotEmpty
-				if KeyTypeNumber == kv.Key.Type {
-					if nil != v.Number && 0 != v.Number.Content && !v.Number.IsNotEmpty {
-						v.Number.IsNotEmpty = true
-					}
-				}
-
-				// 清空关联实际值
-				if KeyTypeRelation == kv.Key.Type {
-					v.Relation.Contents = nil
-				}
-
-				// 清空汇总实际值
-				if KeyTypeRollup == kv.Key.Type {
-					v.Rollup.Contents = nil
-				}
-
-				for _, view := range av.Views {
-					switch view.LayoutType {
-					case LayoutTypeTable:
-						for _, column := range view.Table.Columns {
-							if "" == column.ID {
-								column.ID = kv.Key.ID
-								break
-							}
-						}
-					}
-				}
-			}
-
-			// 补全值的创建时间和更新时间
-			if "" == v.ID {
-				logging.LogWarnf("value id is empty")
-				v.ID = ast.NewNodeID()
-			}
-
-			if 0 == v.CreatedAt {
-				logging.LogWarnf("value [%s] created time is empty", v.ID)
-				createdStr := v.ID[:len("20060102150405")]
-				created, parseErr := time.ParseInLocation("20060102150405", createdStr, time.Local)
-				if nil == parseErr {
-					v.CreatedAt = created.UnixMilli()
-				} else {
-					v.CreatedAt = now
-				}
-			}
-
-			if 0 == v.UpdatedAt {
-				logging.LogWarnf("value [%s] updated time is empty", v.ID)
-				v.UpdatedAt = v.CreatedAt
-			}
-		}
-	}
-
-	// 补全过滤器 Value
-	for _, view := range av.Views {
-		if nil != view.Table {
-			for _, f := range view.Table.Filters {
-				if nil != f.Value {
-					continue
-				}
-
-				if k, _ := av.GetKey(f.Column); nil != k {
-					f.Value = &Value{Type: k.Type}
-				}
-			}
-		}
-	}
+	UpgradeSpec(av)
 
 	// 值去重
 	blockValues := av.GetBlockKeyValues()
@@ -511,13 +425,12 @@ func SaveAttributeView(av *AttributeView) (err error) {
 
 	// 视图值去重
 	for _, view := range av.Views {
-		if nil != view.Table {
-			// 行去重
-			view.Table.RowIDs = gulu.Str.RemoveDuplicatedElem(view.Table.RowIDs)
-			// 分页大小
-			if 1 > view.Table.PageSize {
-				view.Table.PageSize = 50
-			}
+		// 项目自定义排序去重
+		view.ItemIDs = gulu.Str.RemoveDuplicatedElem(view.ItemIDs)
+
+		// 分页大小
+		if 1 > view.PageSize {
+			view.PageSize = ViewDefaultPageSize
 		}
 	}
 
@@ -645,7 +558,7 @@ func (av *AttributeView) GetBlockKey() (ret *Key) {
 	return
 }
 
-func (av *AttributeView) ShallowClone() (ret *AttributeView) {
+func (av *AttributeView) Clone() (ret *AttributeView) {
 	ret = &AttributeView{}
 	data, err := gulu.JSON.MarshalJSON(av)
 	if err != nil {
@@ -684,18 +597,31 @@ func (av *AttributeView) ShallowClone() (ret *AttributeView) {
 
 	for _, view := range ret.Views {
 		view.ID = ast.NewNodeID()
-		view.Table.ID = ast.NewNodeID()
-		for _, column := range view.Table.Columns {
-			column.ID = keyIDMap[column.ID]
-		}
-		view.Table.RowIDs = []string{}
 
-		for _, f := range view.Table.Filters {
+		for _, f := range view.Filters {
 			f.Column = keyIDMap[f.Column]
 		}
-		for _, s := range view.Table.Sorts {
+		for _, s := range view.Sorts {
 			s.Column = keyIDMap[s.Column]
 		}
+
+		if nil != view.Group {
+			view.Group.Field = keyIDMap[view.Group.Field]
+		}
+
+		switch view.LayoutType {
+		case LayoutTypeTable:
+			view.Table.ID = ast.NewNodeID()
+			for _, column := range view.Table.Columns {
+				column.ID = keyIDMap[column.ID]
+			}
+		case LayoutTypeGallery:
+			view.Gallery.ID = ast.NewNodeID()
+			for _, cardField := range view.Gallery.CardFields {
+				cardField.ID = keyIDMap[cardField.ID]
+			}
+		}
+		view.ItemIDs = []string{}
 	}
 	ret.ViewID = ret.Views[0].ID
 
@@ -719,18 +645,20 @@ func GetAttributeViewDataPath(avID string) (ret string) {
 	return
 }
 
-func getI18nName(name string) string {
-	return util.AttrViewLangs[util.Lang][name].(string)
+func GetAttributeViewI18n(key string) string {
+	return util.AttrViewLangs[util.Lang][key].(string)
 }
 
 var (
-	ErrViewNotFound = errors.New("view not found")
-	ErrKeyNotFound  = errors.New("key not found")
+	ErrViewNotFound    = errors.New("view not found")
+	ErrKeyNotFound     = errors.New("key not found")
+	ErrWrongLayoutType = errors.New("wrong layout type")
 )
 
 const (
-	NodeAttrNameAvs = "custom-avs"        // 用于标记块所属的属性视图，逗号分隔 av id
-	NodeAttrView    = "custom-sy-av-view" // 用于标记块所属的属性视图视图 view id Database block support specified view https://github.com/siyuan-note/siyuan/issues/10443
+	NodeAttrNameAvs        = "custom-avs"          // 用于标记块所属的属性视图，逗号分隔 av id
+	NodeAttrView           = "custom-sy-av-view"   // 用于标记块所属的属性视图视图 view id Database block support specified view https://github.com/siyuan-note/siyuan/issues/10443
+	NodeAttrViewStaticText = "custom-sy-av-s-text" // 用于标记块所属的属性视图静态文本 Database-bound block primary key supports setting static anchor text https://github.com/siyuan-note/siyuan/issues/10049
 
 	NodeAttrViewNames = "av-names" // 用于临时标记块所属的属性视图名称，空格分隔
 )

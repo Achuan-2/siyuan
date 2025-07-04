@@ -57,6 +57,9 @@ func statAsset(c *gin.Context) {
 		if strings.Contains(p, ":") {
 			p = strings.TrimPrefix(p, "/")
 		}
+		if strings.Contains(p, "?") {
+			p = p[:strings.Index(p, "?")]
+		}
 	} else {
 		ret.Code = 1
 		return
@@ -86,7 +89,7 @@ func statAsset(c *gin.Context) {
 
 	ret.Data = map[string]interface{}{
 		"size":     info.Size(),
-		"hSize":    humanize.BytesCustomCeil(uint64(info.Size()), 2),
+		"hSize":    humanize.IBytesCustomCeil(uint64(info.Size()), 2),
 		"created":  created,
 		"hCreated": hCreated,
 		"updated":  updated,
@@ -199,6 +202,25 @@ func getDocImageAssets(c *gin.Context) {
 	ret.Data = assets
 }
 
+func getDocAssets(c *gin.Context) {
+	ret := gulu.Ret.NewResult()
+	defer c.JSON(http.StatusOK, ret)
+
+	arg, ok := util.JsonArg(c, ret)
+	if !ok {
+		return
+	}
+
+	id := arg["id"].(string)
+	assets, err := model.DocAssets(id)
+	if err != nil {
+		ret.Code = -1
+		ret.Msg = err.Error()
+		return
+	}
+	ret.Data = assets
+}
+
 func setFileAnnotation(c *gin.Context) {
 	ret := gulu.Ret.NewResult()
 	defer c.JSON(http.StatusOK, ret)
@@ -222,6 +244,7 @@ func setFileAnnotation(c *gin.Context) {
 		ret.Msg = err.Error()
 		return
 	}
+
 	model.IncSync()
 }
 

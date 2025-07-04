@@ -24,7 +24,10 @@ export class Menu {
                     if (lastShowElements.length > 0) {
                         lastShowElements[lastShowElements.length - 1].classList.remove("b3-menu__item--show");
                     } else {
-                        this.remove();
+                        this.element.style.transform = "";
+                        setTimeout(() => {
+                            this.remove();
+                        }, Constants.TIMEOUT_DBLCLICK);
                     }
                     return;
                 }
@@ -84,10 +87,6 @@ export class Menu {
         }
     }
 
-    public addSeparator(index?: number) {
-        return this.addItem({type: "separator", index});
-    }
-
     public addItem(option: IMenu) {
         const menuItem = new MenuItem(option);
         this.append(menuItem.element, option.index);
@@ -98,7 +97,17 @@ export class Menu {
         window.removeEventListener(isMobile() ? "touchmove" : this.wheelEvent, this.preventDefault, false);
     }
 
-    public remove() {
+    public remove(isKeyEvent = false) {
+        if (isKeyEvent) {
+            const subElements = window.siyuan.menus.menu.element.querySelectorAll(".b3-menu__item--show");
+            if (subElements.length > 0) {
+                const subElement = subElements[subElements.length - 1];
+                subElement.classList.remove("b3-menu__item--show");
+                subElement.classList.add("b3-menu__item--current");
+                subElement.querySelector(".b3-menu__item--current")?.classList.remove("b3-menu__item--current");
+                return;
+            }
+        }
         if (window.siyuan.menus.menu.removeCB) {
             window.siyuan.menus.menu.removeCB();
             window.siyuan.menus.menu.removeCB = undefined;
@@ -154,7 +163,7 @@ export class Menu {
                 this.element.style.transform = "translateY(-50vh)";
                 this.element.style.height = "50vh";
             } else {
-                this.element.style.transform = "translateY(-100vh)";
+                this.element.style.transform = "translateY(-100%)";
             }
         });
         this.element.lastElementChild.scrollTop = 0;
@@ -311,7 +320,13 @@ export const bindMenuKeydown = (event: KeyboardEvent) => {
             }
         }
         if (actionMenuElement) {
-            actionMenuElement.classList.add("b3-menu__item--current");
+            if (actionMenuElement.classList.contains("b3-menu__item")) {
+                actionMenuElement.classList.add("b3-menu__item--current");
+            }
+            const inputElement = actionMenuElement.querySelector(":scope > .b3-text-field") as HTMLInputElement;
+            if (inputElement) {
+                inputElement.focus();
+            }
             actionMenuElement.classList.remove("b3-menu__item--show");
             const parentRect = actionMenuElement.parentElement.getBoundingClientRect();
             const actionMenuRect = actionMenuElement.getBoundingClientRect();
@@ -355,6 +370,17 @@ export const bindMenuKeydown = (event: KeyboardEvent) => {
         if (!currentElement) {
             return false;
         } else {
+            const subMenuElement = currentElement.querySelector(".b3-menu__submenu") as HTMLElement;
+            if (subMenuElement) {
+                currentElement.classList.remove("b3-menu__item--current");
+                currentElement.classList.add("b3-menu__item--show");
+                const actionMenuElement = getActionMenu(subMenuElement.firstElementChild.firstElementChild, true);
+                if (actionMenuElement) {
+                    actionMenuElement.classList.add("b3-menu__item--current");
+                }
+                window.siyuan.menus.menu.showSubMenu(subMenuElement);
+                return true;
+            }
             const textElement = currentElement.querySelector(".b3-text-field") as HTMLInputElement;
             const checkElement = currentElement.querySelector(".b3-switch") as HTMLInputElement;
             if (textElement) {
@@ -381,11 +407,11 @@ export class subMenu {
         this.menus = [];
     }
 
-    addSeparator(index?: number) {
+    addSeparator(index?: number, id?: string) {
         if (typeof index === "number") {
-            this.menus.splice(index, 0, {type: "separator"});
+            this.menus.splice(index, 0, {type: "separator", id});
         } else {
-            this.menus.push({type: "separator"});
+            this.menus.push({type: "separator", id});
         }
     }
 

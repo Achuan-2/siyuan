@@ -127,10 +127,16 @@ func ListNotebooks() (ret []*Box, err error) {
 		}
 
 		id := dir.Name()
+		icon := boxConf.Icon
+		if strings.Contains(icon, ".") { // 说明是自定义图标
+			// XSS through emoji name https://github.com/siyuan-note/siyuan/issues/15034
+			icon = util.FilterUploadEmojiFileName(icon)
+		}
+
 		box := &Box{
 			ID:       id,
 			Name:     boxConf.Name,
-			Icon:     boxConf.Icon,
+			Icon:     icon,
 			Sort:     boxConf.Sort,
 			SortMode: boxConf.SortMode,
 			Closed:   boxConf.Closed,
@@ -148,14 +154,12 @@ func ListNotebooks() (ret []*Box, err error) {
 	switch Conf.FileTree.Sort {
 	case util.SortModeNameASC:
 		sort.Slice(ret, func(i, j int) bool {
-			return util.PinYinCompare(ret[i].Name, ret[j].Name)
+			return util.PinYinCompare4FileTree(ret[i].Name, ret[j].Name)
 		})
 	case util.SortModeNameDESC:
 		sort.Slice(ret, func(i, j int) bool {
-			return util.PinYinCompare(ret[j].Name, ret[i].Name)
+			return util.PinYinCompare4FileTree(ret[j].Name, ret[i].Name)
 		})
-	case util.SortModeUpdatedASC:
-	case util.SortModeUpdatedDESC:
 	case util.SortModeAlphanumASC:
 		sort.Slice(ret, func(i, j int) bool {
 			return util.NaturalCompare(ret[i].Name, ret[j].Name)
@@ -166,12 +170,10 @@ func ListNotebooks() (ret []*Box, err error) {
 		})
 	case util.SortModeCustom:
 		sort.Slice(ret, func(i, j int) bool { return ret[i].Sort < ret[j].Sort })
-	case util.SortModeRefCountASC:
-	case util.SortModeRefCountDESC:
 	case util.SortModeCreatedASC:
-		sort.Slice(ret, func(i, j int) bool { return util.NaturalCompare(ret[j].ID, ret[i].ID) })
+		sort.Slice(ret, func(i, j int) bool { return ret[i].ID < ret[j].ID })
 	case util.SortModeCreatedDESC:
-		sort.Slice(ret, func(i, j int) bool { return util.NaturalCompare(ret[j].ID, ret[i].ID) })
+		sort.Slice(ret, func(i, j int) bool { return ret[i].ID > ret[j].ID })
 	}
 	return
 }
@@ -193,6 +195,13 @@ func (box *Box) GetConf() (ret *conf.BoxConf) {
 	if err = gulu.JSON.UnmarshalJSON(data, ret); err != nil {
 		logging.LogErrorf("parse box conf [%s] failed: %s", confPath, err)
 		return
+	}
+
+	icon := ret.Icon
+	if strings.Contains(icon, ".") {
+		// XSS through emoji name https://github.com/siyuan-note/siyuan/issues/15034
+		icon = util.FilterUploadEmojiFileName(icon)
+		ret.Icon = icon
 	}
 	return
 }
@@ -398,7 +407,7 @@ type BoxInfo struct {
 func (box *Box) GetInfo() (ret *BoxInfo) {
 	ret = &BoxInfo{
 		ID:   box.ID,
-		Name: box.Name,
+		Name: util.EscapeHTML(box.Name),
 	}
 
 	fileInfos := box.ListFiles("/")
@@ -496,7 +505,9 @@ func parseKTree(kramdown []byte) (ret *parse.Tree) {
 
 func normalizeTree(tree *parse.Tree) (yfmRootID, yfmTitle, yfmUpdated string) {
 	if nil == tree.Root.FirstChild {
-		tree.Root.AppendChild(treenode.NewParagraph())
+		tree.Root.AppendChild(treenode.NewParagraph(""))
+	} else if !tree.Root.FirstChild.IsBlock() || ast.NodeKramdownBlockIAL == tree.Root.FirstChild.Type {
+		tree.Root.PrependChild(treenode.NewParagraph(""))
 	}
 
 	var unlinks []*ast.Node
@@ -515,7 +526,7 @@ func normalizeTree(tree *parse.Tree) (yfmRootID, yfmTitle, yfmUpdated string) {
 		}
 
 		id := n.IALAttr("id")
-		if "" == id {
+		if "" == id && n.IsBlock() {
 			n.SetIALAttr("id", n.ID)
 		}
 
@@ -594,21 +605,28 @@ func normalizeTree(tree *parse.Tree) (yfmRootID, yfmTitle, yfmUpdated string) {
 					}
 					continue
 				}
-				if "tags" == attrK {
+				if "tags" == attrK && nil != attrV {
 					var tags string
-					for i, tag := range attrV.([]any) {
-						tagStr := strings.TrimSpace(tag.(string))
+					if str, ok := attrV.(string); ok {
+						tags = strings.TrimSpace(str)
+						tree.Root.SetIALAttr("tags", tags)
+						continue
+					}
+
+					for _, tag := range attrV.([]any) {
+						tagStr := fmt.Sprintf("%v", tag)
 						if "" == tag {
 							continue
 						}
 						tagStr = strings.TrimLeft(tagStr, "#,'\"")
 						tagStr = strings.TrimRight(tagStr, "#,'\"")
-						tags += tagStr
-						if i < len(attrV.([]any))-1 {
-							tags += ","
-						}
+						tags += tagStr + ","
 					}
-					tree.Root.SetIALAttr("tags", tags)
+					tags = strings.TrimRight(tags, ",")
+					tags = strings.TrimSpace(tags)
+					if "" != tags {
+						tree.Root.SetIALAttr("tags", tags)
+					}
 					continue
 				}
 
@@ -688,6 +706,11 @@ func ChangeBoxSort(boxIDs []string) {
 }
 
 func SetBoxIcon(boxID, icon string) {
+	if strings.Contains(icon, ".") {
+		// XSS through emoji name https://github.com/siyuan-note/siyuan/issues/15034
+		icon = util.FilterUploadEmojiFileName(icon)
+	}
+
 	box := &Box{ID: boxID}
 	boxConf := box.GetConf()
 	boxConf.Icon = icon
@@ -702,7 +725,7 @@ func getBoxesByPaths(paths []string) (ret map[string]*Box) {
 	ret = map[string]*Box{}
 	var ids []string
 	for _, p := range paths {
-		ids = append(ids, strings.TrimSuffix(path.Base(p), ".sy"))
+		ids = append(ids, util.GetTreeID(p))
 	}
 
 	bts := treenode.GetBlockTrees(ids)

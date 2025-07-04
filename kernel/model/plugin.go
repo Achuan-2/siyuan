@@ -134,7 +134,7 @@ func loadCode(petal *Petal) {
 		langJSONs, readErr := os.ReadDir(i18nDir)
 		if nil != readErr {
 			logging.LogErrorf("read plugin [%s] i18n failed: %s", petal.Name, readErr)
-		} else {
+		} else if 0 < len(langJSONs) {
 			preferredLang := Conf.Lang + ".json"
 			foundPreferredLang := false
 			foundEnUS := false
@@ -166,13 +166,15 @@ func loadCode(petal *Petal) {
 				}
 			}
 
-			data, err = filelock.ReadFile(filepath.Join(i18nDir, preferredLang))
-			if err != nil {
-				logging.LogErrorf("read plugin [%s] i18n failed: %s", petal.Name, err)
-			} else {
-				petal.I18n = map[string]interface{}{}
-				if err = gulu.JSON.UnmarshalJSON(data, &petal.I18n); err != nil {
-					logging.LogErrorf("unmarshal plugin [%s] i18n failed: %s", petal.Name, err)
+			if langFilePath := filepath.Join(i18nDir, preferredLang); gulu.File.IsExist(langFilePath) {
+				data, err = filelock.ReadFile(langFilePath)
+				if err != nil {
+					logging.LogErrorf("read plugin [%s] i18n failed: %s", petal.Name, err)
+				} else {
+					petal.I18n = map[string]interface{}{}
+					if err = gulu.JSON.UnmarshalJSON(data, &petal.I18n); err != nil {
+						logging.LogErrorf("unmarshal plugin [%s] i18n failed: %s", petal.Name, err)
+					}
 				}
 			}
 		}
@@ -184,6 +186,13 @@ var petalsStoreLock = sync.Mutex{}
 func savePetals(petals []*Petal) {
 	petalsStoreLock.Lock()
 	defer petalsStoreLock.Unlock()
+	savePetals0(petals)
+}
+
+func savePetals0(petals []*Petal) {
+	if 1 > len(petals) {
+		petals = []*Petal{}
+	}
 
 	petalDir := filepath.Join(util.DataDir, "storage", "petal")
 	confPath := filepath.Join(petalDir, "petals.json")
@@ -232,6 +241,21 @@ func getPetals() (ret []*Petal) {
 	if err = gulu.JSON.UnmarshalJSON(data, &ret); err != nil {
 		logging.LogErrorf("unmarshal petals failed: %s", err)
 		return
+	}
+
+	var tmp []*Petal
+	pluginsDir := filepath.Join(util.DataDir, "plugins")
+	for _, petal := range ret {
+		if petal.Enabled && filelock.IsExist(filepath.Join(pluginsDir, petal.Name)) {
+			tmp = append(tmp, petal)
+		}
+	}
+	if len(tmp) != len(ret) {
+		savePetals0(tmp)
+		ret = tmp
+	}
+	if 1 > len(ret) {
+		ret = []*Petal{}
 	}
 	return
 }

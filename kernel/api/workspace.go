@@ -94,7 +94,7 @@ func createWorkspaceDir(c *gin.Context) {
 	}
 
 	absPath := arg["path"].(string)
-	absPath = gulu.Str.RemoveInvisible(absPath)
+	absPath = util.RemoveInvalid(absPath)
 	absPath = strings.TrimSpace(absPath)
 	if isInvalidWorkspacePath(absPath) {
 		ret.Code = -1
@@ -195,7 +195,7 @@ func getMobileWorkspaces(c *gin.Context) {
 	ret := gulu.Ret.NewResult()
 	defer c.JSON(http.StatusOK, ret)
 
-	if util.ContainerIOS != util.Container && util.ContainerAndroid != util.Container {
+	if util.ContainerIOS != util.Container && util.ContainerAndroid != util.Container && util.ContainerHarmony != util.Container {
 		return
 	}
 
@@ -289,11 +289,24 @@ func setWorkspaceDir(c *gin.Context) {
 		// 改进判断工作空间路径实现 https://github.com/siyuan-note/siyuan/issues/7569
 		installDirLower := strings.ToLower(filepath.Dir(util.WorkingDir))
 		pathLower := strings.ToLower(path)
-		if strings.HasPrefix(pathLower, installDirLower) && util.IsSubPath(installDirLower, pathLower) {
+		if strings.HasPrefix(pathLower, installDirLower) && (util.IsSubPath(installDirLower, pathLower) || filepath.Clean(installDirLower) == filepath.Clean(pathLower)) {
 			ret.Code = -1
 			ret.Msg = model.Conf.Language(98)
 			ret.Data = map[string]interface{}{"closeTimeout": 5000}
 			return
+		}
+	}
+
+	// 检查路径是否在已有的工作空间路径中
+	pathIsWorkspace := util.IsWorkspaceDir(path)
+	if !pathIsWorkspace {
+		for p := filepath.Dir(path); !util.IsRootPath(p); p = filepath.Dir(p) {
+			if util.IsWorkspaceDir(p) {
+				ret.Code = -1
+				ret.Msg = fmt.Sprintf(model.Conf.Language(256), path, p)
+				ret.Data = map[string]interface{}{"closeTimeout": 7000}
+				return
+			}
 		}
 	}
 
@@ -315,7 +328,7 @@ func setWorkspaceDir(c *gin.Context) {
 		return
 	}
 
-	if util.ContainerAndroid == util.Container || util.ContainerIOS == util.Container {
+	if util.ContainerAndroid == util.Container || util.ContainerIOS == util.Container || util.ContainerHarmony == util.Container {
 		util.PushMsg(model.Conf.Language(42), 1000*15)
 		time.Sleep(time.Second * 1)
 		model.Close(false, false, 1)

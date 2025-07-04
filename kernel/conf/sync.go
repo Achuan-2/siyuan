@@ -21,12 +21,14 @@ type Sync struct {
 	Enabled             bool    `json:"enabled"`             // 是否开启同步
 	Perception          bool    `json:"perception"`          // 是否开启感知
 	Mode                int     `json:"mode"`                // 同步模式，0：未设置（为兼容已有配置，initConf 函数中会转换为 1），1：自动，2：手动 https://github.com/siyuan-note/siyuan/issues/5089，3：完全手动 https://github.com/siyuan-note/siyuan/issues/7295
+	Interval            int     `json:"interval"`            // 自动同步间隔，单位：秒
 	Synced              int64   `json:"synced"`              // 最近同步时间
 	Stat                string  `json:"stat"`                // 最近同步统计信息
 	GenerateConflictDoc bool    `json:"generateConflictDoc"` // 云端同步冲突时是否生成冲突文档
 	Provider            int     `json:"provider"`            // 云端存储服务提供者
 	S3                  *S3     `json:"s3"`                  // S3 对象存储服务配置
 	WebDAV              *WebDAV `json:"webdav"`              // WebDAV 服务配置
+	Local               *Local  `json:"local"`               // 本地文件系统 服务配置
 }
 
 func NewSync() *Sync {
@@ -37,6 +39,7 @@ func NewSync() *Sync {
 		Mode:                1,
 		GenerateConflictDoc: false,
 		Provider:            ProviderSiYuan,
+		Interval:            30,
 	}
 }
 
@@ -61,10 +64,17 @@ type WebDAV struct {
 	ConcurrentReqs int    `json:"concurrentReqs"` // 并发请求数
 }
 
+type Local struct {
+	Endpoint       string `json:"endpoint"`       // 服务端点 (本地文件系统目录)
+	Timeout        int    `json:"timeout"`        // 超时时间，单位：秒
+	ConcurrentReqs int    `json:"concurrentReqs"` // 并发请求数
+}
+
 const (
 	ProviderSiYuan = 0 // ProviderSiYuan 为思源官方提供的云端存储服务
 	ProviderS3     = 2 // ProviderS3 为 S3 协议对象存储提供的云端存储服务
 	ProviderWebDAV = 3 // ProviderWebDAV 为 WebDAV 协议提供的云端存储服务
+	ProviderLocal  = 4 // ProviderLocal 为本地文件系统提供的存储服务
 )
 
 func ProviderToStr(provider int) string {
@@ -75,6 +85,8 @@ func ProviderToStr(provider int) string {
 		return "S3"
 	case ProviderWebDAV:
 		return "WebDAV"
+	case ProviderLocal:
+		return "Local File System"
 	}
 	return "Unknown"
 }

@@ -21,7 +21,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
-	"strconv"
 
 	"github.com/siyuan-note/logging"
 	"github.com/siyuan-note/siyuan/kernel/model"
@@ -143,8 +142,9 @@ func (PublishServiceTransport) RoundTrip(request *http.Request) (response *http.
 				ProtoMinor: request.ProtoMinor,
 				Request:    request,
 				Header: http.Header{
-					"WWW-Authenticate": {"Basic realm=" + strconv.Quote("Authorization Required")},
+					model.BasicAuthHeaderKey: {model.BasicAuthHeaderValue},
 				},
+				Body:          http.NoBody,
 				Close:         false,
 				ContentLength: -1,
 			}, nil

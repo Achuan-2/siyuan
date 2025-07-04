@@ -26,7 +26,8 @@ type TProtyleAction = "cb-get-append" | // 向下滚动加载
     "cb-get-hl" | // 高亮
     "cb-get-focus" | // 光标定位
     "cb-get-focusfirst" | // 动态定位到第一个块
-    "cb-get-setid" | // 重置 blockid
+    "cb-get-setid" | // 无折叠大纲点击 重置 blockid
+    "cb-get-outline" | // 大纲点击
     "cb-get-all" | // 获取所有块
     "cb-get-backlink" | // 悬浮窗为传递型需展示上下文
     "cb-get-unundo" | // 不需要记录历史
@@ -125,9 +126,9 @@ interface ILuteOptions extends IMarkdownConfig {
 }
 
 declare class Viz {
-    constructor(worker: { worker: Worker });
+    public static instance(): Promise<Viz>;
 
-    renderSVGElement: (code: string) => Promise<any>;
+    renderSVGElement: (code: string) => SVGElement;
 }
 
 declare class Viewer {
@@ -280,6 +281,8 @@ declare class Lute {
     public HTML2Md(html: string): string;
 
     public HTML2BlockDOM(html: string): string;
+
+    public SetUnorderedListMarker(marker: string): void;
 }
 
 declare const webkitAudioContext: {
@@ -446,8 +449,9 @@ interface IProtyleOptions {
     mode?: TEditorMode,
     blockId?: string
     rootId?: string
+    originalRefBlockIDs?: IObject
     key?: string
-    defId?: string
+    defIds?: string[]
     render?: {
         background?: boolean
         title?: boolean
@@ -458,8 +462,6 @@ interface IProtyleOptions {
     }
     /** 内部调试时使用 */
     _lutePath?: string;
-    /** 是否显示日志。默认值: false */
-    debugger?: boolean;
     /** 是否启用打字机模式。默认值: false */
     typewriterMode?: boolean;
     /** 多语言。默认值: 'zh_CN' */
@@ -482,6 +484,13 @@ interface IProtyleOptions {
 }
 
 interface IProtyle {
+    highlight: {
+        mark: Highlight
+        markHL: Highlight
+        ranges: Range[]
+        rangeIndex: number
+        styleElement: HTMLStyleElement
+    }
     getInstance: () => import("../protyle").Protyle,
     observerLoad?: ResizeObserver,
     observer?: ResizeObserver,

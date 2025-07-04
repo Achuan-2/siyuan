@@ -36,6 +36,7 @@ import (
 
 	"github.com/88250/gulu"
 	"github.com/88250/lute/ast"
+	"github.com/88250/lute/editor"
 	"github.com/88250/lute/html"
 	"github.com/88250/lute/parse"
 	"github.com/mattn/go-sqlite3"
@@ -197,6 +198,10 @@ func initDBTables() {
 	if err != nil {
 		logging.LogFatalf(logging.ExitCodeReadOnlyDatabase, "create table [attributes] failed: %s", err)
 	}
+	_, err = db.Exec("CREATE INDEX idx_attributes_block_id ON attributes(block_id)")
+	if err != nil {
+		logging.LogFatalf(logging.ExitCodeReadOnlyDatabase, "create index [idx_attributes_block_id] failed: %s", err)
+	}
 	_, err = db.Exec("CREATE INDEX idx_attributes_root_id ON attributes(root_id)")
 	if err != nil {
 		logging.LogFatalf(logging.ExitCodeReadOnlyDatabase, "create index [idx_attributes_root_id] failed: %s", err)
@@ -225,6 +230,8 @@ func initDBConnection() {
 	if nil != db {
 		closeDatabase()
 	}
+
+	util.LogDatabaseSize(util.DBPath)
 	dsn := util.DBPath + "?_journal_mode=WAL" +
 		"&_synchronous=OFF" +
 		"&_mmap_size=2684354560" +
@@ -272,6 +279,7 @@ func initHistoryDBConnection() {
 		historyDB.Close()
 	}
 
+	util.LogDatabaseSize(util.HistoryDBPath)
 	dsn := util.HistoryDBPath + "?_journal_mode=WAL" +
 		"&_synchronous=OFF" +
 		"&_mmap_size=2684354560" +
@@ -327,6 +335,7 @@ func initAssetContentDBConnection() {
 		assetContentDB.Close()
 	}
 
+	util.LogDatabaseSize(util.AssetContentDBPath)
 	dsn := util.AssetContentDBPath + "?_journal_mode=WAL" +
 		"&_synchronous=OFF" +
 		"&_mmap_size=2684354560" +
@@ -737,11 +746,15 @@ func buildSpanFromNode(n *ast.Node, tree *parse.Tree, rootID, boxID, p string) (
 
 		if ast.NodeInlineHTML == n.Type {
 			// 没有行级 HTML，只有块级 HTML，这里转换为块
+			n.ID = ast.NewNodeID()
+			n.SetIALAttr("id", n.ID)
+			n.SetIALAttr("updated", n.ID[:14])
 			b, attrs := buildBlockFromNode(n, tree)
 			b.Type = ast.NodeHTMLBlock.String()
 			blocks = append(blocks, b)
 			attributes = append(attributes, attrs...)
 			walkStatus = ast.WalkContinue
+			logging.LogWarnf("inline HTML [%s] is converted to HTML block ", n.Tokens)
 			return
 		}
 
@@ -837,7 +850,7 @@ func buildBlockFromNode(n *ast.Node, tree *parse.Tree) (block *Block, attributes
 		fcontent = NodeStaticContent(fc, nil, true, false, true)
 
 		parentID = n.Parent.ID
-		if h := heading(n); nil != h { // 如果在标题块下方，则将标题块作为父节点
+		if h := treenode.HeadingParent(n); nil != h { // 如果在标题块下方，则将标题块作为父节点
 			parentID = h.ID
 		}
 		length = utf8.RuneCountInString(fcontent)
@@ -849,11 +862,16 @@ func buildBlockFromNode(n *ast.Node, tree *parse.Tree) (block *Block, attributes
 		content = NodeStaticContent(n, nil, true, indexAssetPath, true)
 
 		parentID = n.Parent.ID
-		if h := heading(n); nil != h {
+		if h := treenode.HeadingParent(n); nil != h {
 			parentID = h.ID
 		}
 		length = utf8.RuneCountInString(content)
 	}
+
+	// 剔除零宽空格 Database index content/markdown values no longer contain zero-width spaces https://github.com/siyuan-note/siyuan/issues/15204
+	fcontent = strings.ReplaceAll(fcontent, editor.Zwsp, "")
+	content = strings.ReplaceAll(content, editor.Zwsp, "")
+	markdown = strings.ReplaceAll(markdown, editor.Zwsp, "")
 
 	block = &Block{
 		ID:       n.ID,
@@ -925,32 +943,12 @@ func tagFromNode(node *ast.Node) (ret string) {
 
 		if n.IsTextMarkType("tag") {
 			tagBuilder.WriteString("#")
-			tagBuilder.WriteString(n.Text())
+			tagBuilder.WriteString(n.Content())
 			tagBuilder.WriteString("# ")
 		}
 		return ast.WalkContinue
 	})
 	return strings.TrimSpace(tagBuilder.String())
-}
-
-func heading(node *ast.Node) *ast.Node {
-	if nil == node {
-		return nil
-	}
-
-	currentLevel := 16
-	if ast.NodeHeading == node.Type {
-		currentLevel = node.HeadingLevel
-	}
-
-	for prev := node.Previous; nil != prev; prev = prev.Previous {
-		if ast.NodeHeading == prev.Type {
-			if prev.HeadingLevel < currentLevel {
-				return prev
-			}
-		}
-	}
-	return nil
 }
 
 func deleteByBoxTx(tx *sql.Tx, box string) (err error) {
@@ -1316,6 +1314,9 @@ func queryRow(query string, args ...interface{}) *sql.Row {
 		logging.LogErrorf("statement is empty")
 		return nil
 	}
+	if nil == db {
+		return nil
+	}
 	return db.QueryRow(query, args...)
 }
 
@@ -1323,6 +1324,9 @@ func query(query string, args ...interface{}) (*sql.Rows, error) {
 	query = strings.TrimSpace(query)
 	if "" == query {
 		return nil, errors.New("statement is empty")
+	}
+	if nil == db {
+		return nil, errors.New("database is nil")
 	}
 	return db.Query(query, args...)
 }
@@ -1500,11 +1504,26 @@ func SQLTemplateFuncs(templateFuncMap *template.FuncMap) {
 		retBlocks = SelectBlocksRawStmt(stmt, 1, 512)
 		return
 	}
+	(*templateFuncMap)["getBlock"] = func(arg any) (retBlock *Block) {
+		switch v := arg.(type) {
+		case string:
+			retBlock = GetBlock(v)
+		case map[string]interface{}:
+			if id, ok := v["id"]; ok {
+				retBlock = GetBlock(id.(string))
+			}
+		}
+		return
+	}
 	(*templateFuncMap)["querySpans"] = func(stmt string, args ...string) (retSpans []*Span) {
 		for _, arg := range args {
 			stmt = strings.Replace(stmt, "?", arg, 1)
 		}
 		retSpans = SelectSpansRawStmt(stmt, 512)
+		return
+	}
+	(*templateFuncMap)["querySQL"] = func(stmt string) (ret []map[string]interface{}) {
+		ret, _ = Query(stmt, 1024)
 		return
 	}
 }
