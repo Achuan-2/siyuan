@@ -119,7 +119,7 @@ ${cell.color ? `color:${cell.color};` : ""}">${renderCell(cell.value, rowIndex, 
         let tabHTML = "";
         let viewData: IAVView;
         response.data.views.forEach((item: IAVView) => {
-            tabHTML += `<div data-position="north" data-av-type="${item.type}" data-id="${item.id}" data-page="${item.pageSize}" data-desc="${escapeAriaLabel(item.desc || "")}" class="ariaLabel item${item.id === response.data.viewID ? " item--focus" : ""}">
+            tabHTML += `<div draggable="true" data-position="north" data-av-type="${item.type}" data-id="${item.id}" data-page="${item.pageSize}" data-desc="${escapeAriaLabel(item.desc || "")}" class="ariaLabel item${item.id === response.data.viewID ? " item--focus" : ""}">
     ${item.icon ? unicode2Emoji(item.icon, "item__graphic", true) : `<svg class="item__graphic"><use xlink:href="#${getViewIcon(item.type)}"></use></svg>`}
     <span class="item__text">${escapeHtml(item.name)}</span>
 </div>`;
@@ -217,7 +217,7 @@ ${view.hideAttrViewName ? " av__gallery--top" : ""}">
                 }
             }
         }
-        options.blockElement.querySelector(".layout-tab-bar").scrollLeft = (options.blockElement.querySelector(".layout-tab-bar .item--focus") as HTMLElement).offsetLeft;
+        options.blockElement.querySelector(".layout-tab-bar").scrollLeft = (options.blockElement.querySelector(".layout-tab-bar .item--focus") as HTMLElement).offsetLeft - 30;
         if (options.cb) {
             options.cb(response.data);
         }

@@ -213,7 +213,7 @@ ${cell.color ? `color:${cell.color};` : ""}">${renderCell(cell.value, rowIndex, 
                 let tabHTML = "";
                 let viewData: IAVView;
                 response.data.views.forEach((item: IAVView) => {
-                    tabHTML += `<div data-position="north" data-av-type="${item.type}" data-id="${item.id}" data-page="${item.pageSize}" data-desc="${escapeAriaLabel(item.desc || "")}" class="ariaLabel item${item.id === response.data.viewID ? " item--focus" : ""}">
+                    tabHTML += `<div draggable="true" data-position="north" data-av-type="${item.type}" data-id="${item.id}" data-page="${item.pageSize}" data-desc="${escapeAriaLabel(item.desc || "")}" class="ariaLabel item${item.id === response.data.viewID ? " item--focus" : ""}">
     ${item.icon ? unicode2Emoji(item.icon, "item__graphic", true) : `<svg class="item__graphic"><use xlink:href="#${getViewIcon(item.type)}"></use></svg>`}
     <span class="item__text">${escapeHtml(item.name)}</span>
 </div>`;
@@ -369,7 +369,7 @@ ${cell.color ? `color:${cell.color};` : ""}">${renderCell(cell.value, rowIndex, 
                         }
                     }
                 }
-                e.querySelector(".layout-tab-bar").scrollLeft = (e.querySelector(".layout-tab-bar .item--focus") as HTMLElement).offsetLeft;
+                e.querySelector(".layout-tab-bar").scrollLeft = (e.querySelector(".layout-tab-bar .item--focus") as HTMLElement).offsetLeft - 30;
                 if (cb) {
                     cb(response.data);
                 }
@@ -556,6 +556,9 @@ export const refreshAV = (protyle: IProtyle, operation: IOperation) => {
                 if (operation.action === "addAttrViewView") {
                     item.dataset.pageSize = "50";
                 }
+                if (operation.action === "removeAttrViewView") {
+                    item.dataset.pageSize = item.querySelector(`.av__views > .layout-tab-bar .item[data-id="${item.getAttribute(Constants.CUSTOM_SY_AV_VIEW)}"]`)?.getAttribute("data-page");
+                }
                 avRender(item, protyle, () => {
                     const attrElement = document.querySelector(`.b3-dialog--open[data-key="${Constants.DIALOG_ATTR}"] div[data-av-id="${avID}"]`) as HTMLElement;
                     if (attrElement) {
@@ -568,10 +571,12 @@ export const refreshAV = (protyle: IProtyle, operation: IOperation) => {
                                 document.querySelector(".av__mask")?.remove();
                             }
                             if (item.getAttribute("data-av-type") === "gallery") {
-                                const filesElement = item.querySelector(`.av__gallery-item[data-id="${operation.srcs[0].id}"]`)?.querySelector(".av__gallery-fields");
-                                if (filesElement && filesElement.querySelector('[data-dtype="block"]')?.getAttribute("data-empty") === "true") {
-                                    filesElement.classList.add("av__gallery-fields--edit");
-                                }
+                                operation.srcs.forEach(srcItem => {
+                                    const filesElement = item.querySelector(`.av__gallery-item[data-id="${srcItem.id}"]`)?.querySelector(".av__gallery-fields");
+                                    if (filesElement && filesElement.querySelector('[data-dtype="block"]')?.getAttribute("data-empty") === "true") {
+                                        filesElement.classList.add("av__gallery-fields--edit");
+                                    }
+                                });
                             }
                         }
                     }
