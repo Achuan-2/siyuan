@@ -16,6 +16,7 @@ import {isInAndroid, isInHarmony, isInIOS} from "../../util/compatibility";
 import {isMobile} from "../../../util/functions";
 import {renderGallery} from "./gallery/render";
 import {getViewIcon} from "./view";
+import {openMenuPanel} from "./openMenuPanel";
 
 export const avRender = (element: Element, protyle: IProtyle, cb?: (data: IAV) => void, renderAll = true) => {
     let avElements: Element[] = [];
@@ -546,18 +547,22 @@ export const refreshAV = (protyle: IProtyle, operation: IOperation) => {
                         item.querySelector(".av__drag-fill")?.remove();
                     });
                     addDragFill(item.querySelector(".av__cell--select"));
-                }
-                if (operation.action === "setAttrViewBlockView") {
+                } else if (operation.action === "setAttrViewBlockView") {
                     const viewTabElement = item.querySelector(`.av__views > .layout-tab-bar > .item[data-id="${operation.id}"]`) as HTMLElement;
                     if (viewTabElement) {
                         item.dataset.pageSize = viewTabElement.dataset.page;
                     }
-                }
-                if (operation.action === "addAttrViewView") {
+                } else if (operation.action === "addAttrViewView") {
                     item.dataset.pageSize = "50";
-                }
-                if (operation.action === "removeAttrViewView") {
+                } else if (operation.action === "removeAttrViewView") {
                     item.dataset.pageSize = item.querySelector(`.av__views > .layout-tab-bar .item[data-id="${item.getAttribute(Constants.CUSTOM_SY_AV_VIEW)}"]`)?.getAttribute("data-page");
+                } else if (operation.action === "sortAttrViewView" && operation.data === "unRefresh") {
+                    const viewTabElement = item.querySelector(`.av__views > .layout-tab-bar > .item[data-id="${operation.id}"]`) as HTMLElement;
+                    if (viewTabElement && !operation.previousID && !viewTabElement.previousElementSibling) {
+                        return;
+                    } else if (viewTabElement && operation.previousID && viewTabElement.previousElementSibling?.getAttribute("data-id") === operation.previousID) {
+                        return;
+                    }
                 }
                 avRender(item, protyle, () => {
                     const attrElement = document.querySelector(`.b3-dialog--open[data-key="${Constants.DIALOG_ATTR}"] div[data-av-id="${avID}"]`) as HTMLElement;
@@ -578,6 +583,8 @@ export const refreshAV = (protyle: IProtyle, operation: IOperation) => {
                                     }
                                 });
                             }
+                        } else if (operation.action === "addAttrViewView") {
+                            openMenuPanel({protyle, blockElement: item, type: "config"});
                         }
                     }
                     item.removeAttribute("data-loading");

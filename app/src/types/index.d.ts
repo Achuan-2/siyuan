@@ -64,6 +64,7 @@ type TOperation =
     | "setAttrViewColDesc"
     | "setAttrViewBlockView"
     | "setAttrViewGroup"
+    | "syncAttrViewTableColWidth"
 type TBazaarType = "templates" | "icons" | "widgets" | "themes" | "plugins"
 type TCardType = "doc" | "notebook" | "all"
 type TEventBus = "ws-main" | "sync-start" | "sync-end" | "sync-fail" |
@@ -140,7 +141,7 @@ interface CSSStyleDeclarationElectron extends CSSStyleDeclaration {
 
 interface Window {
     echarts: {
-        init(element: HTMLElement, theme?: string, options?: {
+        init(element: Element, theme?: string, options?: {
             width: number
         }): {
             setOption(option: any): void;

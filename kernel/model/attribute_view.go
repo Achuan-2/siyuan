@@ -44,6 +44,59 @@ import (
 	"github.com/xrash/smetrics"
 )
 
+func (tx *Transaction) doSyncAttrViewTableColWidth(operation *Operation) (ret *TxErr) {
+	err := syncAttrViewTableColWidth(operation)
+	if err != nil {
+		return &TxErr{code: TxErrHandleAttributeView, id: operation.AvID, msg: err.Error()}
+	}
+	return
+}
+
+func syncAttrViewTableColWidth(operation *Operation) (err error) {
+	attrView, err := av.ParseAttributeView(operation.AvID)
+	if err != nil {
+		return
+	}
+
+	view := attrView.GetView(operation.ID)
+	if nil == view {
+		err = av.ErrViewNotFound
+		logging.LogErrorf("view [%s] not found in attribute view [%s]", operation.ID, operation.AvID)
+		return
+	}
+
+	var width string
+	switch view.LayoutType {
+	case av.LayoutTypeTable:
+		for _, column := range view.Table.Columns {
+			if column.ID == operation.KeyID {
+				width = column.Width
+				break
+			}
+		}
+	case av.LayoutTypeGallery:
+		return
+	}
+
+	if "" == width {
+		return
+	}
+
+	for _, v := range attrView.Views {
+		if av.LayoutTypeTable == v.LayoutType {
+			for _, column := range v.Table.Columns {
+				if column.ID == operation.KeyID {
+					column.Width = width
+					break
+				}
+			}
+		}
+	}
+
+	err = av.SaveAttributeView(attrView)
+	return
+}
+
 func (tx *Transaction) doSetGroupHideEmpty(operation *Operation) (ret *TxErr) {
 	if err := SetGroupHideEmpty(operation.AvID, operation.BlockID, operation.Data.(bool)); nil != err {
 		return &TxErr{code: TxErrHandleAttributeView, id: operation.AvID, msg: err.Error()}
@@ -259,6 +312,7 @@ func ChangeAttrViewLayout(blockID, avID string, layout av.LayoutType) (err error
 		if blockID == bID { // 当前操作的镜像库
 			attrs[av.NodeAttrView] = view.ID
 			node.AttributeViewType = string(view.LayoutType)
+			attrView.ViewID = view.ID
 			changed = true
 		} else {
 			if view.ID == attrs[av.NodeAttrView] {
@@ -2748,7 +2802,6 @@ func addAttributeViewBlock(now int64, avID, blockID, previousBlockID, addingBloc
 
 	// 如果存在过滤条件，则将过滤条件应用到新添加的块上
 	view, _ := getAttrViewViewByBlockID(attrView, blockID)
-
 	if nil != view && 0 < len(view.Filters) && !ignoreFillFilter {
 		viewable := sql.RenderView(attrView, view, "")
 		av.Filter(viewable, attrView)
