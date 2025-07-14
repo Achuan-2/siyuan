@@ -1315,4 +1315,3 @@ aria-label="${ariaLabel}">${getDisplayName(item.name, true, true)}</span>
         return window.siyuan.menus.menu;
     }
 }
-
