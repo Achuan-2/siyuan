@@ -93,7 +93,8 @@ export const avRender = (element: Element, protyle: IProtyle, cb?: (data: IAV) =
                 snapshot,
                 pageSize: parseInt(e.dataset.pageSize) || undefined,
                 viewID: e.getAttribute(Constants.CUSTOM_SY_AV_VIEW) || "",
-                query: query.trim()
+                query: query.trim(),
+                blockID: e.getAttribute("data-node-id"),
             }, (response) => {
                 const data = response.data.view as IAVTable;
                 if (response.data.viewType === "gallery") {
@@ -584,7 +585,9 @@ export const refreshAV = (protyle: IProtyle, operation: IOperation) => {
                                 });
                             }
                         } else if (operation.action === "addAttrViewView") {
-                            openMenuPanel({protyle, blockElement: item, type: "config"});
+                            if (item.getAttribute("data-node-id") === operation.blockID) {
+                                openMenuPanel({protyle, blockElement: item, type: "config"});
+                            }
                         }
                     }
                     item.removeAttribute("data-loading");
