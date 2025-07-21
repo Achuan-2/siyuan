@@ -183,18 +183,28 @@ func DocSaveAsTemplate(id, name string, overwrite bool) (code int, err error) {
 	tree := prepareExportTree(bt)
 	addBlockIALNodes(tree, true)
 
-	var templateCodeBlocks []*ast.Node
+	var nodesToUnlink []*ast.Node
 	ast.Walk(tree.Root, func(n *ast.Node, entering bool) ast.WalkStatus {
 		if !entering {
 			return ast.WalkContinue
 		}
 
-		// Identify template code blocks to be replaced later.
-		if ast.NodeCodeBlock == n.Type {
-			if info := n.ChildByType(ast.NodeCodeBlockInfo); nil != info {
-				if "template" == string(info.Tokens) {
-					templateCodeBlocks = append(templateCodeBlocks, n)
+		// If a code block has the language "template", convert its content to plain text.
+		// This is done by replacing the NodeCodeBlock with a NodeHTMLBlock,
+		// which causes the renderer to output the raw content without Markdown formatting.
+		if n.Type == ast.NodeCodeBlock {
+			if info := n.CodeBlockInfo; bytes.Equal(info, []byte("template")) {
+				if codeNode := n.ChildByType(ast.NodeCodeBlockCode); codeNode != nil && len(codeNode.Tokens) > 0 {
+					// Create a raw HTML block node with the content of the template code.
+					htmlBlock := &ast.Node{Type: ast.NodeHTMLBlock, Tokens: codeNode.Tokens}
+					// Insert the new HTML block before the original code block.
+					n.InsertBefore(htmlBlock)
+
+					// Mark the original code block for removal. This also removes its ID.
+					nodesToUnlink = append(nodesToUnlink, n)
 				}
+				// Skip processing children of the original code block as it's being replaced.
+				return ast.WalkSkipChildren
 			}
 		}
 
@@ -216,15 +226,8 @@ func DocSaveAsTemplate(id, name string, overwrite bool) (code int, err error) {
 		return ast.WalkContinue
 	})
 
-	// Replace the identified template code blocks with plain text paragraphs.
-	// This process effectively removes the code block structure and its ID.
-	for _, n := range templateCodeBlocks {
-		if code := n.ChildByType(ast.NodeCodeBlockCode); nil != code {
-			p := &ast.Node{Type: ast.NodeParagraph}
-			p.AppendChild(&ast.Node{Type: ast.NodeText, Tokens: code.Tokens})
-			n.Parent.InsertBefore(p, n)
-			n.Unlink()
-		}
+	for _, n := range nodesToUnlink {
+		n.Unlink()
 	}
 
 	luteEngine := NewLute()
