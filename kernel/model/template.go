@@ -23,6 +23,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"text/template"
@@ -183,29 +184,9 @@ func DocSaveAsTemplate(id, name string, overwrite bool) (code int, err error) {
 	tree := prepareExportTree(bt)
 	addBlockIALNodes(tree, true)
 
-	var nodesToUnlink []*ast.Node
 	ast.Walk(tree.Root, func(n *ast.Node, entering bool) ast.WalkStatus {
 		if !entering {
 			return ast.WalkContinue
-		}
-
-		// If a code block has the language "template", convert its content to plain text.
-		// This is done by replacing the NodeCodeBlock with a NodeHTMLBlock,
-		// which causes the renderer to output the raw content without Markdown formatting.
-		if n.Type == ast.NodeCodeBlock {
-			if info := n.CodeBlockInfo; bytes.Equal(info, []byte("template")) {
-				if codeNode := n.ChildByType(ast.NodeCodeBlockCode); codeNode != nil && len(codeNode.Tokens) > 0 {
-					// Create a raw HTML block node with the content of the template code.
-					htmlBlock := &ast.Node{Type: ast.NodeHTMLBlock, Tokens: codeNode.Tokens}
-					// Insert the new HTML block before the original code block.
-					n.InsertBefore(htmlBlock)
-
-					// Mark the original code block for removal. This also removes its ID.
-					nodesToUnlink = append(nodesToUnlink, n)
-				}
-				// Skip processing children of the original code block as it's being replaced.
-				return ast.WalkSkipChildren
-			}
 		}
 
 		// Content in templates is not properly escaped
@@ -226,10 +207,6 @@ func DocSaveAsTemplate(id, name string, overwrite bool) (code int, err error) {
 		return ast.WalkContinue
 	})
 
-	for _, n := range nodesToUnlink {
-		n.Unlink()
-	}
-
 	luteEngine := NewLute()
 	formatRenderer := render.NewFormatRenderer(tree, luteEngine.RenderOptions)
 	md := formatRenderer.Render()
@@ -242,6 +219,10 @@ func DocSaveAsTemplate(id, name string, overwrite bool) (code int, err error) {
 		md = append(md, []byte("\n")...)
 		md = append(md, parse.IAL2Tokens(tree.Root.KramdownIAL)...)
 	}
+
+	// 处理 template 代码块：转换为普通文本并移除 id
+	templateCodeBlockRegex := regexp.MustCompile(`‍?` + "`" + `{3}template\n([\s\S]*?)\n‍?` + "`" + `{3}\s*\{: id="[^"]*"\}`)
+	md = templateCodeBlockRegex.ReplaceAll(md, []byte("$1"))
 
 	name = util.FilterFileName(name) + ".md"
 	name = util.TruncateLenFileName(name)
