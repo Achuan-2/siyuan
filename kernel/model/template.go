@@ -183,9 +183,19 @@ func DocSaveAsTemplate(id, name string, overwrite bool) (code int, err error) {
 	tree := prepareExportTree(bt)
 	addBlockIALNodes(tree, true)
 
+	var templateCodeBlocks []*ast.Node
 	ast.Walk(tree.Root, func(n *ast.Node, entering bool) ast.WalkStatus {
 		if !entering {
 			return ast.WalkContinue
+		}
+
+		// Identify template code blocks to be replaced later.
+		if ast.NodeCodeBlock == n.Type {
+			if info := n.ChildByType(ast.NodeCodeBlockInfo); nil != info {
+				if "template" == string(info.Tokens) {
+					templateCodeBlocks = append(templateCodeBlocks, n)
+				}
+			}
 		}
 
 		// Content in templates is not properly escaped
@@ -205,6 +215,17 @@ func DocSaveAsTemplate(id, name string, overwrite bool) (code int, err error) {
 		}
 		return ast.WalkContinue
 	})
+
+	// Replace the identified template code blocks with plain text paragraphs.
+	// This process effectively removes the code block structure and its ID.
+	for _, n := range templateCodeBlocks {
+		if code := n.ChildByType(ast.NodeCodeBlockCode); nil != code {
+			p := &ast.Node{Type: ast.NodeParagraph}
+			p.AppendChild(&ast.Node{Type: ast.NodeText, Tokens: code.Tokens})
+			n.Parent.InsertBefore(p, n)
+			n.Unlink()
+		}
+	}
 
 	luteEngine := NewLute()
 	formatRenderer := render.NewFormatRenderer(tree, luteEngine.RenderOptions)
