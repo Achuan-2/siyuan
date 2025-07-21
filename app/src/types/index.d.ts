@@ -140,6 +140,9 @@ interface CSSStyleDeclarationElectron extends CSSStyleDeclaration {
 }
 
 interface Window {
+    DOMPurify: {
+        sanitize(dirty: string): string;
+    };
     echarts: {
         init(element: Element, theme?: string, options?: {
             width: number
@@ -258,6 +261,13 @@ interface Window {
     openFileByURL(URL: string): boolean;
 
     destroyTheme(): Promise<void>;
+}
+
+interface IClipboardData {
+    textHTML?: string,
+    textPlain?: string,
+    siyuanHTML?: string,
+    files?: File[],
 }
 
 interface IRefDefs {
