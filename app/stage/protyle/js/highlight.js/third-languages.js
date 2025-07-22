@@ -137,6 +137,8 @@ hljs.registerLanguage("gdscript",function(){"use strict";var e=e||{};function r(
 
 
 // https://github.com/siyuan-note/siyuan/pull/15345
+
+// https://github.com/siyuan-note/siyuan/pull/15345
 hljs.registerLanguage('template', function (hljs) {
   const markdown = hljs.getLanguage('markdown');
   const go = hljs.getLanguage('go');
