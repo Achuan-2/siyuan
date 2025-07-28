@@ -1,4 +1,11 @@
 {
+  "groupStep": "グループ間隔",
+  "groupRange": "グループ範囲",
+  "groupMethodDateRelative": "相対日付",
+  "groupMethodDateDay": "日",
+  "groupMethodDateWeek": "週",
+  "groupMethodDateMonth": "月",
+  "groupMethodDateYear": "年",
   "syncColWidth": "列幅を同期",
   "groupMethod": "グループ方法",
   "hideEmptyGroup": "空のグループを隠す",
@@ -1634,6 +1641,8 @@
     "261": "今日",
     "262": "明日",
     "263": "次の %d 日間",
-    "264": "フィールド [%s] の値が空です"
+    "264": "フィールド [%s] の値が空です",
+    "265": "範囲外",
+    "266": "Tesseract OCR がインストールされていないか、設定されていません。ユーザーガイド - リソースファイルセクションを参照して設定してください"
   }
 }

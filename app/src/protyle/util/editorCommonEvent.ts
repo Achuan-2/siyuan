@@ -1083,14 +1083,18 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
                             const doOperations: IOperation[] = [];
                             const undoOperations: IOperation[] = [];
                             const undoPreviousId = blockElement.querySelector(`.av__row[data-id="${selectedIds[0]}"]`).previousElementSibling.getAttribute("data-id") || "";
+                            const targetGroupID = targetElement.parentElement.getAttribute("data-group-id");
                             selectedIds.reverse().forEach(item => {
                                 if (previousID !== item && undoPreviousId !== previousID) {
+                                    const groupID = blockElement.querySelector(`.av__row[data-id="${selectedIds[0]}"]`).parentElement.getAttribute("data-group-id");
                                     doOperations.push({
                                         action: "sortAttrViewRow",
                                         avID,
                                         previousID,
                                         id: item,
                                         blockID: blockElement.dataset.nodeId,
+                                        groupID,
+                                        targetGroupID,
                                     });
                                     undoOperations.push({
                                         action: "sortAttrViewRow",
@@ -1098,18 +1102,22 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
                                         previousID: undoPreviousId,
                                         id: item,
                                         blockID: blockElement.dataset.nodeId,
+                                        groupID: targetGroupID,
+                                        targetGroupID: groupID,
                                     });
                                 }
                             });
                             transaction(protyle, doOperations, undoOperations);
                         } else {
                             const newUpdated = dayjs().format("YYYYMMDDHHmmss");
+                            const groupID = targetElement.parentElement.getAttribute("data-group-id");
                             transaction(protyle, [{
                                 action: "insertAttrViewBlock",
                                 avID,
                                 previousID,
                                 srcs,
-                                blockID: blockElement.dataset.nodeId
+                                blockID: blockElement.dataset.nodeId,
+                                groupID
                             }, {
                                 action: "doUpdateUpdated",
                                 id: blockElement.dataset.nodeId,
@@ -1124,7 +1132,13 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
                                 data: blockElement.getAttribute("updated")
                             }]);
                             blockElement.setAttribute("updated", newUpdated);
-                            insertAttrViewBlockAnimation(protyle, blockElement, sourceIds, previousID);
+                            insertAttrViewBlockAnimation({
+                                protyle,
+                                blockElement,
+                                srcIDs: sourceIds,
+                                previousId: previousID,
+                                groupID
+                            });
                         }
                     }
                 } else if (targetElement.classList.contains("av__gallery-item") || targetElement.classList.contains("av__gallery-add")) {
@@ -1143,14 +1157,18 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
                             const doOperations: IOperation[] = [];
                             const undoOperations: IOperation[] = [];
                             const undoPreviousId = blockElement.querySelector(`.av__gallery-item[data-id="${selectedIds[0]}"]`).previousElementSibling?.getAttribute("data-id") || "";
+                            const targetGroupID = targetElement.parentElement.getAttribute("data-group-id");
                             selectedIds.reverse().forEach(item => {
                                 if (previousID !== item && undoPreviousId !== previousID) {
+                                    const groupID = blockElement.querySelector(`.av__row[data-id="${selectedIds[0]}"]`).parentElement.getAttribute("data-group-id");
                                     doOperations.push({
                                         action: "sortAttrViewRow",
                                         avID,
                                         previousID,
                                         id: item,
                                         blockID: blockElement.dataset.nodeId,
+                                        groupID,
+                                        targetGroupID,
                                     });
                                     undoOperations.push({
                                         action: "sortAttrViewRow",
@@ -1158,6 +1176,8 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
                                         previousID: undoPreviousId,
                                         id: item,
                                         blockID: blockElement.dataset.nodeId,
+                                        groupID: targetGroupID,
+                                        targetGroupID: groupID,
                                     });
                                 }
                             });
@@ -1169,7 +1189,8 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
                                 avID,
                                 previousID,
                                 srcs,
-                                blockID: blockElement.dataset.nodeId
+                                blockID: blockElement.dataset.nodeId,
+                                groupID: targetElement.parentElement.getAttribute("data-group-id")
                             }, {
                                 action: "doUpdateUpdated",
                                 id: blockElement.dataset.nodeId,
@@ -1278,6 +1299,7 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
                         const avID = blockElement.getAttribute("data-av-id");
                         const newUpdated = dayjs().format("YYYYMMDDHHmmss");
                         const srcs: IOperationSrcs[] = [];
+                        const groupID = targetElement.parentElement.getAttribute("data-group-id");
                         ids.forEach(id => {
                             srcs.push({
                                 id,
@@ -1290,6 +1312,7 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
                             previousID,
                             srcs,
                             blockID: blockElement.dataset.nodeId,
+                            groupID
                         }, {
                             action: "doUpdateUpdated",
                             id: blockElement.dataset.nodeId,
@@ -1303,7 +1326,13 @@ export const dropEvent = (protyle: IProtyle, editorElement: HTMLElement) => {
                             id: blockElement.dataset.nodeId,
                             data: blockElement.getAttribute("updated")
                         }]);
-                        insertAttrViewBlockAnimation(protyle, blockElement, ids, previousID);
+                        insertAttrViewBlockAnimation({
+                            protyle,
+                            blockElement,
+                            srcIDs: ids,
+                            previousId: previousID,
+                            groupID
+                        });
                         blockElement.setAttribute("updated", newUpdated);
                     }
                 } else {

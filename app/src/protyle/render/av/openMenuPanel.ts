@@ -48,7 +48,14 @@ import {escapeAttr, escapeHtml} from "../../../util/escape";
 import {Dialog} from "../../../dialog";
 import {bindLayoutEvent, getLayoutHTML, updateLayout} from "./layout";
 import {setGalleryCover, setGalleryRatio, setGallerySize} from "./gallery/util";
-import {bindGroupsEvent, getGroupsHTML, getGroupsMethodHTML, setGroupMethod} from "./groups";
+import {
+    bindGroupsEvent, bindGroupsNumber,
+    getGroupsHTML,
+    getGroupsMethodHTML, getGroupsNumberHTML, getLanguageByIndex,
+    goGroupsDate,
+    goGroupsSort,
+    setGroupMethod
+} from "./groups";
 
 export const openMenuPanel = (options: {
     protyle: IProtyle,
@@ -424,9 +431,8 @@ export const openMenuPanel = (options: {
                 }, options.cellElements);
                 return;
             }
-
             if (targetElement.getAttribute("data-type") === "editCol") {
-                const previousID = (targetElement.classList.contains("dragover__top") ? targetElement.previousElementSibling?.getAttribute("data-id") : targetElement.getAttribute("data-id")) || "";
+                const previousID = (isTop ? targetElement.previousElementSibling?.getAttribute("data-id") : targetElement.getAttribute("data-id")) || "";
                 const undoPreviousID = sourceElement.previousElementSibling?.getAttribute("data-id") || "";
                 if (previousID !== undoPreviousID && previousID !== sourceId) {
                     transaction(options.protyle, [{
@@ -461,6 +467,50 @@ export const openMenuPanel = (options: {
                     });
                 }
                 menuElement.innerHTML = getPropertiesHTML(fields);
+                return;
+            }
+            if (targetElement.querySelector('[data-type="hideGroup"]')) {
+                const previousID = (isTop ? targetElement.previousElementSibling?.getAttribute("data-id") : targetElement.getAttribute("data-id")) || "";
+                const undoPreviousID = sourceElement.previousElementSibling?.getAttribute("data-id") || "";
+                if (previousID !== undoPreviousID && previousID !== sourceId) {
+                    transaction(options.protyle, [{
+                        action: "sortAttrViewGroup",
+                        avID,
+                        blockID,
+                        previousID,
+                        id: sourceId,
+                    }], [{
+                        action: "sortAttrViewGroup",
+                        avID,
+                        blockID,
+                        previousID: undoPreviousID,
+                        id: sourceId,
+                    }]);
+                    menuElement.querySelector('[data-type="goGroupsSort"] .b3-menu__accelerator').textContent = getLanguageByIndex(2, "sort");
+                    data.view.group.order = 2;
+                    data.view.groups.find((group, index) => {
+                        if (group.id === sourceId) {
+                            const groupData = data.view.groups.splice(index, 1)[0];
+                            data.view.groups.find((item, index: number) => {
+                                if (item.id === targetId) {
+                                    if (isTop) {
+                                        data.view.groups.splice(index, 0, groupData);
+                                    } else {
+                                        data.view.groups.splice(index + 1, 0, groupData);
+                                    }
+                                    return true;
+                                }
+                            });
+                            return true;
+                        }
+                    });
+                    if (isTop) {
+                        targetElement.before(sourceElement);
+                    } else {
+                        targetElement.after(sourceElement);
+                    }
+                }
+                targetElement.classList.remove("dragover__top", "dragover__bottom");
                 return;
             }
         });
@@ -574,31 +624,6 @@ export const openMenuPanel = (options: {
                     bindSortsEvent(options.protyle, menuElement, data, blockID);
                     setPosition(menuElement, tabRect.right - menuElement.clientWidth, tabRect.bottom, tabRect.height);
                     window.siyuan.menus.menu.remove();
-                    event.preventDefault();
-                    event.stopPropagation();
-                    break;
-                } else if (type === "goGroups") {
-                    menuElement.innerHTML = getGroupsHTML(fields, data.view.group);
-                    bindGroupsEvent();
-                    setPosition(menuElement, tabRect.right - menuElement.clientWidth, tabRect.bottom, tabRect.height);
-                    window.siyuan.menus.menu.remove();
-                    event.preventDefault();
-                    event.stopPropagation();
-                    break;
-                } else if (type === "goGroupsMethod") {
-                    menuElement.innerHTML = getGroupsMethodHTML(fields, data.view.group);
-                    setPosition(menuElement, tabRect.right - menuElement.clientWidth, tabRect.bottom, tabRect.height);
-                    event.preventDefault();
-                    event.stopPropagation();
-                    break;
-                } else if (type === "setGroupMethod") {
-                    setGroupMethod({
-                        protyle: options.protyle,
-                        fieldId: target.getAttribute("data-id"),
-                        data,
-                        menuElement,
-                        blockElement: options.blockElement,
-                    });
                     event.preventDefault();
                     event.stopPropagation();
                     break;
@@ -1441,9 +1466,126 @@ export const openMenuPanel = (options: {
                         target,
                         protyle: options.protyle,
                         nodeElement: options.blockElement,
-                        data: data
+                        data
                     });
                     fields = getFieldsByData(data);
+                    event.preventDefault();
+                    event.stopPropagation();
+                    break;
+                } else if (type === "goGroupsDate") {
+                    goGroupsDate({
+                        target,
+                        menuElement,
+                        protyle: options.protyle,
+                        blockElement: options.blockElement,
+                        data
+                    });
+                    fields = getFieldsByData(data);
+                    event.stopPropagation();
+                    event.preventDefault();
+                    break;
+                } else if (type === "goGroupsSort") {
+                    goGroupsSort({
+                        target,
+                        menuElement,
+                        protyle: options.protyle,
+                        blockElement: options.blockElement,
+                        data
+                    });
+                    fields = getFieldsByData(data);
+                    event.stopPropagation();
+                    event.preventDefault();
+                    break;
+                } else if (type === "setGroupMethod") {
+                    setGroupMethod({
+                        protyle: options.protyle,
+                        fieldId: target.getAttribute("data-id"),
+                        data,
+                        menuElement,
+                        blockElement: options.blockElement,
+                    });
+                    event.preventDefault();
+                    event.stopPropagation();
+                    break;
+                } else if (type === "goGroups") {
+                    if (menuElement.querySelector('[data-type="avGroupRange"]') && closeCB) {
+                        await closeCB();
+                    }
+                    closeCB = undefined;
+                    menuElement.innerHTML = getGroupsHTML(fields, data.view);
+                    bindGroupsEvent({
+                        protyle: options.protyle,
+                        menuElement: menuElement,
+                        blockElement: options.blockElement,
+                        data
+                    });
+                    setPosition(menuElement, tabRect.right - menuElement.clientWidth, tabRect.bottom, tabRect.height);
+                    event.preventDefault();
+                    event.stopPropagation();
+                    break;
+                } else if (type === "goGroupsMethod") {
+                    window.siyuan.menus.menu.remove();
+                    menuElement.innerHTML = getGroupsMethodHTML(fields, data.view.group);
+                    setPosition(menuElement, tabRect.right - menuElement.clientWidth, tabRect.bottom, tabRect.height);
+                    event.preventDefault();
+                    event.stopPropagation();
+                    break;
+                } else if (type === "getGroupsNumber") {
+                    window.siyuan.menus.menu.remove();
+                    menuElement.innerHTML = getGroupsNumberHTML(data.view.group);
+                    setPosition(menuElement, tabRect.right - menuElement.clientWidth, tabRect.bottom, tabRect.height);
+                    closeCB = bindGroupsNumber({
+                        protyle: options.protyle,
+                        data,
+                        menuElement,
+                        blockElement: options.blockElement
+                    });
+                    event.preventDefault();
+                    event.stopPropagation();
+                    break;
+                } else if (type === "hideGroup") {
+                    window.siyuan.menus.menu.remove();
+                    const useElement = target.firstElementChild;
+                    const isHide = useElement.getAttribute("xlink:href") !== "#iconEye";
+                    useElement.setAttribute("xlink:href", isHide ? "#iconEye" : "#iconEyeoff");
+                    transaction(options.protyle, [{
+                        action: "hideAttrViewGroup",
+                        avID: data.id,
+                        blockID,
+                        id: target.dataset.id,
+                        data: isHide,
+                    }], [{
+                        action: "hideAttrViewGroup",
+                        avID: data.id,
+                        blockID,
+                        id: target.dataset.id,
+                        data: !isHide
+                    }]);
+                    data.view.groups.find((item) => {
+                        if (item.id === target.dataset.id) {
+                            item.groupHidden = isHide ? 2 : 0;
+                            return true;
+                        }
+                    });
+                    event.preventDefault();
+                    event.stopPropagation();
+                    break;
+                } else if (type === "removeGroups") {
+                    window.siyuan.menus.menu.remove();
+                    transaction(options.protyle, [{
+                        action: "removeAttrViewGroup",
+                        avID: data.id,
+                        blockID,
+                    }], [{
+                        action: "setAttrViewGroup",
+                        avID: data.id,
+                        blockID,
+                        data: data.view.group
+                    }]);
+                    data.view.group = null;
+                    delete data.view.groups;
+                    menuElement.innerHTML = getGroupsHTML(fields, data.view);
+                    setPosition(menuElement, tabRect.right - menuElement.clientWidth, tabRect.bottom, tabRect.height);
                     event.preventDefault();
                     event.stopPropagation();
                     break;

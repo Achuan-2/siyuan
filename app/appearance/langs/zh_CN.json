@@ -1,4 +1,11 @@
 {
+  "groupStep": "分组间隔",
+  "groupRange": "分组范围",
+  "groupMethodDateRelative": "相对日期",
+  "groupMethodDateDay": "天",
+  "groupMethodDateWeek": "周",
+  "groupMethodDateMonth": "月",
+  "groupMethodDateYear": "年",
   "syncColWidth": "同步列宽",
   "groupMethod": "分组方式",
   "hideEmptyGroup": "隐藏空白分组",
@@ -1634,6 +1641,8 @@
     "261": "今天",
     "262": "明天",
     "263": "未来 %d 天",
-    "264": "字段 [%s] 值为空"
+    "264": "字段 [%s] 值为空",
+    "265": "不在范围内",
+    "266": "Tesseract OCR 未安装或未配置，请参考 用户指南-资源文件 章节进行配置"
   }
 }

@@ -1,4 +1,11 @@
 {
+  "groupStep": "Odstęp grupowania",
+  "groupRange": "Zakres grupowania",
+  "groupMethodDateRelative": "Data względna",
+  "groupMethodDateDay": "Dzień",
+  "groupMethodDateWeek": "Tydzień",
+  "groupMethodDateMonth": "Miesiąc",
+  "groupMethodDateYear": "Rok",
   "syncColWidth": "Synchronizuj szerokość kolumny",
   "groupMethod": "Metoda grupowania",
   "hideEmptyGroup": "Ukryj pustą grupę",
@@ -1634,6 +1641,8 @@
     "261": "Dzisiaj",
     "262": "Jutro",
     "263": "Następne %d dni",
-    "264": "Pole [%s] jest puste"
+    "264": "Pole [%s] jest puste",
+    "265": "Poza zakresem",
+    "266": "Tesseract OCR nie jest zainstalowany lub skonfigurowany, zapoznaj się z Podręcznikiem użytkownika - Sekcja plików zasobów, aby skonfigurować"
   }
 }

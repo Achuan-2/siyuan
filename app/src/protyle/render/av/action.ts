@@ -157,7 +157,7 @@ export const avClick = (protyle: IProtyle, event: MouseEvent & { target: HTMLEle
             event.stopPropagation();
             return true;
         } else if (type === "av-add-more") {
-            insertRows(blockElement, protyle, 1, undefined);
+            insertRows({blockElement, protyle, count: 1, previousID: ""});
             event.preventDefault();
             event.stopPropagation();
             return true;
@@ -210,10 +210,14 @@ export const avClick = (protyle: IProtyle, event: MouseEvent & { target: HTMLEle
             event.stopPropagation();
             return true;
         } else if (type === "av-add-bottom") {
-            insertRows(blockElement, protyle, 1,
-                blockElement.querySelector(".av__row--util")?.previousElementSibling?.getAttribute("data-id") ||
-                target.previousElementSibling?.getAttribute("data-id") || undefined
-            );
+            const bodyElement = hasClosestByClassName(target, "av__body");
+            insertRows({
+                blockElement, protyle,
+                count: 1,
+                previousID: (bodyElement && bodyElement.querySelector(".av__row--util")?.previousElementSibling?.getAttribute("data-id")) ||
+                    target.previousElementSibling?.getAttribute("data-id") || undefined,
+                groupID: bodyElement ? bodyElement.getAttribute("data-group-id") : ""
+            });
             event.preventDefault();
             event.stopPropagation();
             return true;
@@ -291,6 +295,34 @@ export const avClick = (protyle: IProtyle, event: MouseEvent & { target: HTMLEle
                     y: rect.bottom
                 }
             });
+            event.preventDefault();
+            event.stopPropagation();
+            return true;
+        } else if (type === "av-group-fold") {
+            if (target.getAttribute("data-folding") !== "true") {
+                target.setAttribute("data-folding", "true");
+                const isOpen = target.firstElementChild.classList.contains("av__group-arrow--open");
+                transaction(protyle, [{
+                    action: "foldAttrViewGroup",
+                    avID: blockElement.dataset.avId,
+                    blockID: blockElement.dataset.nodeId,
+                    id: target.dataset.id,
+                    data: isOpen
+                }], [{
+                    action: "foldAttrViewGroup",
+                    avID: blockElement.dataset.avId,
+                    blockID: blockElement.dataset.nodeId,
+                    id: target.dataset.id,
+                    data: !isOpen
+                }]);
+                if (isOpen) {
+                    target.firstElementChild.classList.remove("av__group-arrow--open");
+                    target.parentElement.nextElementSibling.classList.add("fn__none");
+                } else {
+                    target.firstElementChild.classList.add("av__group-arrow--open");
+                    target.parentElement.nextElementSibling.classList.remove("fn__none");
+                }
+            }
             event.preventDefault();
             event.stopPropagation();
             return true;
@@ -554,7 +586,8 @@ export const avContextmenu = (protyle: IProtyle, rowElement: HTMLElement, positi
                         avID,
                         ignoreFillFilter: true,
                         srcs,
-                        blockID: listItemElement.dataset.blockId
+                        blockID: listItemElement.dataset.blockId,
+                        groupID: rowElement.parentElement.getAttribute("data-group-id")
                     }, {
                         action: "doUpdateUpdated",
                         id: listItemElement.dataset.blockId,
@@ -583,12 +616,24 @@ ${window.siyuan.languages[avType === "table" ? "insertRowBefore" : "insertItemBe
                         if (document.activeElement === inputElement) {
                             return;
                         }
-                        insertRows(blockElement, protyle, parseInt(inputElement.value), rowElements[0].previousElementSibling.getAttribute("data-id"));
+                        insertRows({
+                            blockElement,
+                            protyle,
+                            count: parseInt(inputElement.value),
+                            previousID: rowElements[0].previousElementSibling.getAttribute("data-id"),
+                            groupID: rowElements[0].parentElement.getAttribute("data-group-id")
+                        });
                         menu.close();
                     });
                     inputElement.addEventListener("keydown", (event: KeyboardEvent) => {
                         if (!event.isComposing && event.key === "Enter") {
-                            insertRows(blockElement, protyle, parseInt(inputElement.value), rowElements[0].previousElementSibling.getAttribute("data-id"));
+                            insertRows({
+                                blockElement,
+                                protyle,
+                                count: parseInt(inputElement.value),
+                                previousID: rowElements[0].previousElementSibling.getAttribute("data-id"),
+                                groupID: rowElements[0].parentElement.getAttribute("data-group-id")
+                            });
                             menu.close();
                         }
                     });
@@ -606,12 +651,24 @@ ${window.siyuan.languages[avType === "table" ? "insertRowAfter" : "insertItemAft
                         if (document.activeElement === inputElement) {
                             return;
                         }
-                        insertRows(blockElement, protyle, parseInt(inputElement.value), rowElements[0].getAttribute("data-id"));
+                        insertRows({
+                            blockElement,
+                            protyle,
+                            count: parseInt(inputElement.value),
+                            previousID: rowElements[0].getAttribute("data-id"),
+                            groupID: rowElements[0].parentElement.getAttribute("data-group-id")
+                        });
                         menu.close();
                     });
                     inputElement.addEventListener("keydown", (event: KeyboardEvent) => {
                         if (!event.isComposing && event.key === "Enter") {
-                            insertRows(blockElement, protyle, parseInt(inputElement.value), rowElements[0].getAttribute("data-id"));
+                            insertRows({
+                                blockElement,
+                                protyle,
+                                count: parseInt(inputElement.value),
+                                previousID: rowElements[0].getAttribute("data-id"),
+                                groupID: rowElements[0].parentElement.getAttribute("data-group-id")
+                            });
                             menu.close();
                         }
                     });

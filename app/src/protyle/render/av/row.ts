@@ -67,27 +67,30 @@ export const updateHeader = (rowElement: HTMLElement) => {
         return;
     }
     const selectCount = rowElement.parentElement.querySelectorAll(".av__row--select:not(.av__row--header)").length;
-    const diffCount = rowElement.parentElement.childElementCount - 3 - selectCount;
+    const count = rowElement.parentElement.querySelectorAll(".av__row:not(.av__row--header)").length;
+
     const headElement = rowElement.parentElement.firstElementChild;
     const headUseElement = headElement.querySelector("use");
-    const counterElement = blockElement.querySelector(".av__counter");
-    const avHeadElement = blockElement.querySelector(".av__header") as HTMLElement;
-    if (diffCount === 0 && rowElement.parentElement.childElementCount - 3 !== 0) {
+
+    if (count === selectCount && count !== 0) {
         headElement.classList.add("av__row--select");
         headUseElement.setAttribute("xlink:href", "#iconCheck");
-    } else if (diffCount === rowElement.parentElement.childElementCount - 3) {
+    } else if (selectCount === 0) {
         headElement.classList.remove("av__row--select");
         headUseElement.setAttribute("xlink:href", "#iconUncheck");
-        counterElement.classList.add("fn__none");
-        avHeadElement.style.position = "";
-        return;
-    } else if (diffCount > 0) {
+    } else if (selectCount > 0) {
         headElement.classList.add("av__row--select");
         headUseElement.setAttribute("xlink:href", "#iconIndeterminateCheck");
     }
+
+    const counterElement = blockElement.querySelector(".av__counter");
+    const allCount = blockElement.querySelectorAll(".av__row--select:not(.av__row--header)").length;
+    if (allCount === 0) {
+        counterElement.classList.add("fn__none");
+        return;
+    }
     counterElement.classList.remove("fn__none");
-    counterElement.innerHTML = `${selectCount} ${window.siyuan.languages.selected}`;
-    avHeadElement.style.position = "sticky";
+    counterElement.innerHTML = `${allCount} ${window.siyuan.languages.selected}`;
 };
 
 export const setPage = (blockElement: Element) => {
@@ -103,21 +106,29 @@ export const setPage = (blockElement: Element) => {
 
 /**
  * 前端插入一假行
- * @param protyle
- * @param blockElement
- * @param srcIDs
- * @param previousId
- * @param avId 存在为新增否则为拖拽插入
+ * @param options.protyle
+ * @param options.blockElement
+ * @param options.srcIDs
+ * @param options.previousId
+ * @param options.avId 存在为新增否则为拖拽插入
  */
-export const insertAttrViewBlockAnimation = (protyle: IProtyle, blockElement: Element, srcIDs: string[], previousId: string, avId?: string,) => {
-    if ((blockElement.querySelector('[data-type="av-search"]') as HTMLInputElement).value !== "") {
+export const insertAttrViewBlockAnimation = (options: {
+    protyle: IProtyle,
+    blockElement: Element,
+    srcIDs: string[],
+    previousId: string,
+    groupID?: string
+}) => {
+    if ((options.blockElement.querySelector('[data-type="av-search"]') as HTMLInputElement).value !== "") {
         showMessage(window.siyuan.languages.insertRowTip);
         return;
     }
-    let previousElement = blockElement.querySelector(`.av__row[data-id="${previousId}"]`) || blockElement.querySelector(".av__row--header");
+    const avId = options.blockElement.getAttribute("data-av-id");
+    const groupQuery = options.groupID ? `.av__body[data-group-id="${options.groupID}"] ` : "";
+    let previousElement = options.blockElement.querySelector(`.av__row[data-id="${options.previousId}"]`) || options.blockElement.querySelector(groupQuery + ".av__row--header");
     // 有排序需要加入最后一行
-    if (blockElement.querySelector('.av__views [data-type="av-sort"]').classList.contains("block__icon--active")) {
-        previousElement = blockElement.querySelector(".av__row--util").previousElementSibling;
+    if (options.blockElement.querySelector('.av__views [data-type="av-sort"]').classList.contains("block__icon--active")) {
+        previousElement = options.blockElement.querySelector("groupQuery + .av__row--util").previousElementSibling;
     }
     let colHTML = '<div class="av__colsticky"><div class="av__firstcol"><svg><use xlink:href="#iconUncheck"></use></svg></div></div>';
     const pinIndex = previousElement.querySelectorAll(".av__colsticky .av__cell").length - 1;
@@ -140,14 +151,14 @@ ${getTypeByCellElement(item) === "block" ? ' data-detached="true"' : ""}><span c
         }
     });
     let html = "";
-    srcIDs.forEach((id) => {
-        const blockCellElement = blockElement.querySelector(`[data-block-id="${id}"]`);
+    options.srcIDs.forEach((id) => {
+        const blockCellElement = options.blockElement.querySelector(`[data-block-id="${id}"]`);
         if (!blockCellElement) {
-            html += `<div class="av__row" data-type="ghost" data-id="${id}" data-avid="${avId}" data-previous-id="${previousId}">
+            html += `<div class="av__row" data-type="ghost" data-id="${id}" data-avid="${avId}" data-previous-id="${options.previousId}">
     ${colHTML}
 </div>`;
         } else {
-            clearSelect(["cell"], blockElement);
+            clearSelect(["cell"], options.blockElement);
             addDragFill(blockCellElement);
             blockCellElement.classList.add("av__cell--select");
         }
@@ -155,19 +166,19 @@ ${getTypeByCellElement(item) === "block" ? ' data-detached="true"' : ""}><span c
     previousElement.insertAdjacentHTML("afterend", html);
     if (avId) {
         const currentRow = previousElement.nextElementSibling;
-        if (blockElement.querySelector('.av__views [data-type="av-sort"]').classList.contains("block__icon--active") &&
-            !blockElement.querySelector('[data-type="av-load-more"]').classList.contains("fn__none")) {
+        if (options.blockElement.querySelector('.av__views [data-type="av-sort"]').classList.contains("block__icon--active") &&
+            !options.blockElement.querySelector('[data-type="av-load-more"]').classList.contains("fn__none")) {
             currentRow.setAttribute("data-need-update", "true");
         }
         const sideRow = previousElement.classList.contains("av__row--header") ? currentRow.nextElementSibling : previousElement;
         fetchPost("/api/av/getAttributeViewFilterSort", {
             id: avId,
-            blockID: blockElement.getAttribute("data-node-id")
+            blockID: options.blockElement.getAttribute("data-node-id")
         }, (response) => {
             // https://github.com/siyuan-note/siyuan/issues/10517
             let hideTextCell = false;
             response.data.filters.find((item: IAVFilter) => {
-                const headerElement = blockElement.querySelector(`.av__cell--header[data-col-id="${item.column}"]`);
+                const headerElement = options.blockElement.querySelector(`.av__cell--header[data-col-id="${item.column}"]`);
                 if (!headerElement) {
                     return;
                 }
@@ -250,13 +261,13 @@ ${getTypeByCellElement(item) === "block" ? ' data-detached="true"' : ""}><span c
             if (hideTextCell) {
                 currentRow.remove();
                 showMessage(window.siyuan.languages.insertRowTip);
-            } else if (srcIDs.length === 1) {
-                popTextCell(protyle, [currentRow.querySelector('.av__cell[data-detached="true"]')], "block");
+            } else if (options.srcIDs.length === 1) {
+                popTextCell(options.protyle, [currentRow.querySelector('.av__cell[data-detached="true"]')], "block");
             }
-            setPage(blockElement);
+            setPage(options.blockElement);
         });
     }
-    setPage(blockElement);
+    setPage(options.blockElement);
 };
 
 export const stickyRow = (blockElement: HTMLElement, elementRect: DOMRect, status: "top" | "bottom" | "all") => {
@@ -264,22 +275,25 @@ export const stickyRow = (blockElement: HTMLElement, elementRect: DOMRect, statu
         return;
     }
     // 只读模式下也需固定 https://github.com/siyuan-note/siyuan/issues/11338
-    const scrollRect = blockElement.querySelector(".av__scroll").getBoundingClientRect();
-    const headerElement = blockElement.querySelector(".av__row--header") as HTMLElement;
-    if (headerElement && (status === "top" || status === "all")) {
-        const distance = Math.floor(elementRect.top - scrollRect.top);
-        if (distance > 0 && distance < scrollRect.height) {
-            headerElement.style.transform = `translateY(${distance}px)`;
-        } else {
-            headerElement.style.transform = "";
-        }
+    const headerElements = blockElement.querySelectorAll(".av__row--header");
+    if (headerElements.length > 0 && (status === "top" || status === "all")) {
+        headerElements.forEach((item: HTMLElement) => {
+            const bodyRect = item.parentElement.getBoundingClientRect();
+            const distance = Math.floor(elementRect.top - bodyRect.top);
+            if (distance > 0 && distance < bodyRect.height - item.clientHeight) {
+                item.style.transform = `translateY(${distance}px)`;
+            } else {
+                item.style.transform = "";
+            }
+        });
     }
 
     const footerElement = blockElement.querySelector(".av__row--footer") as HTMLElement;
     if (footerElement && (status === "bottom" || status === "all")) {
         if (footerElement.querySelector(".av__calc--ashow")) {
-            const distance = Math.ceil(elementRect.bottom - footerElement.parentElement.getBoundingClientRect().bottom);
-            if (distance < 0 && -distance < scrollRect.height) {
+            const bodyRect = footerElement.parentElement.getBoundingClientRect();
+            const distance = Math.ceil(elementRect.bottom - bodyRect.bottom);
+            if (distance < 0 && -distance < bodyRect.height) {
                 footerElement.style.transform = `translateY(${distance}px)`;
             } else {
                 footerElement.style.transform = "";
@@ -426,7 +440,8 @@ export const deleteRow = (blockElement: HTMLElement, protyle: IProtyle) => {
                 isDetached: blockValue.isDetached,
                 content: blockValue.block.content
             }],
-            blockID: blockElement.dataset.nodeId
+            blockID: blockElement.dataset.nodeId,
+            groupID: item.parentElement.getAttribute("data-group-id")
         });
     });
     const newUpdated = dayjs().format("YYYYMMDDHHmmss");
@@ -452,11 +467,17 @@ export const deleteRow = (blockElement: HTMLElement, protyle: IProtyle) => {
     blockElement.setAttribute("updated", newUpdated);
 };
 
-export const insertRows = (blockElement: HTMLElement, protyle: IProtyle, count: number, previousID: string) => {
-    const avID = blockElement.getAttribute("data-av-id");
+export const insertRows = (options: {
+    blockElement: HTMLElement,
+    protyle: IProtyle,
+    count: number,
+    previousID: string,
+    groupID?: string
+}) => {
+    const avID = options.blockElement.getAttribute("data-av-id");
     const srcIDs: string[] = [];
     const srcs: IOperationSrcs[] = [];
-    new Array(count).fill(0).forEach(() => {
+    new Array(options.count).fill(0).forEach(() => {
         const newNodeID = Lute.NewNodeID();
         srcIDs.push(newNodeID);
         srcs.push({
@@ -466,15 +487,16 @@ export const insertRows = (blockElement: HTMLElement, protyle: IProtyle, count: 
         });
     });
     const newUpdated = dayjs().format("YYYYMMDDHHmmss");
-    transaction(protyle, [{
+    transaction(options.protyle, [{
         action: "insertAttrViewBlock",
         avID,
-        previousID,
+        previousID: options.previousID,
         srcs,
-        blockID: blockElement.dataset.nodeId,
+        blockID: options.blockElement.dataset.nodeId,
+        groupID: options.groupID
     }, {
         action: "doUpdateUpdated",
-        id: blockElement.dataset.nodeId,
+        id: options.blockElement.dataset.nodeId,
         data: newUpdated,
     }], [{
         action: "removeAttrViewBlock",
@@ -482,18 +504,24 @@ export const insertRows = (blockElement: HTMLElement, protyle: IProtyle, count: 
         avID,
     }, {
         action: "doUpdateUpdated",
-        id: blockElement.dataset.nodeId,
-        data: blockElement.getAttribute("updated")
+        id: options.blockElement.dataset.nodeId,
+        data: options.blockElement.getAttribute("updated")
     }]);
-    if (blockElement.getAttribute("data-av-type") === "gallery") {
+    if (options.blockElement.getAttribute("data-av-type") === "gallery") {
         insertGalleryItemAnimation({
-            blockElement,
-            protyle,
+            blockElement: options.blockElement,
+            protyle: options.protyle,
             srcIDs,
-            previousId: previousID
+            previousId: options.previousID
         });
     } else {
-        insertAttrViewBlockAnimation(protyle, blockElement, srcIDs, previousID, avID);
+        insertAttrViewBlockAnimation({
+            protyle: options.protyle,
+            blockElement: options.blockElement,
+            srcIDs,
+            previousId: options.previousID,
+            groupID: options.groupID
+        });
     }
-    blockElement.setAttribute("updated", newUpdated);
+    options.blockElement.setAttribute("updated", newUpdated);
 };

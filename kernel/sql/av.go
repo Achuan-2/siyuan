@@ -32,6 +32,19 @@ import (
 	"github.com/siyuan-note/siyuan/kernel/util"
 )
 
+func RenderGroupView(attrView *av.AttributeView, view, groupView *av.View) (ret av.Viewable) {
+	switch groupView.LayoutType {
+	case av.LayoutTypeTable:
+		groupView.Table.Columns = view.Table.Columns
+	case av.LayoutTypeGallery:
+		groupView.Gallery.CardFields = view.Gallery.CardFields
+	}
+
+	groupView.Filters = view.Filters
+	groupView.Sorts = view.Sorts
+	return RenderView(attrView, groupView, "")
+}
+
 func RenderView(attrView *av.AttributeView, view *av.View, query string) (ret av.Viewable) {
 	switch view.LayoutType {
 	case av.LayoutTypeTable:
@@ -202,7 +215,7 @@ func generateAttrViewItems(attrView *av.AttributeView, view *av.View) (ret map[s
 	}
 
 	// 如果是分组视图，则需要过滤掉不在分组中的项目
-	if 0 < len(view.GroupItemIDs) {
+	if nil != view.GroupItemIDs {
 		tmp := map[string][]*av.KeyValues{}
 		for _, groupItemID := range view.GroupItemIDs {
 			if _, ok := ret[groupItemID]; ok {
@@ -620,8 +633,14 @@ func filterByQuery(query string, collection av.Collection) {
 
 // manualSort 处理用户手动排序。
 func manualSort(view *av.View, collection av.Collection) {
+	itemIDs := view.ItemIDs
+	// 如果是分组视图，则需要根据分组项的顺序进行排序
+	if 0 < len(view.GroupItemIDs) {
+		itemIDs = view.GroupItemIDs
+	}
+
 	sortItemIDs := map[string]int{}
-	for i, itemID := range view.ItemIDs {
+	for i, itemID := range itemIDs {
 		sortItemIDs[itemID] = i
 	}
 

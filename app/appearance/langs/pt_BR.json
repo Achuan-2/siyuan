@@ -1,4 +1,11 @@
 {
+  "groupStep": "Intervalo de agrupamento",
+  "groupRange": "Intervalo de grupo",
+  "groupMethodDateRelative": "Data relativa",
+  "groupMethodDateDay": "Dia",
+  "groupMethodDateWeek": "Semana",
+  "groupMethodDateMonth": "Mês",
+  "groupMethodDateYear": "Ano",
   "syncColWidth": "Sincronizar largura da coluna",
   "groupMethod": "Método de agrupamento",
   "hideEmptyGroup": "Ocultar grupo vazio",
@@ -1634,6 +1641,8 @@
     "261": "Hoje",
     "262": "Amanhã",
     "263": "Próximos %d dias",
-    "264": "O campo [%s] está vazio"
+    "264": "O campo [%s] está vazio",
+    "265": "Fora do intervalo",
+    "266": "Tesseract OCR não está instalado ou configurado, consulte o Guia do Usuário - Seção de Arquivos de Recursos para configuração"
   }
 }

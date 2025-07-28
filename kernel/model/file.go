@@ -764,6 +764,11 @@ func loadNodesByStartEnd(tree *parse.Tree, startID, endID string) (nodes []*ast.
 			}
 			break
 		}
+
+		if len(nodes) >= Conf.Editor.DynamicLoadBlocks {
+			// 如果加载到指定数量的块则停止加载
+			break
+		}
 	}
 	return
 }
@@ -981,7 +986,7 @@ func DuplicateDoc(tree *parse.Tree) {
 			AddAttributeViewBlock(nil, []map[string]interface{}{{
 				"id":         n.ID,
 				"isDetached": false,
-			}}, avID, "", "", false)
+			}}, avID, "", "", "", false)
 			ReloadAttrView(avID)
 		}
 		return ast.WalkContinue

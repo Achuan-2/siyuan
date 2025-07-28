@@ -59,10 +59,9 @@ func batchReplaceAttributeViewBlocks(c *gin.Context) {
 
 func setAttrViewGroup(c *gin.Context) {
 	ret := gulu.Ret.NewResult()
-	defer c.JSON(http.StatusOK, ret)
-
 	arg, ok := util.JsonArg(c, ret)
 	if !ok {
+		c.JSON(http.StatusOK, ret)
 		return
 	}
 
@@ -74,12 +73,14 @@ func setAttrViewGroup(c *gin.Context) {
 	if nil != err {
 		ret.Code = -1
 		ret.Msg = err.Error()
+		c.JSON(http.StatusOK, ret)
 		return
 	}
 	group := &av.ViewGroup{}
 	if err = gulu.JSON.UnmarshalJSON(data, group); nil != err {
 		ret.Code = -1
 		ret.Msg = err.Error()
+		c.JSON(http.StatusOK, ret)
 		return
 	}
 
@@ -87,8 +88,13 @@ func setAttrViewGroup(c *gin.Context) {
 	if err != nil {
 		ret.Code = -1
 		ret.Msg = err.Error()
+
+		c.JSON(http.StatusOK, ret)
 		return
 	}
+
+	ret = renderAttrView(blockID, avID, "", "", 1, -1)
+	c.JSON(http.StatusOK, ret)
 }
 
 func changeAttrViewLayout(c *gin.Context) {
@@ -286,9 +292,13 @@ func addAttributeViewBlocks(c *gin.Context) {
 	}
 
 	avID := arg["avID"].(string)
-	blockID := ""
+	var blockID string
 	if blockIDArg := arg["blockID"]; nil != blockIDArg {
 		blockID = blockIDArg.(string)
+	}
+	var groupID string
+	if groupIDArg := arg["groupID"]; nil != groupIDArg {
+		groupID = groupIDArg.(string)
 	}
 	var previousID string
 	if nil != arg["previousID"] {
@@ -304,7 +314,7 @@ func addAttributeViewBlocks(c *gin.Context) {
 		src := v.(map[string]interface{})
 		srcs = append(srcs, src)
 	}
-	err := model.AddAttributeViewBlock(nil, srcs, avID, blockID, previousID, ignoreFillFilter)
+	err := model.AddAttributeViewBlock(nil, srcs, avID, blockID, groupID, previousID, ignoreFillFilter)
 	if err != nil {
 		ret.Code = -1
 		ret.Msg = err.Error()

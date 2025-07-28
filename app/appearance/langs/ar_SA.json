@@ -1,4 +1,11 @@
 {
+  "groupStep": "فاصل التجميع",
+  "groupRange": "نطاق التجميع",
+  "groupMethodDateRelative": "تاريخ نسبي",
+  "groupMethodDateDay": "يوم",
+  "groupMethodDateWeek": "أسبوع",
+  "groupMethodDateMonth": "شهر",
+  "groupMethodDateYear": "سنة",
   "syncColWidth": "مزامنة عرض العمود",
   "groupMethod": "طريقة التجميع",
   "hideEmptyGroup": "إخفاء المجموعة الفارغة",
@@ -1634,6 +1641,8 @@
     "261": "اليوم",
     "262": "غدًا",
     "263": "التالي %d أيام",
-    "264": "الحقل [%s] فارغ"
+    "264": "الحقل [%s] فارغ",
+    "265": "خارج النطاق",
+    "266": "Tesseract OCR غير مثبت أو غير مهيأ، يرجى الرجوع إلى دليل المستخدم - قسم ملفات الموارد لإجراء الإعداد"
   }
 }
