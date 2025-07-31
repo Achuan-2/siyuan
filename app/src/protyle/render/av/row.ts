@@ -128,7 +128,7 @@ export const insertAttrViewBlockAnimation = (options: {
     let previousElement = options.blockElement.querySelector(`.av__row[data-id="${options.previousId}"]`) || options.blockElement.querySelector(groupQuery + ".av__row--header");
     // 有排序需要加入最后一行
     if (options.blockElement.querySelector('.av__views [data-type="av-sort"]').classList.contains("block__icon--active")) {
-        previousElement = options.blockElement.querySelector("groupQuery + .av__row--util").previousElementSibling;
+        previousElement = options.blockElement.querySelector(groupQuery + ".av__row--util").previousElementSibling;
     }
     let colHTML = '<div class="av__colsticky"><div class="av__firstcol"><svg><use xlink:href="#iconUncheck"></use></svg></div></div>';
     const pinIndex = previousElement.querySelectorAll(".av__colsticky .av__cell").length - 1;
@@ -288,19 +288,21 @@ export const stickyRow = (blockElement: HTMLElement, elementRect: DOMRect, statu
         });
     }
 
-    const footerElement = blockElement.querySelector(".av__row--footer") as HTMLElement;
-    if (footerElement && (status === "bottom" || status === "all")) {
-        if (footerElement.querySelector(".av__calc--ashow")) {
-            const bodyRect = footerElement.parentElement.getBoundingClientRect();
-            const distance = Math.ceil(elementRect.bottom - bodyRect.bottom);
-            if (distance < 0 && -distance < bodyRect.height) {
-                footerElement.style.transform = `translateY(${distance}px)`;
+    const footerElements = blockElement.querySelectorAll(".av__row--footer");
+    if (footerElements.length > 0 && (status === "bottom" || status === "all")) {
+        footerElements.forEach((item: HTMLElement) => {
+            if (item.querySelector(".av__calc--ashow")) {
+                const bodyRect = item.parentElement.getBoundingClientRect();
+                const distance = Math.ceil(elementRect.bottom - bodyRect.bottom);
+                if (distance < 0 && -distance < bodyRect.height - item.clientHeight) {
+                    item.style.transform = `translateY(${distance}px)`;
+                } else {
+                    item.style.transform = "";
+                }
             } else {
-                footerElement.style.transform = "";
+                item.style.transform = "";
             }
-        } else {
-            footerElement.style.transform = "";
-        }
+        });
     }
 };
 

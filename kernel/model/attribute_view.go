@@ -4682,8 +4682,12 @@ func regenAttrViewViewGroups(attrView *av.AttributeView, keyID string) {
 
 		for _, g := range view.Groups {
 			if view.Group.HideEmpty {
-				if 2 != g.GroupHidden && 1 > len(g.GroupItemIDs) {
-					g.GroupHidden = 1
+				if 1 > len(g.GroupItemIDs) {
+					if 0 == g.GroupHidden {
+						g.GroupHidden = 1
+					}
+				} else {
+					g.GroupHidden = 0
 				}
 			} else {
 				if 2 != g.GroupHidden {
