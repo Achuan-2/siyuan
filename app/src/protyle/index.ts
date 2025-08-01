@@ -160,9 +160,7 @@ export class Protyle {
                             break;
                         case "transactions":
                             data.data[0].doOperations.find((item: IOperation) => {
-                                if (!this.protyle.preview.element.classList.contains("fn__none") &&
-                                    item.action !== "updateAttrs"   // 预览模式下点击只读
-                                ) {
+                                if (!this.protyle.preview.element.classList.contains("fn__none")) {
                                     this.protyle.preview.render(this.protyle);
                                 } else if (options.backlinkData && ["delete", "move"].includes(item.action)) {
                                     // 只对特定情况刷新，否则展开、编辑等操作刷新会频繁
@@ -181,11 +179,15 @@ export class Protyle {
                                     if (this.protyle.wysiwyg.element.childElementCount === 0 && this.protyle.block.parentID &&
                                         !(item.action === "delete" && typeof item.data?.createEmptyParagraph === "boolean" && !item.data.createEmptyParagraph)) {
                                         if (item.action === "delete" && this.protyle.block.showAll) {
-                                            zoomOut({
-                                                protyle: this.protyle,
-                                                id: this.protyle.block.rootID,
-                                                focusId: this.protyle.block.id
-                                            });
+                                            if (this.protyle.options.handleEmptyContent) {
+                                                this.protyle.options.handleEmptyContent();
+                                            } else {
+                                                zoomOut({
+                                                    protyle: this.protyle,
+                                                    id: this.protyle.block.rootID,
+                                                    focusId: this.protyle.block.id
+                                                });
+                                            }
                                         } else {
                                             const newID = Lute.NewNodeID();
                                             const emptyElement = genEmptyElement(false, false, newID);
