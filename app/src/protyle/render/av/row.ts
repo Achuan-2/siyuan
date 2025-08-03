@@ -94,14 +94,16 @@ export const updateHeader = (rowElement: HTMLElement) => {
 };
 
 export const setPage = (blockElement: Element) => {
-    const pageSize = parseInt(blockElement.getAttribute("data-page-size"));
-    if (pageSize) {
-        const avType = blockElement.getAttribute("data-av-type") as TAVView;
-        const currentCount = blockElement.querySelectorAll(avType === "table" ? ".av__row:not(.av__row--header)" : ".av__gallery-item").length;
-        if (pageSize < currentCount) {
-            blockElement.setAttribute("data-page-size", currentCount.toString());
+    const avType = blockElement.getAttribute("data-av-type") as TAVView;
+    blockElement.querySelectorAll(".av__body").forEach((item: HTMLElement) => {
+        const pageSize = item.dataset.pageSize;
+        if (pageSize) {
+            const currentCount = item.querySelectorAll(avType === "table" ? ".av__row:not(.av__row--header)" : ".av__gallery-item").length;
+            if (parseInt(pageSize) < currentCount) {
+                item.dataset.pageSize = currentCount.toString();
+            }
         }
-    }
+    });
 };
 
 /**
@@ -119,10 +121,7 @@ export const insertAttrViewBlockAnimation = (options: {
     previousId: string,
     groupID?: string
 }) => {
-    if ((options.blockElement.querySelector('[data-type="av-search"]') as HTMLInputElement).value !== "") {
-        showMessage(window.siyuan.languages.insertRowTip);
-        return;
-    }
+    (options.blockElement.querySelector('[data-type="av-search"]') as HTMLInputElement).value = "";
     const avId = options.blockElement.getAttribute("data-av-id");
     const groupQuery = options.groupID ? `.av__body[data-group-id="${options.groupID}"] ` : "";
     let previousElement = options.blockElement.querySelector(`.av__row[data-id="${options.previousId}"]`) || options.blockElement.querySelector(groupQuery + ".av__row--header");
@@ -171,9 +170,11 @@ ${getTypeByCellElement(item) === "block" ? ' data-detached="true"' : ""}><span c
             currentRow.setAttribute("data-need-update", "true");
         }
         const sideRow = previousElement.classList.contains("av__row--header") ? currentRow.nextElementSibling : previousElement;
-        fetchPost("/api/av/getAttributeViewFilterSort", {
-            id: avId,
-            blockID: options.blockElement.getAttribute("data-node-id")
+        fetchPost("/api/av/getAttributeViewAddingBlockDefaultValues", {
+            avID: avId,
+            viewID: options.blockElement.getAttribute(Constants.CUSTOM_SY_AV_VIEW),
+            groupID: options.groupID,
+            previousID: options.previousId,
         }, (response) => {
             // https://github.com/siyuan-note/siyuan/issues/10517
             let hideTextCell = false;
@@ -316,7 +317,9 @@ const updatePageSize = (options: {
     if (options.currentPageSize === options.newPageSize) {
         return;
     }
-    options.nodeElement.setAttribute("data-page-size", options.newPageSize);
+    options.nodeElement.querySelectorAll(".av__body").forEach((item: HTMLElement) => {
+        item.dataset.pageSize = options.newPageSize;
+    });
     const blockID = options.nodeElement.getAttribute("data-node-id");
     transaction(options.protyle, [{
         action: "setAttrViewPageSize",

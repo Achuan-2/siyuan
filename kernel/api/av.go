@@ -27,6 +27,38 @@ import (
 	"github.com/siyuan-note/siyuan/kernel/util"
 )
 
+// getAttributeViewAddingBlockDefaultValues 用于获取添加块时的默认值。
+// 存在过滤或分组条件时，添加块时需要填充默认值到过滤字段或分组字段中，前端需要调用该接口来获取这些默认值以便填充。
+func getAttributeViewAddingBlockDefaultValues(c *gin.Context) {
+	ret := gulu.Ret.NewResult()
+	defer c.JSON(http.StatusOK, ret)
+
+	arg, ok := util.JsonArg(c, ret)
+	if !ok {
+		return
+	}
+
+	avID := arg["avID"].(string)
+	viewID := arg["viewID"].(string)
+	var groupID string
+	if groupIDArg := arg["groupID"]; nil != groupIDArg {
+		groupID = groupIDArg.(string)
+	}
+	var previousID string
+	if nil != arg["previousID"] {
+		previousID = arg["previousID"].(string)
+	}
+	var addingBlockID string
+	if nil != arg["addingBlockID"] {
+		addingBlockID = arg["addingBlockID"].(string)
+	}
+
+	values := model.GetAttrViewAddingBlockDefaultValues(avID, viewID, groupID, previousID, addingBlockID)
+	ret.Data = map[string]interface{}{
+		"values": values,
+	}
+}
+
 func batchReplaceAttributeViewBlocks(c *gin.Context) {
 	// Add kernel API `/api/av/batchReplaceAttributeViewBlocks` https://github.com/siyuan-note/siyuan/issues/15313
 	ret := gulu.Ret.NewResult()
@@ -304,17 +336,13 @@ func addAttributeViewBlocks(c *gin.Context) {
 	if nil != arg["previousID"] {
 		previousID = arg["previousID"].(string)
 	}
-	ignoreFillFilter := true
-	if nil != arg["ignoreFillFilter"] {
-		ignoreFillFilter = arg["ignoreFillFilter"].(bool)
-	}
 
 	var srcs []map[string]interface{}
 	for _, v := range arg["srcs"].([]interface{}) {
 		src := v.(map[string]interface{})
 		srcs = append(srcs, src)
 	}
-	err := model.AddAttributeViewBlock(nil, srcs, avID, blockID, groupID, previousID, ignoreFillFilter)
+	err := model.AddAttributeViewBlock(nil, srcs, avID, blockID, groupID, previousID)
 	if err != nil {
 		ret.Code = -1
 		ret.Msg = err.Error()

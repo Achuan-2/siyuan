@@ -17,6 +17,7 @@ import {isMobile} from "../../../util/functions";
 import {renderGallery} from "./gallery/render";
 import {getFieldsByData, getViewIcon} from "./view";
 import {openMenuPanel} from "./openMenuPanel";
+import {getPageSize} from "./groups";
 
 interface ITableOptions {
     protyle: IProtyle,
@@ -35,6 +36,7 @@ interface ITableOptions {
         dragFillId: string,
         activeIds: string[],
         query: string,
+        pageSizes: { [key: string]: string },
     }
 }
 
@@ -223,6 +225,19 @@ ${cell.color ? `color:${cell.color};` : ""}">${renderCell(cell.value, rowIndex, 
 <div class="av__row--footer${hasCalc ? " av__readonly--show" : ""}">${calcHTML}</div>`;
 };
 
+export const getGroupTitleHTML = (group: IAVView, counter: number) => {
+    return `<div class="av__group-title block__icons">
+    <div class="block__icon block__icon--show" data-type="av-group-fold" data-id="${group.id}">
+        <svg class="${group.groupFolded ? "" : "av__group-arrow--open"}"><use xlink:href="#iconRight"></use></svg>
+    </div>
+    <span class="fn__space"></span>
+    ${group.name}
+    <span class="${counter === 0 ? "fn__none" : "counter"}">${counter}</span>
+    <span class="fn__space"></span>
+    <span class="block__icon ariaLabel" data-type="av-add-top" data-position="north" aria-label="${window.siyuan.languages.newRow}"><svg><use xlink:href="#iconAdd"></use></svg></span>
+</div>`;
+};
+
 const renderGroupTable = (options: ITableOptions) => {
     const searchInputElement = options.blockElement.querySelector('[data-type="av-search"]') as HTMLInputElement;
     const isSearching = searchInputElement && document.activeElement === searchInputElement;
@@ -232,12 +247,8 @@ const renderGroupTable = (options: ITableOptions) => {
     options.data.view.groups.forEach((group: IAVTable) => {
         if (group.groupHidden === 0) {
             group.columns = (options.data.view as IAVTable).columns;
-            avBodyHTML += `<div class="av__group-title">
-    <div class="block__icon block__icon--show" data-type="av-group-fold" data-id="${group.id}">
-        <svg class="${group.groupFolded ? "" : "av__group-arrow--open"}"><use xlink:href="#iconRight"></use></svg>
-    </div><span class="fn__space"></span>${group.name}<span class="${group.rows.length === 0 ? "fn__none" : "counter"}">${group.rows.length}</span>
-</div>
-<div data-group-id="${group.id}" style="float: left" class="av__body${group.groupFolded ? " fn__none" : ""}">${getTableHTMLs(group, options.blockElement)}</div>`;
+            avBodyHTML += `${getGroupTitleHTML(group, group.rows.length)}
+<div data-group-id="${group.id}" data-page-size="${group.pageSize}" style="float: left" class="av__body${group.groupFolded ? " fn__none" : ""}">${getTableHTMLs(group, options.blockElement)}</div>`;
         }
     });
     if (options.renderAll) {
@@ -260,7 +271,10 @@ const afterRenderTable = (options: ITableOptions) => {
     options.blockElement.style.alignSelf = options.resetData.alignSelf;
     const editRect = options.protyle.contentElement.getBoundingClientRect();
     if (options.resetData.headerTransform) {
-        (options.blockElement.querySelector('.av__row--header[style^="transform"]') as HTMLElement).style.transform = options.resetData.headerTransform;
+        const headerTransformElement = options.blockElement.querySelector('.av__row--header[style^="transform"]') as HTMLElement;
+        if (headerTransformElement) {
+            headerTransformElement.style.transform = options.resetData.headerTransform;
+        }
     } else {
         // 需等待渲染完，否则 getBoundingClientRect 错误 https://github.com/siyuan-note/siyuan/issues/13787
         setTimeout(() => {
@@ -268,7 +282,10 @@ const afterRenderTable = (options: ITableOptions) => {
         }, Constants.TIMEOUT_LOAD);
     }
     if (options.resetData.footerTransform) {
-        (options.blockElement.querySelector(".av__row--footer") as HTMLElement).style.transform = options.resetData.footerTransform;
+        const footerTransformElement = options.blockElement.querySelector('.av__row--footer[style^="transform"]') as HTMLElement;
+        if (footerTransformElement) {
+            footerTransformElement.style.transform = options.resetData.footerTransform;
+        }
     } else {
         // 需等待渲染完，否则 getBoundingClientRect 错误 https://github.com/siyuan-note/siyuan/issues/13787
         setTimeout(() => {
@@ -305,7 +322,13 @@ const afterRenderTable = (options: ITableOptions) => {
             updateHeader(rowElement);
         }
     });
-
+    Object.keys(options.resetData.pageSizes).forEach((groupId) => {
+        if (groupId === "unGroup") {
+            (options.blockElement.querySelector(".av__body") as HTMLElement).dataset.pageSize = options.resetData.pageSizes[groupId];
+            return;
+        }
+        (options.blockElement.querySelector(`.av__body[data-group-id="${groupId}"]`) as HTMLElement).dataset.pageSize = options.resetData.pageSizes[groupId];
+    });
     if (options.resetData.dragFillId) {
         addDragFill(options.blockElement.querySelector(`.av__row[data-id="${options.resetData.dragFillId.split(Constants.ZWSP)[0]}"] .av__cell[data-col-id="${options.resetData.dragFillId.split(Constants.ZWSP)[1]}"]`));
     }
@@ -433,6 +456,10 @@ export const avRender = (element: Element, protyle: IProtyle, cb?: (data: IAV) =
                 activeIds.push((hasClosestByClassName(item, "av__row") as HTMLElement).dataset.id + Constants.ZWSP + item.getAttribute("data-col-id"));
             });
             const searchInputElement = e.querySelector('[data-type="av-search"]') as HTMLInputElement;
+            const pageSizes: { [key: string]: string } = {};
+            e.querySelectorAll(".av__body").forEach((item: HTMLElement) => {
+                pageSizes[item.dataset.groupId || "unGroup"] = item.dataset.pageSize;
+            });
             const resetData = {
                 selectCellId,
                 alignSelf: e.style.alignSelf,
@@ -443,7 +470,8 @@ export const avRender = (element: Element, protyle: IProtyle, cb?: (data: IAV) =
                 selectRowIds,
                 dragFillId,
                 activeIds,
-                query: searchInputElement?.value || ""
+                query: searchInputElement?.value || "",
+                pageSizes
             };
             if (e.firstElementChild.innerHTML === "") {
                 e.style.alignSelf = "";
@@ -461,11 +489,13 @@ export const avRender = (element: Element, protyle: IProtyle, cb?: (data: IAV) =
             }
             const created = protyle.options.history?.created;
             const snapshot = protyle.options.history?.snapshot;
+            const avPageSize = getPageSize(e);
             fetchPost(created ? "/api/av/renderHistoryAttributeView" : (snapshot ? "/api/av/renderSnapshotAttributeView" : "/api/av/renderAttributeView"), {
                 id: e.getAttribute("data-av-id"),
                 created,
                 snapshot,
-                pageSize: parseInt(e.dataset.pageSize) || undefined,
+                pageSize: avPageSize.unGroupPageSize,
+                groupPaging: avPageSize.groupPageSize,
                 viewID: e.getAttribute(Constants.CUSTOM_SY_AV_VIEW) || "",
                 query: resetData.query.trim(),
                 blockID: e.getAttribute("data-node-id"),
@@ -480,10 +510,7 @@ export const avRender = (element: Element, protyle: IProtyle, cb?: (data: IAV) =
                     renderGroupTable({blockElement: e, protyle, cb, renderAll, data: response.data, resetData});
                     return;
                 }
-                if (!e.dataset.pageSize) {
-                    e.dataset.pageSize = data.pageSize.toString();
-                }
-                const avBodyHTML = `<div class="av__body" style="float: left">
+                const avBodyHTML = `<div class="av__body" data-page-size="${data.pageSize}" style="float: left">
     ${getTableHTMLs(data, e)}
 </div>`;
                 if (renderAll) {
@@ -653,12 +680,18 @@ export const refreshAV = (protyle: IProtyle, operation: IOperation) => {
             } else if (operation.action === "setAttrViewBlockView") {
                 const viewTabElement = item.querySelector(`.av__views > .layout-tab-bar > .item[data-id="${operation.id}"]`) as HTMLElement;
                 if (viewTabElement) {
-                    item.dataset.pageSize = viewTabElement.dataset.page;
+                    item.querySelectorAll(".av__body").forEach((bodyItem: HTMLElement) => {
+                        bodyItem.dataset.pageSize = viewTabElement.dataset.page;
+                    });
                 }
             } else if (operation.action === "addAttrViewView") {
-                item.dataset.pageSize = "50";
+                item.querySelectorAll(".av__body").forEach((bodyItem: HTMLElement) => {
+                    bodyItem.dataset.pageSize = "50";
+                });
             } else if (operation.action === "removeAttrViewView") {
-                item.dataset.pageSize = item.querySelector(`.av__views > .layout-tab-bar .item[data-id="${item.getAttribute(Constants.CUSTOM_SY_AV_VIEW)}"]`)?.getAttribute("data-page");
+                item.querySelectorAll(".av__body").forEach((bodyItem: HTMLElement) => {
+                    bodyItem.dataset.pageSize = item.querySelector(`.av__views > .layout-tab-bar .item[data-id="${item.getAttribute(Constants.CUSTOM_SY_AV_VIEW)}"]`)?.getAttribute("data-page");
+                });
             } else if (operation.action === "sortAttrViewView" && operation.data === "unRefresh") {
                 const viewTabElement = item.querySelector(`.av__views > .layout-tab-bar > .item[data-id="${operation.id}"]`) as HTMLElement;
                 if (viewTabElement && !operation.previousID && !viewTabElement.previousElementSibling) {

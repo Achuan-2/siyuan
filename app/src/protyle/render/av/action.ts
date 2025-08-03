@@ -4,7 +4,8 @@ import {transaction} from "../../wysiwyg/transaction";
 import {openEditorTab} from "../../../menus/util";
 import {openFileAttr} from "../../../menus/commonMenuItem";
 import {
-    addDragFill, cellValueIsEmpty,
+    addDragFill,
+    cellValueIsEmpty,
     genCellValueByElement,
     getCellText,
     getTypeByCellElement,
@@ -54,7 +55,8 @@ export const avClick = (protyle: IProtyle, event: MouseEvent & { target: HTMLEle
             rowFooterElement.style.transform = "";
         }
         blockElement.removeAttribute("data-render");
-        blockElement.dataset.pageSize = (parseInt(blockElement.dataset.pageSize) + parseInt(blockElement.querySelector('[data-type="set-page-size"]').getAttribute("data-size"))).toString();
+        const bodyElement = hasClosestByClassName(event.target, "av__body") as HTMLElement;
+        bodyElement.dataset.pageSize = (parseInt(bodyElement.dataset.pageSize) + parseInt(bodyElement.querySelector('[data-type="set-page-size"]').getAttribute("data-size"))).toString();
         avRender(blockElement, protyle);
         event.preventDefault();
         event.stopPropagation();
@@ -157,7 +159,13 @@ export const avClick = (protyle: IProtyle, event: MouseEvent & { target: HTMLEle
             event.stopPropagation();
             return true;
         } else if (type === "av-add-more") {
-            insertRows({blockElement, protyle, count: 1, previousID: ""});
+            insertRows({
+                blockElement,
+                protyle,
+                count: 1,
+                previousID: "",
+                groupID: blockElement.querySelector(".av__body")?.getAttribute("data-group-id") || ""
+            });
             event.preventDefault();
             event.stopPropagation();
             return true;
@@ -217,6 +225,18 @@ export const avClick = (protyle: IProtyle, event: MouseEvent & { target: HTMLEle
                 previousID: (bodyElement && bodyElement.querySelector(".av__row--util")?.previousElementSibling?.getAttribute("data-id")) ||
                     target.previousElementSibling?.getAttribute("data-id") || undefined,
                 groupID: bodyElement ? bodyElement.getAttribute("data-group-id") : ""
+            });
+            event.preventDefault();
+            event.stopPropagation();
+            return true;
+        } else if (type === "av-add-top") {
+            const titleElement = hasClosestByClassName(target, "av__group-title");
+            insertRows({
+                blockElement,
+                protyle,
+                count: 1,
+                previousID: "",
+                groupID: titleElement ? titleElement.nextElementSibling.getAttribute("data-group-id") : ""
             });
             event.preventDefault();
             event.stopPropagation();
@@ -584,7 +604,6 @@ export const avContextmenu = (protyle: IProtyle, rowElement: HTMLElement, positi
                     transaction(protyle, [{
                         action: "insertAttrViewBlock",
                         avID,
-                        ignoreFillFilter: true,
                         srcs,
                         blockID: listItemElement.dataset.blockId,
                         groupID: rowElement.parentElement.getAttribute("data-group-id")

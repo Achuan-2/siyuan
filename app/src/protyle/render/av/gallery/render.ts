@@ -7,10 +7,11 @@ import {cellValueIsEmpty, renderCell} from "../cell";
 import {focusBlock} from "../../../util/selection";
 import {electronUndo} from "../../../undo";
 import {addClearButton} from "../../../../util/addClearButton";
-import {avRender, genTabHeaderHTML, updateSearch} from "../render";
+import {avRender, genTabHeaderHTML, getGroupTitleHTML, updateSearch} from "../render";
 import {processRender} from "../../../util/processCode";
 import {getColIconByType, getColNameByType} from "../col";
 import {getCompressURL} from "../../../../util/image";
+import {getPageSize} from "../groups";
 
 interface ITableOptions {
     protyle: IProtyle,
@@ -23,6 +24,7 @@ interface ITableOptions {
         selectItemIds: string[],
         isSearching: boolean,
         editIds: string[],
+        pageSizes: { [key: string]: string },
         query: string,
         oldOffset: number,
     }
@@ -63,7 +65,7 @@ const getGalleryHTML = (data: IAVGallery, selectItemIds: string[], editIds: stri
                 ariaLabel += escapeAttr(`<div class="ft__on-surface">${data.fields[fieldsIndex].desc}</div>`);
             }
             if (cell.valueType === "checkbox") {
-                cell.value["checkbox"].content = data.fields[fieldsIndex].name||getColNameByType(data.fields[fieldsIndex].type)
+                cell.value["checkbox"].content = data.fields[fieldsIndex].name || getColNameByType(data.fields[fieldsIndex].type);
             }
             galleryHTML += `<div class="av__cell${checkClass} ariaLabel" data-wrap="${data.fields[fieldsIndex].wrap}" 
 data-empty="${isEmpty}" 
@@ -106,12 +108,8 @@ const renderGroupGallery = (options: ITableOptions) => {
     options.data.view.groups.forEach((group: IAVGallery) => {
         if (group.groupHidden === 0) {
             group.fields = (options.data.view as IAVGallery).fields;
-            avBodyHTML += `<div class="av__group-title">
-    <div class="block__icon block__icon--show" data-type="av-group-fold" data-id="${group.id}">
-        <svg class="${group.groupFolded ? "" : "av__group-arrow--open"}"><use xlink:href="#iconRight"></use></svg>
-    </div><span class="fn__space"></span>${group.name}<span class="${group.cards.length === 0 ? "fn__none" : "counter"}">${group.cards.length}</span>
-</div>
-<div data-group-id="${group.id}" class="av__body${group.groupFolded ? " fn__none" : ""}">${getGalleryHTML(group, options.resetData.selectItemIds, options.resetData.editIds)}</div>`;
+            avBodyHTML += `${getGroupTitleHTML(group, group.fields.length)}
+<div data-group-id="${group.id}" data-page-size="${group.pageSize}" class="av__body${group.groupFolded ? " fn__none" : ""}">${getGalleryHTML(group, options.resetData.selectItemIds, options.resetData.editIds)}</div>`;
         }
     });
     if (options.renderAll) {
@@ -140,6 +138,13 @@ const afterRenderGallery = (options: ITableOptions) => {
     if (options.resetData.alignSelf) {
         options.blockElement.style.alignSelf = options.resetData.alignSelf;
     }
+    Object.keys(options.resetData.pageSizes).forEach((groupId) => {
+        if (groupId === "unGroup") {
+            (options.blockElement.querySelector(".av__body") as HTMLElement).dataset.pageSize = options.resetData.pageSizes[groupId];
+            return;
+        }
+        (options.blockElement.querySelector(`.av__body[data-group-id="${groupId}"]`) as HTMLElement).dataset.pageSize = options.resetData.pageSizes[groupId];
+    });
     if (getSelection().rangeCount > 0) {
         // 修改表头后光标重新定位
         const range = getSelection().getRangeAt(0);
@@ -236,6 +241,10 @@ export const renderGallery = async (options: {
             selectItemIds.push(rowId);
         }
     });
+    const pageSizes: { [key: string]: string } = {};
+    options.blockElement.querySelectorAll(".av__body").forEach((item: HTMLElement) => {
+        pageSizes[item.dataset.groupId || "unGroup"] = item.dataset.pageSize;
+    });
     const resetData = {
         isSearching: searchInputElement && document.activeElement === searchInputElement,
         query: searchInputElement?.value || "",
@@ -243,6 +252,7 @@ export const renderGallery = async (options: {
         oldOffset: options.protyle.contentElement.scrollTop,
         editIds,
         selectItemIds,
+        pageSizes,
     };
     if (options.blockElement.firstElementChild.innerHTML === "") {
         options.blockElement.style.alignSelf = "";
@@ -257,11 +267,13 @@ export const renderGallery = async (options: {
 
     let data: IAV = options.data;
     if (!data) {
+        const avPageSize = getPageSize(options.blockElement);
         const response = await fetchSyncPost(created ? "/api/av/renderHistoryAttributeView" : (snapshot ? "/api/av/renderSnapshotAttributeView" : "/api/av/renderAttributeView"), {
             id: options.blockElement.getAttribute("data-av-id"),
             created,
             snapshot,
-            pageSize: parseInt(options.blockElement.dataset.pageSize) || undefined,
+            pageSize: avPageSize.unGroupPageSize,
+            groupPaging: avPageSize.groupPageSize,
             viewID: options.blockElement.getAttribute(Constants.CUSTOM_SY_AV_VIEW) || "",
             query: resetData.query.trim()
         });
@@ -284,22 +296,21 @@ export const renderGallery = async (options: {
         });
         return;
     }
-    if (!options.blockElement.dataset.pageSize) {
-        options.blockElement.dataset.pageSize = view.pageSize.toString();
-    }
     const bodyHTML = getGalleryHTML(view, selectItemIds, editIds);
     if (options.renderAll) {
         options.blockElement.firstElementChild.outerHTML = `<div class="av__container fn__block">
     ${genTabHeaderHTML(data, resetData.isSearching || !!resetData.query, options.protyle.disabled || !!hasClosestByAttribute(options.blockElement, "data-type", "NodeBlockQueryEmbed"))}
     <div>
-        <div class="av__body">
+        <div class="av__body" data-page-size="${view.pageSize}">
             ${bodyHTML}
         </div>
     </div>
     <div class="av__cursor" contenteditable="true">${Constants.ZWSP}</div>
 </div>`;
     } else {
-        options.blockElement.querySelector(".av__body").innerHTML = bodyHTML;
+        const bodyElement = options.blockElement.querySelector(".av__body") as HTMLElement;
+        bodyElement.innerHTML = bodyHTML;
+        bodyElement.dataset.pageSize = view.pageSize.toString();
     }
     afterRenderGallery({
         resetData,
