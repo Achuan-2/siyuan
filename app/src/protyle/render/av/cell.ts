@@ -380,7 +380,7 @@ export const genCellValue = (colType: TAVCol, value: string | any) => {
         }
     }
     if (colType === "block") {
-        if (typeof value === "object" && value.id) {
+        if (typeof value === "object" && value && value.id) {
             cellValue.isDetached = false;
         } else {
             cellValue.isDetached = true;
@@ -983,7 +983,7 @@ export const renderCell = (cellValue: IAVCellValue, rowIndex = 0, showIcon = tru
         text += "</div>";
     } else if (cellValue.type === "rollup") {
         cellValue?.rollup?.contents?.forEach((item) => {
-            const rollupText = ["select", "mSelect", "mAsset", "checkbox", "relation"].includes(item.type) ? renderCell(item, rowIndex, showIcon, type) : renderRollup(item);
+            const rollupText = ["template", "select", "mSelect", "mAsset", "checkbox", "relation"].includes(item.type) ? renderCell(item, rowIndex, showIcon, type) : renderRollup(item);
             if (rollupText) {
                 text += rollupText + ", ";
             }

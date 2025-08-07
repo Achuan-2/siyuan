@@ -1,14 +1,13 @@
 import {fetchPost} from "../../../util/fetch";
 import {getColIconByType} from "./col";
 import {Constants} from "../../../constants";
-import {addDragFill, cellScrollIntoView, renderCell} from "./cell";
+import {addDragFill, cellScrollIntoView, popTextCell, renderCell} from "./cell";
 import {unicode2Emoji} from "../../../emoji";
 import {focusBlock} from "../../util/selection";
 import {hasClosestBlock, hasClosestByAttribute, hasClosestByClassName} from "../../util/hasClosest";
 import {stickyRow, updateHeader} from "./row";
 import {getCalcValue} from "./calc";
 import {renderAVAttribute} from "./blockAttr";
-import {showMessage} from "../../../dialog/message";
 import {addClearButton} from "../../../util/addClearButton";
 import {escapeAriaLabel, escapeAttr, escapeHtml} from "../../../util/escape";
 import {electronUndo} from "../../undo";
@@ -226,15 +225,22 @@ ${cell.color ? `color:${cell.color};` : ""}">${renderCell(cell.value, rowIndex, 
 };
 
 export const getGroupTitleHTML = (group: IAVView, counter: number) => {
-    return `<div class="av__group-title block__icons">
-    <div class="block__icon block__icon--show" data-type="av-group-fold" data-id="${group.id}">
+    let nameHTML = "";
+    if (["mSelect", "select"].includes(group.groupValue.type)) {
+        group.groupValue.mSelect.forEach((item) => {
+            nameHTML += `<span class="b3-chip" style="background-color:var(--b3-font-background${item.color});color:var(--b3-font-color${item.color})">${escapeHtml(item.content)}</span>`;
+        });
+    } else {
+        nameHTML = group.name;
+    }
+    return `<div class="av__group-title">
+    <div class="av__group-icon" data-type="av-group-fold" data-id="${group.id}">
         <svg class="${group.groupFolded ? "" : "av__group-arrow--open"}"><use xlink:href="#iconRight"></use></svg>
     </div>
     <span class="fn__space"></span>
-    ${group.name}
-    <span class="${counter === 0 ? "fn__none" : "counter"}">${counter}</span>
-    <span class="fn__space"></span>
-    <span class="block__icon ariaLabel" data-type="av-add-top" data-position="north" aria-label="${window.siyuan.languages.newRow}"><svg><use xlink:href="#iconAdd"></use></svg></span>
+    ${nameHTML}
+    <span class="${counter === 0 ? "fn__none" : "av__group-counter"}">${counter}</span>
+    <span class="av__group-icon av__group-icon--hover ariaLabel" data-type="av-add-top" data-position="north" aria-label="${window.siyuan.languages.newRow}"><svg><use xlink:href="#iconAdd"></use></svg></span>
 </div>`;
 };
 
@@ -327,7 +333,10 @@ const afterRenderTable = (options: ITableOptions) => {
             (options.blockElement.querySelector(".av__body") as HTMLElement).dataset.pageSize = options.resetData.pageSizes[groupId];
             return;
         }
-        (options.blockElement.querySelector(`.av__body[data-group-id="${groupId}"]`) as HTMLElement).dataset.pageSize = options.resetData.pageSizes[groupId];
+        const bodyElement = options.blockElement.querySelector(`.av__body[data-group-id="${groupId}"]`) as HTMLElement;
+        if (bodyElement) {
+            bodyElement.dataset.pageSize = options.resetData.pageSizes[groupId];
+        }
     });
     if (options.resetData.dragFillId) {
         addDragFill(options.blockElement.querySelector(`.av__row[data-id="${options.resetData.dragFillId.split(Constants.ZWSP)[0]}"] .av__cell[data-col-id="${options.resetData.dragFillId.split(Constants.ZWSP)[1]}"]`));
@@ -608,7 +617,7 @@ export const refreshAV = (protyle: IProtyle, operation: IOperation) => {
                     // hide
                     titleElement.classList.add("fn__none");
                 }
-                if (item.getAttribute("data-av-type") === "gallery") {
+                if (item.getAttribute("data-av-type") === "gallery" && !item.querySelector(".av__group-title")) {
                     const galleryElement = item.querySelector(".av__gallery");
                     if (!operation.data) {
                         galleryElement.classList.remove("av__gallery--top");
@@ -670,7 +679,6 @@ export const refreshAV = (protyle: IProtyle, operation: IOperation) => {
         const avID = operation.action === "setAttrViewName" ? operation.id : operation.avID;
         Array.from(protyle.wysiwyg.element.querySelectorAll(`[data-av-id="${avID}"]`)).forEach((item: HTMLElement) => {
             item.removeAttribute("data-render");
-            const updateRow = item.querySelector('[data-need-update="true"]');
             if (operation.action === "sortAttrViewCol" || operation.action === "sortAttrViewRow") {
                 item.querySelectorAll(".av__cell--active").forEach((item: HTMLElement) => {
                     item.classList.remove("av__cell--active");
@@ -707,17 +715,20 @@ export const refreshAV = (protyle: IProtyle, operation: IOperation) => {
                     renderAVAttribute(attrElement.parentElement, attrElement.dataset.nodeId, protyle);
                 } else {
                     if (operation.action === "insertAttrViewBlock") {
-                        if (updateRow && !item.querySelector(`[data-id="${updateRow.getAttribute("data-id")}"]`)) {
-                            showMessage(window.siyuan.languages.insertRowTip);
-                            document.querySelector(".av__mask")?.remove();
-                        }
+                        const groupQuery = operation.groupID ? `[data-group-id="${operation.groupID}"]` : "";
                         if (item.getAttribute("data-av-type") === "gallery") {
                             operation.srcs.forEach(srcItem => {
-                                const filesElement = item.querySelector(`.av__gallery-item[data-id="${srcItem.id}"]`)?.querySelector(".av__gallery-fields");
+                                const filesElement = item.querySelector(`.av__body${groupQuery} .av__gallery-item[data-id="${srcItem.id}"]`)?.querySelector(".av__gallery-fields");
                                 if (filesElement && filesElement.querySelector('[data-dtype="block"]')?.getAttribute("data-empty") === "true") {
                                     filesElement.classList.add("av__gallery-fields--edit");
                                 }
                             });
+                        }
+                        if (operation.srcs.length === 1) {
+                            const popCellElement = item.querySelector(`.av__body${groupQuery} .av__cell[data-block-id="${operation.srcs[0].id}"]`) as HTMLElement;
+                            if (popCellElement) {
+                                popTextCell(protyle, [popCellElement], "block");
+                            }
                         }
                     } else if (operation.action === "addAttrViewView") {
                         if (item.getAttribute("data-node-id") === operation.blockID) {

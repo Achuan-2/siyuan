@@ -65,6 +65,7 @@ type TOperation =
     | "setAttrViewBlockView"
     | "setAttrViewGroup"
     | "removeAttrViewGroup"
+    | "hideAttrViewAllGroups"
     | "syncAttrViewTableColWidth"
     | "hideAttrViewGroup"
     | "sortAttrViewGroup"
@@ -863,6 +864,7 @@ interface IAVView {
     sorts: IAVSort[],
     groups: IAVView[]
     group: IAVGroup
+    groupValue: IAVCellValue
 }
 
 interface IAVTable extends IAVView {

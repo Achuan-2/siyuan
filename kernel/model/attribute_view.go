@@ -44,7 +44,7 @@ import (
 	"github.com/xrash/smetrics"
 )
 
-func GetAttrViewAddingBlockDefaultValues(avID, viewID, groupID, previousBlockID, addingBlockID string) (ret map[string]*av.Value) {
+func GetAttrViewAddingBlockDefaultValues(avID, viewID, groupID, previousBlockID, addingBlockID string) (ret map[string]*av.Value, ignore bool) {
 	ret = map[string]*av.Value{}
 
 	attrView, err := av.ParseAttributeView(avID)
@@ -59,6 +59,12 @@ func GetAttrViewAddingBlockDefaultValues(avID, viewID, groupID, previousBlockID,
 		return
 	}
 
+	if 1 > len(view.Filters) && nil == view.Group {
+		// 没有过滤条件也没有分组条件时忽略
+		ignore = true
+		return
+	}
+
 	groupView := view
 	if "" != groupID {
 		groupView = view.GetGroup(groupID)
@@ -67,7 +73,9 @@ func GetAttrViewAddingBlockDefaultValues(avID, viewID, groupID, previousBlockID,
 		logging.LogErrorf("group [%s] not found in view [%s] of attribute view [%s]", groupID, viewID, avID)
 		return
 	}
-	return getAttrViewAddingBlockDefaultValues(attrView, view, groupView, previousBlockID, addingBlockID)
+
+	ret = getAttrViewAddingBlockDefaultValues(attrView, view, groupView, previousBlockID, addingBlockID)
+	return
 }
 
 func getAttrViewAddingBlockDefaultValues(attrView *av.AttributeView, view, groupView *av.View, previousBlockID, addingBlockID string) (ret map[string]*av.Value) {
@@ -79,18 +87,40 @@ func getAttrViewAddingBlockDefaultValues(attrView *av.AttributeView, view, group
 		filterKeyIDs[f.Column] = true
 	}
 
+	// 对库中存在模板字段和汇总字段的情况进行处理（尽量从临近项获取新值，获取不到的话直接返回）
+	existSpecialField := false
+	for _, keyValues := range attrView.KeyValues {
+		if av.KeyTypeTemplate == keyValues.Key.Type || av.KeyTypeRollup == keyValues.Key.Type {
+			existSpecialField = true
+			break
+		}
+	}
+	if existSpecialField {
+		if nil != nearItem {
+			// 存在临近项时从临近项获取新值
+			for _, keyValues := range attrView.KeyValues {
+				newValue := getNewValueByNearItem(nearItem, keyValues.Key, addingBlockID)
+				ret[keyValues.Key.ID] = newValue
+			}
+		} else { // 不存在临近项时不生成任何新值
+			return
+		}
+	}
+
 	for _, filter := range view.Filters {
 		keyValues, _ := attrView.GetKeyValues(filter.Column)
 		if nil == keyValues {
 			continue
 		}
 
-		var defaultVal *av.Value
+		var newValue *av.Value
 		if nil != nearItem {
-			defaultVal = nearItem.GetValue(filter.Column)
+			// 存在临近项时优先通过临近项获取新值
+			newValue = getNewValueByNearItem(nearItem, keyValues.Key, addingBlockID)
+		} else {
+			// 不存在临近项时通过过滤条件计算新值
+			newValue = filter.GetAffectValue(keyValues.Key, addingBlockID)
 		}
-
-		newValue := filter.GetAffectValue(keyValues.Key, defaultVal, addingBlockID)
 		if nil != newValue {
 			ret[keyValues.Key.ID] = newValue
 		}
@@ -102,8 +132,16 @@ func getAttrViewAddingBlockDefaultValues(attrView *av.AttributeView, view, group
 			newValue := getNewValueByNearItem(nearItem, groupKey, addingBlockID)
 			if av.KeyTypeSelect == groupKey.Type || av.KeyTypeMSelect == groupKey.Type {
 				// 因为单选或多选只能按选项分组，并且可能存在空白分组（前面可能找不到临近项） ，所以单选或多选类型的分组字段使用分组值内容对应的选项
-				if opt := groupKey.GetOption(groupView.GroupValue); nil != opt && groupValueDefault != groupView.GroupValue {
-					newValue.MSelect = append(newValue.MSelect, &av.ValueSelect{Content: opt.Name, Color: opt.Color})
+				if opt := groupKey.GetOption(groupView.GetGroupValue()); nil != opt && groupValueDefault != groupView.GetGroupValue() {
+					exists := false
+					for _, s := range newValue.MSelect {
+						if s.Content == groupView.GetGroupValue() {
+							exists = true
+						}
+					}
+					if !exists {
+						newValue.MSelect = append(newValue.MSelect, &av.ValueSelect{Content: opt.Name, Color: opt.Color})
+					}
 				}
 			}
 
@@ -187,7 +225,7 @@ func removeAttributeViewGroup(avID, blockID string) (err error) {
 }
 
 func removeAttributeViewGroup0(view *av.View) {
-	view.Group, view.Groups, view.GroupUpdated = nil, nil, 0
+	view.Group, view.Groups, view.GroupCreated = nil, nil, 0
 }
 
 func (tx *Transaction) doSyncAttrViewTableColWidth(operation *Operation) (ret *TxErr) {
@@ -272,6 +310,40 @@ func hideAttributeViewGroup(avID, blockID, groupID string, hidden int) (err erro
 	return
 }
 
+func (tx *Transaction) doHideAttrViewAllGroups(operation *Operation) (ret *TxErr) {
+	if err := hideAttributeViewAllGroups(operation.AvID, operation.BlockID, operation.Data.(bool)); nil != err {
+		return &TxErr{code: TxErrHandleAttributeView, id: operation.AvID, msg: err.Error()}
+	}
+	return
+}
+
+func hideAttributeViewAllGroups(avID, blockID string, hidden bool) (err error) {
+	attrView, err := av.ParseAttributeView(avID)
+	if err != nil {
+		return
+	}
+
+	view, err := getAttrViewViewByBlockID(attrView, blockID)
+	if err != nil {
+		return
+	}
+
+	for _, group := range view.Groups {
+		if hidden {
+			group.GroupHidden = 2
+		} else {
+			group.GroupHidden = 0
+		}
+	}
+
+	err = av.SaveAttributeView(attrView)
+	if err != nil {
+		logging.LogErrorf("save attribute view [%s] failed: %s", avID, err)
+		return
+	}
+	return
+}
+
 func (tx *Transaction) doFoldAttrViewGroup(operation *Operation) (ret *TxErr) {
 	if err := foldAttrViewGroup(operation.AvID, operation.BlockID, operation.ID, operation.Data.(bool)); nil != err {
 		return &TxErr{code: TxErrHandleAttributeView, id: operation.AvID, msg: err.Error()}
@@ -338,8 +410,10 @@ func SetAttributeViewGroup(avID, blockID string, group *av.ViewGroup) (err error
 		return err
 	}
 
+	groupStates := getAttrViewGroupStates(view)
 	view.Group = group
 	regenAttrViewViewGroups(attrView, "force")
+	setAttrViewGroupStates(view, groupStates)
 
 	err = av.SaveAttributeView(attrView)
 	ReloadAttrView(avID)
@@ -476,6 +550,8 @@ func ChangeAttrViewLayout(blockID, avID string, layout av.LayoutType) (err error
 			}
 		}
 	}
+
+	regenAttrViewViewGroups(attrView, "force")
 
 	if err = av.SaveAttributeView(attrView); nil != err {
 		logging.LogErrorf("save attribute view [%s] failed: %s", avID, err)
@@ -954,7 +1030,7 @@ func SearchAttributeViewNonRelationKey(avID, keyword string) (ret []*av.Key) {
 	}
 
 	for _, keyValues := range attrView.KeyValues {
-		if av.KeyTypeRelation != keyValues.Key.Type && av.KeyTypeRollup != keyValues.Key.Type && av.KeyTypeTemplate != keyValues.Key.Type && av.KeyTypeCreated != keyValues.Key.Type && av.KeyTypeUpdated != keyValues.Key.Type && av.KeyTypeLineNumber != keyValues.Key.Type {
+		if av.KeyTypeRelation != keyValues.Key.Type && av.KeyTypeRollup != keyValues.Key.Type && av.KeyTypeCreated != keyValues.Key.Type && av.KeyTypeUpdated != keyValues.Key.Type && av.KeyTypeLineNumber != keyValues.Key.Type {
 			if strings.Contains(strings.ToLower(keyValues.Key.Name), strings.ToLower(keyword)) {
 				ret = append(ret, keyValues.Key)
 			}
@@ -1225,8 +1301,8 @@ func GetBlockAttributeViewKeys(blockID string) (ret []*BlockAttributeViewKeys) {
 			}
 		}
 
-		// 渲染自动生成的列值，比如模板列、关联列、汇总列、创建时间列和更新时间列
-		// 先处理关联列、汇总列、创建时间列和更新时间列
+		// 渲染自动生成的字段值，比如模板字段、关联字段、汇总字段、创建时间字段和更新时间字段
+		// 先处理关联字段、汇总字段、创建时间字段和更新时间字段
 		for _, kv := range keyValues {
 			switch kv.Key.Type {
 			case av.KeyTypeBlock: // 对于主键可能需要填充静态锚文本 Database-bound block primary key supports setting static anchor text https://github.com/siyuan-note/siyuan/issues/10049
@@ -1262,7 +1338,7 @@ func GetBlockAttributeViewKeys(blockID string) (ret []*BlockAttributeViewKeys) {
 						for _, bID := range relVal.Relation.BlockIDs {
 							destVal := destAv.GetValue(kv.Key.Rollup.KeyID, bID)
 							if nil == destVal {
-								if destAv.ExistBlock(bID) { // 数据库中存在行但是列值不存在是数据未初始化，这里补一个默认值
+								if destAv.ExistBlock(bID) { // 数据库中存在行但是字段值不存在是数据未初始化，这里补一个默认值
 									destVal = av.GetAttributeViewDefaultValue(ast.NewNodeID(), kv.Key.Rollup.KeyID, bID, destKey.Type)
 								}
 								if nil == destVal {
@@ -1326,7 +1402,7 @@ func GetBlockAttributeViewKeys(blockID string) (ret []*BlockAttributeViewKeys) {
 			}
 		}
 
-		// 再处理模板列
+		// 再处理模板字段
 
 		// 渲染模板
 		var renderTemplateErr error
@@ -1579,17 +1655,25 @@ func renderAttributeView(attrView *av.AttributeView, blockID, viewID, query stri
 
 	// 当前日期可能会变，所以如果是按日期分组则需要重新生成分组
 	if isGroupByDate(view) {
-		updatedDate := time.UnixMilli(view.GroupUpdated).Format("2006-01-02")
-		if time.Now().Format("2006-01-02") != updatedDate {
+		createdDate := time.UnixMilli(view.GroupCreated).Format("2006-01-02")
+		if time.Now().Format("2006-01-02") != createdDate {
 			regenAttrViewViewGroups(attrView, "force")
 			av.SaveAttributeView(attrView)
 		}
 	}
 
+	fixDev := false
 	// 如果存在分组的话渲染分组视图
 	if groupKey := view.GetGroupKey(attrView); nil != groupKey {
 		for _, groupView := range view.Groups {
-			switch groupView.GroupValue {
+			if "" == groupView.GetGroupValue() && !fixDev {
+				// TODO 分组上线后删除，预计 2025 年 9 月后可以删除
+				regenAttrViewViewGroups(attrView, "force")
+				av.SaveAttributeView(attrView)
+				fixDev = true
+			}
+
+			switch groupView.GetGroupValue() {
 			case groupValueDefault:
 				groupView.Name = fmt.Sprintf(Conf.language(264), groupKey.Name)
 			case groupValueNotInRange:
@@ -1609,7 +1693,7 @@ func renderAttributeView(attrView *av.AttributeView, blockID, viewID, query stri
 			case groupValueNext30Days:
 				groupView.Name = fmt.Sprintf(Conf.language(263), 30)
 			default:
-				groupView.Name = groupView.GroupValue
+				groupView.Name = groupView.GetGroupValue()
 			}
 		}
 
@@ -1657,20 +1741,7 @@ func genAttrViewViewGroups(view *av.View, attrView *av.AttributeView) {
 		return
 	}
 
-	// 临时记录每个分组视图的状态，以便后面重新生成分组后可以恢复这些状态
-	type GroupState struct {
-		Folded bool
-		Hidden int
-		Sort   int
-	}
-	groupStates := map[string]*GroupState{}
-	for i, groupView := range view.Groups {
-		groupStates[groupView.GroupValue] = &GroupState{
-			Folded: groupView.GroupFolded,
-			Hidden: groupView.GroupHidden,
-			Sort:   i,
-		}
-	}
+	groupStates := getAttrViewGroupStates(view)
 
 	group := view.Group
 	view.Groups = nil
@@ -1721,18 +1792,24 @@ func genAttrViewViewGroups(view *av.View, attrView *av.AttributeView) {
 	todayStart := time.Now()
 	todayStart = time.Date(todayStart.Year(), todayStart.Month(), todayStart.Day(), 0, 0, 0, 0, time.Local)
 
-	var groupVal string
 	groupItemsMap := map[string][]av.Item{}
 	for _, item := range items {
 		value := item.GetValue(group.Field)
 		if value.IsEmpty() {
-			groupVal = groupValueDefault
-			groupItemsMap[groupVal] = append(groupItemsMap[groupVal], item)
+			groupItemsMap[groupValueDefault] = append(groupItemsMap[groupValueDefault], item)
 			continue
 		}
 
+		var groupVal string
 		switch group.Method {
 		case av.GroupMethodValue:
+			if av.KeyTypeMSelect == groupKey.Type {
+				for _, s := range value.MSelect {
+					groupItemsMap[s.Content] = append(groupItemsMap[s.Content], item)
+				}
+				continue
+			}
+
 			groupVal = value.String(false)
 		case av.GroupMethodRangeNum:
 			if group.Range.NumStart > value.Number.Content || group.Range.NumEnd < value.Number.Content {
@@ -1793,6 +1870,7 @@ func genAttrViewViewGroups(view *av.View, attrView *av.AttributeView) {
 				}
 			}
 		}
+
 		groupItemsMap[groupVal] = append(groupItemsMap[groupVal], item)
 	}
 
@@ -1804,7 +1882,7 @@ func genAttrViewViewGroups(view *av.View, attrView *av.AttributeView) {
 		}
 	}
 
-	for name, groupItems := range groupItemsMap {
+	for groupValue, groupItems := range groupItemsMap {
 		var v *av.View
 		switch view.LayoutType {
 		case av.LayoutTypeTable:
@@ -1824,26 +1902,27 @@ func genAttrViewViewGroups(view *av.View, attrView *av.AttributeView) {
 		}
 
 		v.Name = "" // 分组视图的名称在渲染时才填充
-		v.GroupValue = name
+		v.GroupVal = &av.Value{Type: av.KeyTypeText, Text: &av.ValueText{Content: groupValue}}
+		if av.KeyTypeSelect == groupKey.Type || av.KeyTypeMSelect == groupKey.Type {
+			if opt := groupKey.GetOption(groupValue); nil != opt {
+				v.GroupVal.Text = nil
+				v.GroupVal.Type = av.KeyTypeSelect
+				v.GroupVal.MSelect = []*av.ValueSelect{{Content: opt.Name, Color: opt.Color}}
+			}
+		}
 		view.Groups = append(view.Groups, v)
 	}
 
-	view.GroupUpdated = time.Now().UnixMilli()
+	view.GroupCreated = time.Now().UnixMilli()
 
-	// 恢复分组视图状态
-	for _, groupView := range view.Groups {
-		if state, ok := groupStates[groupView.GroupValue]; ok {
-			groupView.GroupFolded = state.Folded
-			groupView.GroupHidden = state.Hidden
-		}
-	}
+	setAttrViewGroupStates(view, groupStates)
 
 	if av.GroupOrderMan == view.Group.Order {
 		// 恢复分组视图的自定义顺序
 		if len(groupStates) > 0 {
 			sort.SliceStable(view.Groups, func(i, j int) bool {
-				if stateI, ok := groupStates[view.Groups[i].GroupValue]; ok {
-					if stateJ, ok := groupStates[view.Groups[j].GroupValue]; ok {
+				if stateI, ok := groupStates[view.Groups[i].GetGroupValue()]; ok {
+					if stateJ, ok := groupStates[view.Groups[j].GetGroupValue()]; ok {
 						return stateI.Sort < stateJ.Sort
 					}
 				}
@@ -1855,11 +1934,11 @@ func genAttrViewViewGroups(view *av.View, attrView *av.AttributeView) {
 			var relativeDateGroups []*av.View
 			var last30Days, last7Days, yesterday, today, tomorrow, next7Days, next30Days, defaultGroup *av.View
 			for _, groupView := range view.Groups {
-				_, err := time.Parse("2006-01", groupView.GroupValue)
+				_, err := time.Parse("2006-01", groupView.GetGroupValue())
 				if nil == err { // 如果能解析出来说明是 30 天之前或 30 天之后的分组形式
 					relativeDateGroups = append(relativeDateGroups, groupView)
 				} else { // 否则是相对日期分组形式
-					switch groupView.GroupValue {
+					switch groupView.GetGroupValue() {
 					case groupValueLast30Days:
 						last30Days = groupView
 					case groupValueLast7Days:
@@ -1881,7 +1960,7 @@ func genAttrViewViewGroups(view *av.View, attrView *av.AttributeView) {
 			}
 
 			sort.SliceStable(relativeDateGroups, func(i, j int) bool {
-				return relativeDateGroups[i].GroupValue < relativeDateGroups[j].GroupValue
+				return relativeDateGroups[i].GetGroupValue() < relativeDateGroups[j].GetGroupValue()
 			})
 
 			var lastNext30Days []*av.View
@@ -1911,7 +1990,7 @@ func genAttrViewViewGroups(view *av.View, attrView *av.AttributeView) {
 			startIdx := -1
 			thisMonth := todayStart.Format("2006-01")
 			for i, monthGroup := range relativeDateGroups {
-				if monthGroup.GroupValue < thisMonth {
+				if monthGroup.GetGroupValue() < thisMonth {
 					startIdx = i + 1
 				}
 			}
@@ -1932,12 +2011,47 @@ func genAttrViewViewGroups(view *av.View, attrView *av.AttributeView) {
 			view.Groups = relativeDateGroups
 		} else {
 			sort.SliceStable(view.Groups, func(i, j int) bool {
-				iVal, jVal := view.Groups[i].GroupValue, view.Groups[j].GroupValue
+				iVal, jVal := view.Groups[i].GetGroupValue(), view.Groups[j].GetGroupValue()
 				if av.GroupOrderAsc == view.Group.Order {
 					return util.NaturalCompare(iVal, jVal)
 				}
 				return util.NaturalCompare(jVal, iVal)
 			})
+		}
+	}
+}
+
+// GroupState 用于临时记录每个分组视图的状态，以便后面重新生成分组后可以恢复这些状态。
+type GroupState struct {
+	ID     string
+	Folded bool
+	Hidden int
+	Sort   int
+}
+
+func getAttrViewGroupStates(view *av.View) (groupStates map[string]*GroupState) {
+	groupStates = map[string]*GroupState{}
+	if nil == view.Group {
+		return
+	}
+
+	for i, groupView := range view.Groups {
+		groupStates[groupView.GetGroupValue()] = &GroupState{
+			ID:     groupView.ID,
+			Folded: groupView.GroupFolded,
+			Hidden: groupView.GroupHidden,
+			Sort:   i,
+		}
+	}
+	return
+}
+
+func setAttrViewGroupStates(view *av.View, groupStates map[string]*GroupState) {
+	for _, groupView := range view.Groups {
+		if state, ok := groupStates[groupView.GetGroupValue()]; ok {
+			groupView.ID = state.ID
+			groupView.GroupFolded = state.Folded
+			groupView.GroupHidden = state.Hidden
 		}
 	}
 }
@@ -2165,10 +2279,10 @@ func (tx *Transaction) doUpdateAttrViewColRollup(operation *Operation) (ret *TxE
 }
 
 func updateAttributeViewColRollup(operation *Operation) (err error) {
-	// operation.AvID 汇总列所在 av
-	// operation.ID 汇总列 ID
-	// operation.ParentID 汇总列基于的关联列 ID
-	// operation.KeyID 目标列 ID
+	// operation.AvID 汇总字段所在 av
+	// operation.ID 汇总字段 ID
+	// operation.ParentID 汇总字段基于的关联字段 ID
+	// operation.KeyID 目标字段 ID
 	// operation.Data 计算方式
 
 	attrView, err := av.ParseAttributeView(operation.AvID)
@@ -2216,11 +2330,11 @@ func (tx *Transaction) doUpdateAttrViewColRelation(operation *Operation) (ret *T
 func updateAttributeViewColRelation(operation *Operation) (err error) {
 	// operation.AvID 源 avID
 	// operation.ID 目标 avID
-	// operation.KeyID 源 av 关联列 ID
+	// operation.KeyID 源 av 关联字段 ID
 	// operation.IsTwoWay 是否双向关联
-	// operation.BackRelationKeyID 双向关联的目标关联列 ID
-	// operation.Name 双向关联的目标关联列名称
-	// operation.Format 源 av 关联列名称
+	// operation.BackRelationKeyID 双向关联的目标关联字段 ID
+	// operation.Name 双向关联的目标关联字段名称
+	// operation.Format 源 av 关联字段名称
 
 	srcAv, err := av.ParseAttributeView(operation.AvID)
 	if err != nil {
@@ -2808,6 +2922,10 @@ func (tx *Transaction) setAttributeViewName(operation *Operation) (err error) {
 	}
 
 	attrView.Name = strings.TrimSpace(operation.Data.(string))
+	attrView.Name = strings.ReplaceAll(attrView.Name, "\n", " ")
+	if 256 < len(attrView.Name) {
+		attrView.Name = gulu.Str.SubStr(attrView.Name, 256)
+	}
 	err = av.SaveAttributeView(attrView)
 
 	_, nodes := tx.getAttrViewBoundNodes(attrView)
@@ -3132,6 +3250,11 @@ func addAttributeViewBlock(now int64, avID, blockID, groupID, previousBlockID, a
 			continue
 		}
 
+		if av.KeyTypeRollup == newValue.Type {
+			// 汇总字段的值是渲染时计算的，不需要添加到数据存储中
+			continue
+		}
+
 		if av.KeyTypeBlock == newValue.Type {
 			// 如果是主键的话前面已经添加过了，这里仅修改内容
 			blockValue.Block.Content = newValue.Block.Content
@@ -3140,9 +3263,14 @@ func addAttributeViewBlock(now int64, avID, blockID, groupID, previousBlockID, a
 
 		if (av.KeyTypeSelect == newValue.Type || av.KeyTypeMSelect == newValue.Type) && 1 > len(newValue.MSelect) {
 			// 单选或多选类型的值可能需要从分组条件中获取默认值
-			if opt := keyValues.Key.GetOption(groupView.GroupValue); nil != opt && groupValueDefault != groupView.GroupValue {
+			if opt := keyValues.Key.GetOption(groupView.GetGroupValue()); nil != opt && groupValueDefault != groupView.GetGroupValue() {
 				newValue.MSelect = append(newValue.MSelect, &av.ValueSelect{Content: opt.Name, Color: opt.Color})
 			}
+		}
+
+		if av.KeyTypeRelation == newValue.Type && nil != keyValues.Key.Relation && keyValues.Key.Relation.IsTwoWay {
+			// 双向关联需要同时更新目标字段的值
+			updateTwoWayRelationDestAttrView(attrView, keyValues.Key, newValue, 1, []string{})
 		}
 
 		newValue.BlockID = addingBlockID
@@ -3405,7 +3533,7 @@ func duplicateAttributeViewKey(operation *Operation) (err error) {
 		return
 	}
 
-	if av.KeyTypeBlock == key.Type || av.KeyTypeRelation == key.Type || av.KeyTypeRollup == key.Type {
+	if av.KeyTypeBlock == key.Type || av.KeyTypeRelation == key.Type {
 		return
 	}
 
@@ -4147,7 +4275,7 @@ func RemoveAttributeViewKey(avID, keyID string, removeRelationDest bool) (err er
 				destAvRelSrcAv := false
 				for i, keyValues := range destAv.KeyValues {
 					if keyValues.Key.ID == removedKey.Relation.BackKeyID {
-						if removeRelationDest { // 删除双向关联的目标列
+						if removeRelationDest { // 删除双向关联的目标字段
 							destAv.KeyValues = append(destAv.KeyValues[:i], destAv.KeyValues[i+1:]...)
 						}
 						continue
@@ -4433,13 +4561,13 @@ func UpdateAttributeViewCell(tx *Transaction, avID, keyID, rowID string, valueDa
 	return
 }
 
-func updateAttributeViewValue(tx *Transaction, attrView *av.AttributeView, keyID, rowID string, valueData interface{}) (val *av.Value, err error) {
+func updateAttributeViewValue(tx *Transaction, attrView *av.AttributeView, keyID, blockID string, valueData interface{}) (val *av.Value, err error) {
 	avID := attrView.ID
 	var blockVal *av.Value
 	for _, kv := range attrView.KeyValues {
 		if av.KeyTypeBlock == kv.Key.Type {
 			for _, v := range kv.Values {
-				if rowID == v.Block.ID {
+				if blockID == v.Block.ID {
 					blockVal = v
 					break
 				}
@@ -4459,7 +4587,7 @@ func updateAttributeViewValue(tx *Transaction, attrView *av.AttributeView, keyID
 		}
 
 		for _, value := range keyValues.Values {
-			if rowID == value.BlockID {
+			if blockID == value.BlockID {
 				val = value
 				val.Type = keyValues.Key.Type
 				break
@@ -4467,7 +4595,7 @@ func updateAttributeViewValue(tx *Transaction, attrView *av.AttributeView, keyID
 		}
 
 		if nil == val {
-			val = &av.Value{ID: ast.NewNodeID(), KeyID: keyID, BlockID: rowID, Type: keyValues.Key.Type, CreatedAt: now, UpdatedAt: now}
+			val = &av.Value{ID: ast.NewNodeID(), KeyID: keyID, BlockID: blockID, Type: keyValues.Key.Type, CreatedAt: now, UpdatedAt: now}
 			keyValues.Values = append(keyValues.Values, val)
 		}
 		break
@@ -4531,7 +4659,7 @@ func updateAttributeViewValue(tx *Transaction, attrView *av.AttributeView, keyID
 
 	relationChangeMode := 0 // 0：不变（仅排序），1：增加，2：减少
 	if av.KeyTypeRelation == val.Type {
-		// 关联列得 content 是自动渲染的，所以不需要保存
+		// 关联字段得 content 是自动渲染的，所以不需要保存
 		val.Relation.Contents = nil
 
 		// 去重
@@ -4556,7 +4684,7 @@ func updateAttributeViewValue(tx *Transaction, attrView *av.AttributeView, keyID
 
 		if !val.IsDetached { // 现在绑定了块
 			// 将游离行绑定到新建的块上
-			bindBlockAv(tx, avID, rowID)
+			bindBlockAv(tx, avID, blockID)
 			if nil != val.Block {
 				val.BlockID = val.Block.ID
 			}
@@ -4567,7 +4695,7 @@ func updateAttributeViewValue(tx *Transaction, attrView *av.AttributeView, keyID
 		if isUpdatingBlockKey { // 正在更新主键
 			if val.IsDetached { // 现在是游离行
 				// 将绑定的块从属性视图中移除
-				unbindBlockAv(tx, avID, rowID)
+				unbindBlockAv(tx, avID, blockID)
 			} else {
 				// 现在也绑定了块
 
@@ -4609,78 +4737,83 @@ func updateAttributeViewValue(tx *Transaction, attrView *av.AttributeView, keyID
 	}
 	val.SetUpdatedAt(now)
 
-	regenAttrViewViewGroups(attrView, keyID)
-
 	if nil != key && av.KeyTypeRelation == key.Type && nil != key.Relation && key.Relation.IsTwoWay {
 		// 双向关联需要同时更新目标字段的值
+		updateTwoWayRelationDestAttrView(attrView, key, val, relationChangeMode, oldRelationBlockIDs)
+	}
 
-		var destAv *av.AttributeView
-		if avID == key.Relation.AvID {
-			destAv = attrView
-		} else {
-			destAv, _ = av.ParseAttributeView(key.Relation.AvID)
+	regenAttrViewViewGroups(attrView, keyID)
+	return
+}
+
+// relationChangeMode
+// 0：关联字段值不变（仅排序），不影响目标值
+// 1：关联字段值增加，增加目标值
+// 2：关联字段值减少，减少目标值
+func updateTwoWayRelationDestAttrView(attrView *av.AttributeView, relKey *av.Key, val *av.Value, relationChangeMode int, oldRelationBlockIDs []string) {
+	var destAv *av.AttributeView
+	if attrView.ID == relKey.Relation.AvID {
+		destAv = attrView
+	} else {
+		destAv, _ = av.ParseAttributeView(relKey.Relation.AvID)
+	}
+
+	if nil == destAv {
+		return
+	}
+
+	now := util.CurrentTimeMillis()
+	if 1 == relationChangeMode {
+		addBlockIDs := val.Relation.BlockIDs
+		for _, bID := range oldRelationBlockIDs {
+			addBlockIDs = gulu.Str.RemoveElem(addBlockIDs, bID)
 		}
 
-		if nil != destAv {
-			// relationChangeMode
-			// 0：关联列值不变（仅排序），不影响目标值
-			// 1：关联列值增加，增加目标值
-			// 2：关联列值减少，减少目标值
-
-			if 1 == relationChangeMode {
-				addBlockIDs := val.Relation.BlockIDs
-				for _, bID := range oldRelationBlockIDs {
-					addBlockIDs = gulu.Str.RemoveElem(addBlockIDs, bID)
+		for _, blockID := range addBlockIDs {
+			for _, keyValues := range destAv.KeyValues {
+				if keyValues.Key.ID != relKey.Relation.BackKeyID {
+					continue
 				}
 
-				for _, blockID := range addBlockIDs {
-					for _, keyValues := range destAv.KeyValues {
-						if keyValues.Key.ID != key.Relation.BackKeyID {
-							continue
-						}
+				destVal := keyValues.GetValue(blockID)
+				if nil == destVal {
+					destVal = &av.Value{ID: ast.NewNodeID(), KeyID: keyValues.Key.ID, BlockID: blockID, Type: keyValues.Key.Type, Relation: &av.ValueRelation{}, CreatedAt: now, UpdatedAt: now + 1000}
+					keyValues.Values = append(keyValues.Values, destVal)
+				}
 
-						destVal := keyValues.GetValue(blockID)
-						if nil == destVal {
-							destVal = &av.Value{ID: ast.NewNodeID(), KeyID: keyValues.Key.ID, BlockID: blockID, Type: keyValues.Key.Type, Relation: &av.ValueRelation{}, CreatedAt: now, UpdatedAt: now + 1000}
-							keyValues.Values = append(keyValues.Values, destVal)
-						}
+				destVal.Relation.BlockIDs = append(destVal.Relation.BlockIDs, val.BlockID)
+				destVal.Relation.BlockIDs = gulu.Str.RemoveDuplicatedElem(destVal.Relation.BlockIDs)
+				regenAttrViewViewGroups(destAv, relKey.Relation.BackKeyID)
+				break
+			}
+		}
+	} else if 2 == relationChangeMode {
+		removeBlockIDs := oldRelationBlockIDs
+		for _, bID := range val.Relation.BlockIDs {
+			removeBlockIDs = gulu.Str.RemoveElem(removeBlockIDs, bID)
+		}
 
-						destVal.Relation.BlockIDs = append(destVal.Relation.BlockIDs, rowID)
-						destVal.Relation.BlockIDs = gulu.Str.RemoveDuplicatedElem(destVal.Relation.BlockIDs)
-						regenAttrViewViewGroups(destAv, key.Relation.BackKeyID)
+		for _, blockID := range removeBlockIDs {
+			for _, keyValues := range destAv.KeyValues {
+				if keyValues.Key.ID != relKey.Relation.BackKeyID {
+					continue
+				}
+
+				for _, value := range keyValues.Values {
+					if value.BlockID == blockID {
+						value.Relation.BlockIDs = gulu.Str.RemoveElem(value.Relation.BlockIDs, val.BlockID)
+						value.SetUpdatedAt(now)
+						regenAttrViewViewGroups(destAv, relKey.Relation.BackKeyID)
 						break
 					}
 				}
-			} else if 2 == relationChangeMode {
-				removeBlockIDs := oldRelationBlockIDs
-				for _, bID := range val.Relation.BlockIDs {
-					removeBlockIDs = gulu.Str.RemoveElem(removeBlockIDs, bID)
-				}
-
-				for _, blockID := range removeBlockIDs {
-					for _, keyValues := range destAv.KeyValues {
-						if keyValues.Key.ID != key.Relation.BackKeyID {
-							continue
-						}
-
-						for _, value := range keyValues.Values {
-							if value.BlockID == blockID {
-								value.Relation.BlockIDs = gulu.Str.RemoveElem(value.Relation.BlockIDs, rowID)
-								value.SetUpdatedAt(now)
-								regenAttrViewViewGroups(destAv, key.Relation.BackKeyID)
-								break
-							}
-						}
-					}
-				}
-			}
-
-			if destAv != attrView {
-				av.SaveAttributeView(destAv)
 			}
 		}
 	}
-	return
+
+	if destAv != attrView {
+		av.SaveAttributeView(destAv)
+	}
 }
 
 func regenAttrViewViewGroups(attrView *av.AttributeView, keyID string) {

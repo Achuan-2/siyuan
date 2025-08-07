@@ -307,12 +307,18 @@ export const insertHTML = (html: string, protyle: IProtyle, isBlock = false,
         (isNodeCodeBlock || protyle.toolbar.getCurrentType(range).includes("code"))) {
         range.deleteContents();
         // 代码块需保持至少一个 \n https://github.com/siyuan-note/siyuan/pull/13271#issuecomment-2502672155
+        let codeBlockIsEmpty = false;
         if (isNodeCodeBlock && editableElement.textContent === "") {
-            html += "\n";
+            codeBlockIsEmpty = true;
         }
         range.insertNode(document.createTextNode(html.replace(/\r\n|\r|\u2028|\u2029/g, "\n")));
         range.collapse(false);
         range.insertNode(document.createElement("wbr"));
+        if (codeBlockIsEmpty) {
+            // 代码块为空添加的 \n 需放在最后 https://github.com/siyuan-note/siyuan/issues/15399
+            range.collapse(false);
+            range.insertNode(document.createTextNode("\n"));
+        }
         if (isNodeCodeBlock) {
             blockElement.querySelector('[data-render="true"]')?.removeAttribute("data-render");
             highlightRender(blockElement);
@@ -382,16 +388,6 @@ export const insertHTML = (html: string, protyle: IProtyle, isBlock = false,
         // https://github.com/siyuan-note/siyuan/issues/14114
         isBlock = false;
         block2text = true;
-    }
-    if (!isBlock && tempElement && tempElement.content.childElementCount === 1) {
-        // 通过右键粘贴包含属性的块需保留整个块 https://github.com/siyuan-note/siyuan/issues/15268
-        for (let i = 0; i < tempElement.content.firstElementChild.attributes.length; i++) {
-            const attribute = tempElement.content.firstElementChild.attributes[i];
-            if (["memo", "name", "alias", "bookmark"].includes(attribute.name) || attribute.name.startsWith("custom-")) {
-                isBlock = true;
-                break;
-            }
-        }
     }
     // 使用 lute 方法会添加 p 元素，只有一个 p 元素或者只有一个字符串或者为 <u>b</u> 时的时候只拷贝内部
     if (!isBlock) {

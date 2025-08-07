@@ -1514,13 +1514,17 @@ export const openMenuPanel = (options: {
                         await closeCB();
                     }
                     closeCB = undefined;
-                    menuElement.innerHTML = getGroupsHTML(fields, data.view);
-                    bindGroupsEvent({
-                        protyle: options.protyle,
-                        menuElement: menuElement,
-                        blockElement: options.blockElement,
-                        data
-                    });
+                    if ((data.view.group && data.view.group.field) || target.classList.contains("block__icon")) {
+                        menuElement.innerHTML = getGroupsHTML(fields, data.view);
+                        bindGroupsEvent({
+                            protyle: options.protyle,
+                            menuElement: menuElement,
+                            blockElement: options.blockElement,
+                            data
+                        });
+                    } else {
+                        menuElement.innerHTML = getGroupsMethodHTML(fields, data.view.group);
+                    }
                     setPosition(menuElement, tabRect.right - menuElement.clientWidth, tabRect.bottom, tabRect.height);
                     event.preventDefault();
                     event.stopPropagation();
@@ -1551,13 +1555,19 @@ export const openMenuPanel = (options: {
                     const isHide = useElement.getAttribute("xlink:href") !== "#iconEye";
                     useElement.setAttribute("xlink:href", isHide ? "#iconEye" : "#iconEyeoff");
                     let oldGroupHidden;
-                    data.view.groups.find((item) => {
+                    let showCount = 0;
+                    data.view.groups.forEach((item) => {
                         if (item.id === target.dataset.id) {
                             oldGroupHidden = item.groupHidden;
-                            item.groupHidden = isHide ? 2 : 0;
-                            return true;
+                            item.groupHidden = isHide ? 0 : 2;
+                        }
+                        if (item.groupHidden === 0) {
+                            showCount++;
                         }
                     });
+                    menuElement.querySelector('[data-type="hideGroups"]').innerHTML = `${window.siyuan.languages[showCount === 0 ? "showAll" : "hideAll"]}
+<span class="fn__space"></span>
+<svg><use xlink:href="#iconEye${showCount === 0 ? "" : "off"}"></use></svg>`;
                     transaction(options.protyle, [{
                         action: "hideAttrViewGroup",
                         avID: data.id,
@@ -1570,6 +1580,30 @@ export const openMenuPanel = (options: {
                         blockID,
                         id: target.dataset.id,
                         data: oldGroupHidden
+                    }]);
+                    event.preventDefault();
+                    event.stopPropagation();
+                    break;
+                } else if (type === "hideGroups") {
+                    window.siyuan.menus.menu.remove();
+                    const isShow = target.querySelector("use").getAttribute("xlink:href") === "#iconEyeoff";
+                    target.innerHTML = `${window.siyuan.languages[isShow ? "showAll" : "hideAll"]}
+<span class="fn__space"></span>
+<svg><use xlink:href="#iconEye${isShow ? "" : "off"}"></use></svg>`;
+                    data.view.groups.forEach((item) => {
+                        item.groupHidden = isShow ? 2 : 0;
+                        target.parentElement.parentElement.querySelector(`.b3-menu__item[data-id="${item.id}"] .b3-menu__action use`)?.setAttribute("xlink:href", `#iconEye${isShow ? "off" : ""}`);
+                    });
+                    transaction(options.protyle, [{
+                        action: "hideAttrViewAllGroups",
+                        avID: data.id,
+                        blockID,
+                        data: isShow,
+                    }], [{
+                        action: "hideAttrViewAllGroups",
+                        avID: data.id,
+                        blockID,
+                        data: !isShow
                     }]);
                     event.preventDefault();
                     event.stopPropagation();
