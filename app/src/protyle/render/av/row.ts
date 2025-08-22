@@ -3,14 +3,13 @@ import {focusBlock} from "../../util/selection";
 import {Menu} from "../../../plugin/Menu";
 import {transaction} from "../../wysiwyg/transaction";
 import {
-    addDragFill, genCellValue,
+    genCellValue,
     genCellValueByElement,
     getTypeByCellElement,
     renderCell,
     renderCellAttr
 } from "./cell";
 import {fetchPost} from "../../../util/fetch";
-import {showMessage} from "../../../dialog/message";
 import * as dayjs from "dayjs";
 import {Constants} from "../../../constants";
 import {insertGalleryItemAnimation} from "./gallery/item";
@@ -116,7 +115,7 @@ export const setPage = (blockElement: Element) => {
 export const insertAttrViewBlockAnimation = (options: {
     protyle: IProtyle,
     blockElement: Element,
-    srcIDs: string[],
+    srcIDs: string[],   // node id
     previousId: string,
     groupID?: string
 }) => {
@@ -128,7 +127,14 @@ export const insertAttrViewBlockAnimation = (options: {
     if (hasSort) {
         previousElement = options.blockElement.querySelector(groupQuery + ".av__row--util").previousElementSibling;
     }
-
+    const bodyElement = options.blockElement.querySelector(`.av__body[data-group-id="${options.groupID}"] `);
+    if (bodyElement && ["updated", "created"].includes(bodyElement.getAttribute("data-dtype")) &&
+        bodyElement.getAttribute("data-content") !== "_@today@_") {
+        previousElement = options.blockElement.querySelector('.av__body[data-content="_@today@_"] .av__row--util')?.previousElementSibling;
+        if (!previousElement) {
+            return;
+        }
+    }
     let cellsHTML = '<div class="av__colsticky"><div class="av__firstcol"><svg><use xlink:href="#iconUncheck"></use></svg></div></div>';
     const pinIndex = previousElement.querySelectorAll(".av__colsticky .av__cell").length - 1;
     if (pinIndex > -1) {
@@ -154,16 +160,10 @@ ${colType === "block" ? ' data-detached="true"' : ""}>${renderCell(genCellValue(
     });
     let html = "";
     clearSelect(["cell", "row"], options.blockElement);
-    options.srcIDs.forEach((id) => {
-        const blockCellElement = options.blockElement.querySelector(`[data-block-id="${id}"]`);
-        if (!blockCellElement) {
-            html += `<div class="av__row" data-type="ghost">
+    options.srcIDs.forEach(() => {
+        html += `<div class="av__row" data-type="ghost">
     ${cellsHTML}
 </div>`;
-        } else {
-            addDragFill(blockCellElement);
-            blockCellElement.classList.add("av__cell--select");
-        }
     });
     previousElement.insertAdjacentHTML("afterend", html);
     fetchPost("/api/av/getAttributeViewAddingBlockDefaultValues", {
@@ -172,11 +172,7 @@ ${colType === "block" ? ' data-detached="true"' : ""}>${renderCell(genCellValue(
         groupID: options.groupID,
         previousID: options.previousId,
     }, (response) => {
-        if (!response.data.values) {
-            if (!response.data.ignore) {
-                showMessage(window.siyuan.languages.insertRowTip);
-            }
-        } else {
+        if (response.data.values) {
             let popCellElement: HTMLElement;
             const updateIds = Object.keys(response.data.values);
             options.blockElement.querySelectorAll('[data-type="ghost"]').forEach(rowItem => {
@@ -357,15 +353,16 @@ export const deleteRow = (blockElement: HTMLElement, protyle: IProtyle) => {
     const undoOperations: IOperation[] = [];
     const blockIds: string[] = [];
     rowElements.forEach(item => {
-        blockIds.push(item.querySelector(".av__cell[data-block-id]").getAttribute("data-block-id"));
+        blockIds.push(item.getAttribute("data-id"));
     });
     rowElements.forEach(item => {
-        const blockValue = genCellValueByElement("block", item.querySelector(".av__cell[data-block-id]"));
+        const blockValue = genCellValueByElement("block", item.querySelector('.av__cell[data-dtype="block"]'));
         undoOperations.push({
             action: "insertAttrViewBlock",
             avID,
             previousID: item.previousElementSibling?.getAttribute("data-id") || "",
             srcs: [{
+                itemID: Lute.NewNodeID(),
                 id: item.getAttribute("data-id"),
                 isDetached: blockValue.isDetached,
                 content: blockValue.block.content
@@ -411,6 +408,7 @@ export const insertRows = (options: {
         const newNodeID = Lute.NewNodeID();
         srcIDs.push(newNodeID);
         srcs.push({
+            itemID: Lute.NewNodeID(),
             id: newNodeID,
             isDetached: true,
             content: "",

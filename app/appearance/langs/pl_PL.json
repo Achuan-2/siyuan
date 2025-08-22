@@ -1,4 +1,6 @@
 {
+  "displayFieldName": "Wyświetl nazwę pola",
+  "sortBySelectOption": "Sortuj według opcji",
   "groupStep": "Odstęp grupowania",
   "groupRange": "Zakres grupowania",
   "groupMethodDateRelative": "Data względna",
@@ -553,7 +555,7 @@
   "embedBlockBreadcrumbTip": "Po włączeniu wbudowane bloki będą wyświetlać okruszki, wbudowane bloki w super blokach ignorują tę opcję i nigdy nie pokazują okruszków",
   "appearanceMode": "Tryb wyglądu",
   "editReadonly": "Tryb tylko do odczytu",
-  "editReadonlyTip": "Po włączeniu edytor załaduje dokument w trybie tylko do odczytu",
+  "editReadonlyTip": "Po włączeniu dokument będzie domyślnie tylko do odczytu",
   "generateConflictDoc": "Generuj dokument konfliktowy podczas synchronizacji konfliktów",
   "generateConflictDocTip": "Po włączeniu, dokument konfliktowy zostanie wygenerowany, gdy wystąpi konflikt synchronizacji, aby można go było otworzyć i przeglądać bezpośrednio. Niezależnie od tego, czy włączone, [Historia danych] zarejestruje dokument konfliktowy",
   "deleteOpConfirm": "⚠️ Potwierdzenie operacji usunięcia",
@@ -1643,6 +1645,7 @@
     "263": "Następne %d dni",
     "264": "Pole [%s] jest puste",
     "265": "Poza zakresem",
-    "266": "Tesseract OCR nie jest zainstalowany lub skonfigurowany, zapoznaj się z Podręcznikiem użytkownika - Sekcja plików zasobów, aby skonfigurować"
+    "266": "Tesseract OCR nie jest zainstalowany lub skonfigurowany, zapoznaj się z Podręcznikiem użytkownika - Sekcja plików zasobów, aby skonfigurować",
+    "267": "Nienazwana baza danych"
   }
 }

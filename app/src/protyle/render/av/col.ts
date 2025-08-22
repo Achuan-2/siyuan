@@ -200,7 +200,7 @@ export const getEditHTML = (options: {
     <svg class="b3-menu__icon" style=""><use xlink:href="#iconCopy"></use></svg>
     <span class="b3-menu__label">${window.siyuan.languages.duplicate}</span>
 </button>
-<button class="b3-menu__item" data-type="removeCol">
+<button class="b3-menu__item  b3-menu__item--warning" data-type="removeCol">
     <svg class="b3-menu__icon" style=""><use xlink:href="#iconTrashcan"></use></svg>
     <span class="b3-menu__label">${window.siyuan.languages.delete}</span>
 </button>`;
@@ -571,20 +571,19 @@ const addAttrViewColAnimation = (options: {
     }
     const nodeId = options.blockElement.getAttribute("data-node-id");
     if (options.blockElement.classList.contains("av")) {
-        options.blockElement.querySelectorAll(".av__row").forEach((item, index) => {
+        options.blockElement.querySelectorAll(".av__row").forEach((item) => {
             let previousElement;
             if (options.previousID) {
                 previousElement = item.querySelector(`[data-col-id="${options.previousID}"]`);
             } else {
-                previousElement = item.lastElementChild.previousElementSibling;
+                previousElement = item.querySelector(".av__cell").previousElementSibling;
             }
             let html = "";
-            if (index === 0) {
-                // av__pulse 用于检测是否新增，和 render 中 isPulse 配合弹出菜单
+            if (item.classList.contains("av__row--header")) {
                 html = `<div class="av__cell av__cell--header" draggable="true" data-icon="${options.icon || ""}" data-col-id="${options.id}" data-dtype="${options.type}" data-wrap="false" style="width: 200px;">
     ${options.icon ? unicode2Emoji(options.icon, "av__cellheadericon", true) : `<svg class="av__cellheadericon"><use xlink:href="#${getColIconByType(options.type)}"></use></svg>`}
     <span class="av__celltext fn__flex-1">${options.name}</span>
-    <div class="av__widthdrag av__pulse"></div>
+    <div class="av__widthdrag"></div>
 </div>`;
             } else {
                 html = '<div class="av__cell" style="width: 200px"><span class="av__pulse"></span></div>';
@@ -806,7 +805,9 @@ export const showColMenu = (protyle: IProtyle, blockElement: Element, cellElemen
                                 return true;
                             }
                         });
+                        let empty = false;
                         if (!filter) {
+                            empty = true;
                             filter = {
                                 column: colId,
                                 operator: getDefaultOperatorByType(type),
@@ -815,6 +816,7 @@ export const showColMenu = (protyle: IProtyle, blockElement: Element, cellElemen
                             avData.view.filters.push(filter);
                         }
                         setFilter({
+                            empty,
                             filter,
                             protyle,
                             data: avData,

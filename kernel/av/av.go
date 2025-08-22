@@ -197,11 +197,14 @@ type View struct {
 	Groups       []*View    `json:"groups,omitempty"`    // 分组视图列表
 	GroupItemIDs []string   `json:"groupItemIds"`        // 分组项目 ID 列表，用于维护分组中的所有项目
 	GroupCalc    *GroupCalc `json:"groupCalc,omitempty"` // 分组计算规则
+	GroupKey     *Key       `json:"groupKey,omitempty"`  // 分组字段
 	GroupVal     *Value     `json:"groupVal,omitempty"`  // 分组值
 	GroupFolded  bool       `json:"groupFolded"`         // 分组是否折叠
 	GroupHidden  int        `json:"groupHidden"`         // 分组是否隐藏，0：显示，1：空白隐藏，2：手动隐藏
+	GroupSort    int        `json:"groupSort"`           // 分组排序值，用于手动排序
 }
 
+// GetGroupValue 获取分组视图的分组值。
 func (view *View) GetGroupValue() string {
 	if nil == view.GroupVal {
 		return ""
@@ -209,8 +212,8 @@ func (view *View) GetGroupValue() string {
 	return view.GroupVal.String(false)
 }
 
-// GetGroup 获取指定分组 ID 的分组视图。
-func (view *View) GetGroup(groupID string) *View {
+// GetGroupByID 获取指定分组 ID 的分组视图。
+func (view *View) GetGroupByID(groupID string) *View {
 	if nil == view.Groups {
 		return nil
 	}
@@ -220,6 +223,32 @@ func (view *View) GetGroup(groupID string) *View {
 		}
 	}
 	return nil
+}
+
+// GetGroupByGroupValue 获取指定分组值的分组视图。
+func (view *View) GetGroupByGroupValue(groupVal string) *View {
+	if nil == view.Groups {
+		return nil
+	}
+	for _, group := range view.Groups {
+		if group.GetGroupValue() == groupVal {
+			return group
+		}
+	}
+	return nil
+}
+
+// RemoveGroupByID 从分组视图列表中移除指定 ID 的分组视图。
+func (view *View) RemoveGroupByID(groupID string) {
+	if nil == view.Groups {
+		return
+	}
+	for i, group := range view.Groups {
+		if group.ID == groupID {
+			view.Groups = append(view.Groups[:i], view.Groups[i+1:]...)
+			return
+		}
+	}
 }
 
 // GetGroupKey 获取分组视图的分组字段。
@@ -320,6 +349,10 @@ type Viewable interface {
 
 	// SetGroupFolded 设置分组是否折叠。
 	SetGroupFolded(folded bool)
+
+	// GetGroupHidden 获取分组是否隐藏。
+	// hidden 0：显示，1：空白隐藏，2：手动隐藏
+	GetGroupHidden() int
 
 	// SetGroupHidden 设置分组是否隐藏。
 	// hidden 0：显示，1：空白隐藏，2：手动隐藏
@@ -532,27 +565,42 @@ func (av *AttributeView) GetCurrentView(viewID string) (ret *View, err error) {
 	return
 }
 
-func (av *AttributeView) ExistBlock(blockID string) bool {
-	for _, kv := range av.KeyValues {
-		if KeyTypeBlock != kv.Key.Type {
-			continue
+func (av *AttributeView) ExistItem(itemID string) bool {
+	for _, blockVal := range av.GetBlockKeyValues().Values {
+		if blockVal.BlockID == itemID {
+			return true
 		}
-
-		for _, v := range kv.Values {
-			if v.BlockID == blockID {
-				return true
-			}
-		}
-		return false
 	}
 	return false
 }
 
-func (av *AttributeView) GetValue(keyID, blockID string) (ret *Value) {
+func (av *AttributeView) ExistBoundBlock(nodeID string) bool {
+	for _, blockVal := range av.GetBlockKeyValues().Values {
+		if blockVal.Block.ID == nodeID {
+			return true
+		}
+	}
+	return false
+}
+
+func (av *AttributeView) GetBlockValueByBoundID(nodeID string) *Value {
+	for _, kv := range av.KeyValues {
+		if KeyTypeBlock == kv.Key.Type {
+			for _, v := range kv.Values {
+				if v.Block.ID == nodeID {
+					return v
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (av *AttributeView) GetValue(keyID, itemID string) (ret *Value) {
 	for _, kv := range av.KeyValues {
 		if kv.Key.ID == keyID {
 			for _, v := range kv.Values {
-				if v.BlockID == blockID {
+				if v.BlockID == itemID {
 					ret = v
 					return
 				}
@@ -578,6 +626,20 @@ func (av *AttributeView) GetBlockKeyValues() (ret *KeyValues) {
 		if KeyTypeBlock == kv.Key.Type {
 			ret = kv
 			return
+		}
+	}
+	return
+}
+
+func (av *AttributeView) GetBlockValue(itemID string) (ret *Value) {
+	for _, kv := range av.KeyValues {
+		if KeyTypeBlock == kv.Key.Type && 0 < len(kv.Values) {
+			for _, v := range kv.Values {
+				if v.BlockID == itemID {
+					ret = v
+					return
+				}
+			}
 		}
 	}
 	return

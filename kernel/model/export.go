@@ -2012,8 +2012,16 @@ func exportMarkdownContent(id, ext string, exportRefMode int, defBlockIDs []stri
 		return
 	}
 
-	if ast.NodeParagraph == tree.Root.FirstChild.Type {
-		isEmpty = nil == tree.Root.FirstChild.FirstChild
+	for c := tree.Root.FirstChild; nil != c; c = c.Next {
+		if ast.NodeParagraph == c.Type {
+			isEmpty = nil == c.FirstChild
+			if !isEmpty {
+				break
+			}
+		} else {
+			isEmpty = false
+			break
+		}
 	}
 
 	exportedMd = exportMarkdownContent0(id, tree, "", false, false, false,
@@ -2610,10 +2618,6 @@ func exportTree(tree *parse.Tree, wysiwyg, keepFold, avHiddenCol bool,
 					} else if av.KeyTypeTemplate == cell.Value.Type {
 						if nil != cell.Value.Template {
 							val = cell.Value.Template.Content
-							if "<no value>" == val {
-								val = ""
-							}
-
 							val = strings.ReplaceAll(val, "\\|", "|")
 							val = strings.ReplaceAll(val, "|", "\\|")
 							col := table.GetColumn(cell.Value.KeyID)
@@ -3382,7 +3386,11 @@ func exportRefTrees(tree *parse.Tree, defBlockIDs *[]string, retTrees, treeCache
 			}
 
 			for _, val := range blockKeyValues.Values {
-				defBlock := treenode.GetBlockTree(val.BlockID)
+				if val.IsDetached {
+					continue
+				}
+
+				defBlock := treenode.GetBlockTree(val.Block.ID)
 				if nil == defBlock {
 					continue
 				}
@@ -3430,7 +3438,7 @@ func getAttrViewTable(attrView *av.AttributeView, view *av.View, query string) (
 	}
 
 	depth := 1
-	ret = sql.RenderAttributeViewTable(attrView, view, query, &depth)
+	ret = sql.RenderAttributeViewTable(attrView, view, query, &depth, map[string]*av.AttributeView{})
 	return
 }
 

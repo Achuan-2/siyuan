@@ -59,7 +59,6 @@ type TOperation =
     | "setAttrViewShowIcon"
     | "setAttrViewWrapField"
     | "setAttrViewColDate"
-    | "unbindAttrViewBlock"
     | "setAttrViewViewDesc"
     | "setAttrViewColDesc"
     | "setAttrViewBlockView"
@@ -70,6 +69,7 @@ type TOperation =
     | "hideAttrViewGroup"
     | "sortAttrViewGroup"
     | "foldAttrViewGroup"
+    | "setAttrViewDisplayFieldName"
 type TBazaarType = "templates" | "icons" | "widgets" | "themes" | "plugins"
 type TCardType = "doc" | "notebook" | "all"
 type TEventBus = "ws-main" | "sync-start" | "sync-end" | "sync-fail" |
@@ -82,7 +82,7 @@ type TEventBus = "ws-main" | "sync-start" | "sync-end" | "sync-fail" |
     "paste" |
     "input-search" |
     "loaded-protyle-dynamic" | "loaded-protyle-static" |
-    "switch-protyle" |
+    "switch-protyle" | "switch-protyle-mode" |
     "destroy-protyle" |
     "lock-screen" |
     "mobile-keyboard-show" | "mobile-keyboard-hide"
@@ -557,6 +557,7 @@ interface IOperation {
 }
 
 interface IOperationSrcs {
+    itemID: string,
     id: string,
     content?: string,
     isDetached: boolean
@@ -864,6 +865,7 @@ interface IAVView {
     sorts: IAVSort[],
     groups: IAVView[]
     group: IAVGroup
+    groupKey: IAVColumn
     groupValue: IAVCellValue
 }
 
@@ -878,6 +880,7 @@ interface IAVGallery extends IAVView {
     coverFromAssetKeyID?: string;
     cardSize: number;   // 0：小卡片，1：中卡片，2：大卡片
     cardAspectRatio: number;
+    displayFieldName: boolean;
     fitImage: boolean;
     cards: IAVGalleryItem[],
     desc: string
@@ -908,7 +911,7 @@ interface IAVGroup {
         numStep: number  // 数字范围步长 100
     }
     hideEmpty?: boolean
-    order?: number  // 升序: 0(默认), 降序: 1, 手动排序: 2
+    order?: number  // 升序: 0(默认), 降序: 1, 手动排序: 2, 按选项排序: 3
 }
 
 interface IAVSort {
@@ -965,6 +968,7 @@ interface IAVCell {
 interface IAVCellValue {
     keyID?: string,
     id?: string,
+    blockID?: string // 为 row id
     type: TAVCol,
     isDetached?: boolean,
     text?: {

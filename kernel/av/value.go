@@ -33,9 +33,9 @@ import (
 
 type Value struct {
 	ID         string  `json:"id,omitempty"`
-	KeyID      string  `json:"keyID,omitempty"`
-	BlockID    string  `json:"blockID,omitempty"`
-	Type       KeyType `json:"type,omitempty"`
+	KeyID      string  `json:"keyID,omitempty"`      // 字段 ID
+	BlockID    string  `json:"blockID,omitempty"`    // 项目 ID
+	Type       KeyType `json:"type,omitempty"`       // 字段类型
 	IsDetached bool    `json:"isDetached,omitempty"` // 是否为非绑定块，注意这个字段只能在主键（KeyTypeBlock）上使用，其他类型的值不要使用
 
 	CreatedAt int64 `json:"createdAt,omitempty"`
@@ -65,6 +65,8 @@ func (value *Value) SetUpdatedAt(mills int64) {
 	}
 }
 
+const CheckboxCheckedStr = "√"
+
 func (value *Value) String(format bool) string {
 	if nil == value {
 		return ""
@@ -75,7 +77,7 @@ func (value *Value) String(format bool) string {
 		if nil == value.Block {
 			return ""
 		}
-		return value.Block.Content
+		return strings.TrimSpace(value.Block.Content)
 	case KeyTypeText:
 		if nil == value.Text {
 			return ""
@@ -113,17 +115,17 @@ func (value *Value) String(format bool) string {
 		if nil == value.URL {
 			return ""
 		}
-		return value.URL.Content
+		return strings.TrimSpace(value.URL.Content)
 	case KeyTypeEmail:
 		if nil == value.Email {
 			return ""
 		}
-		return value.Email.Content
+		return strings.TrimSpace(value.Email.Content)
 	case KeyTypePhone:
 		if nil == value.Phone {
 			return ""
 		}
-		return value.Phone.Content
+		return strings.TrimSpace(value.Phone.Content)
 	case KeyTypeMAsset:
 		if 1 > len(value.MAsset) {
 			return ""
@@ -153,7 +155,7 @@ func (value *Value) String(format bool) string {
 			return ""
 		}
 		if value.Checkbox.Checked {
-			return "√"
+			return CheckboxCheckedStr
 		}
 		return ""
 	case KeyTypeRelation:
@@ -218,6 +220,84 @@ func (value *Value) IsEdited() bool {
 		return true
 	}
 	return value.CreatedAt != value.UpdatedAt
+}
+
+func (value *Value) IsBlank() bool {
+	if nil == value {
+		return true
+	}
+
+	switch value.Type {
+	case KeyTypeBlock:
+		if nil == value.Block {
+			return true
+		}
+		return "" == strings.TrimSpace(value.Block.Content)
+	case KeyTypeText:
+		if nil == value.Text {
+			return true
+		}
+		return "" == strings.TrimSpace(value.Text.Content)
+	case KeyTypeNumber:
+		if nil == value.Number {
+			return true
+		}
+		return !value.Number.IsNotEmpty
+	case KeyTypeDate:
+		if nil == value.Date {
+			return true
+		}
+		return !value.Date.IsNotEmpty
+	case KeyTypeSelect:
+		if 1 > len(value.MSelect) {
+			return true
+		}
+		return "" == strings.TrimSpace(value.MSelect[0].Content)
+	case KeyTypeMSelect:
+		return 1 > len(value.MSelect)
+	case KeyTypeURL:
+		if nil == value.URL {
+			return true
+		}
+		return "" == strings.TrimSpace(value.URL.Content)
+	case KeyTypeEmail:
+		if nil == value.Email {
+			return true
+		}
+		return "" == strings.TrimSpace(value.Email.Content)
+	case KeyTypePhone:
+		if nil == value.Phone {
+			return true
+		}
+		return "" == strings.TrimSpace(value.Phone.Content)
+	case KeyTypeMAsset:
+		return 1 > len(value.MAsset)
+	case KeyTypeTemplate:
+		if nil == value.Template {
+			return true
+		}
+		return "" == strings.TrimSpace(value.Template.Content)
+	case KeyTypeCreated:
+		if nil == value.Created {
+			return true
+		}
+		return !value.Created.IsNotEmpty
+	case KeyTypeUpdated:
+		if nil == value.Updated {
+			return true
+		}
+		return !value.Updated.IsNotEmpty
+	case KeyTypeCheckbox:
+		if nil == value.Checkbox {
+			return true
+		}
+		return false // 复选框不会为空
+	case KeyTypeRelation:
+		return 1 > len(value.Relation.Contents)
+	case KeyTypeRollup:
+		return 1 > len(value.Rollup.Contents)
+	}
+	return false
 }
 
 func (value *Value) IsEmpty() bool {
@@ -374,11 +454,11 @@ func (value *Value) GetValByType(typ KeyType) (ret interface{}) {
 }
 
 type ValueBlock struct {
-	ID      string `json:"id"`
-	Icon    string `json:"icon"`
+	ID      string `json:"id,omitempty"` // 绑定的块 ID，非绑定块时为空
+	Icon    string `json:"icon,omitempty"`
 	Content string `json:"content"`
-	Created int64  `json:"created"`
-	Updated int64  `json:"updated"`
+	Created int64  `json:"created,omitempty"`
+	Updated int64  `json:"updated,omitempty"`
 }
 
 type ValueText struct {
@@ -593,6 +673,15 @@ func Round(val float64, precision int) float64 {
 type ValueSelect struct {
 	Content string `json:"content"`
 	Color   string `json:"color"`
+}
+
+func MSelectExistOption(mSelect []*ValueSelect, opt string) bool {
+	for _, s := range mSelect {
+		if s.Content == opt {
+			return true
+		}
+	}
+	return false
 }
 
 type ValueURL struct {
@@ -969,6 +1058,8 @@ func GetAttributeViewDefaultValue(valueID, keyID, blockID string, typ KeyType) (
 	}
 
 	switch typ {
+	case KeyTypeBlock:
+		ret.Block = &ValueBlock{Created: ret.CreatedAt, Updated: ret.UpdatedAt}
 	case KeyTypeText:
 		ret.Text = &ValueText{}
 	case KeyTypeNumber:

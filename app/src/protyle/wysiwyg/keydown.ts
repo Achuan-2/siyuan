@@ -691,8 +691,8 @@ export const keydown = (protyle: IProtyle, editorElement: HTMLElement) => {
                                 } else {
                                     // 修正光标上移至 \n 结尾的块时落点错误 https://github.com/siyuan-note/siyuan/issues/14443
                                     const prevEditableElement = getContenteditableElement(previousElement) as HTMLElement;
-                                    if (prevEditableElement && prevEditableElement.lastChild.nodeType === 3 &&
-                                        prevEditableElement.lastChild.textContent.endsWith("\n")) {
+                                    if (prevEditableElement && prevEditableElement.lastChild?.nodeType === 3 &&
+                                        prevEditableElement.lastChild?.textContent.endsWith("\n")) {
                                         //  不能移除 /n, 否则两个 /n 导致界面异常
                                         focusBlock(previousElement, undefined, false);
                                         event.preventDefault();
@@ -855,13 +855,15 @@ export const keydown = (protyle: IProtyle, editorElement: HTMLElement) => {
                         const cloneRange = range.cloneRange();
                         const nextElement = getNextBlock(getTopAloneElement(nodeElement));
                         if (nextElement) {
-                            const nextRange = focusBlock(nextElement);
-                            if (nextRange) {
-                                const nextBlockElement = hasClosestBlock(nextRange.startContainer);
-                                if (nextBlockElement) {
-                                    // 反向删除合并为一个块时，光标应保持在尾部 https://github.com/siyuan-note/siyuan/issues/14290#issuecomment-2849810529
-                                    cloneRange.insertNode(document.createElement("wbr"));
-                                    removeBlock(protyle, nextBlockElement, nextRange, "Delete");
+                            if (!nodeElement.classList.contains("code-block")) {
+                                const nextRange = focusBlock(nextElement);
+                                if (nextRange) {
+                                    const nextBlockElement = hasClosestBlock(nextRange.startContainer);
+                                    if (nextBlockElement) {
+                                        // 反向删除合并为一个块时，光标应保持在尾部 https://github.com/siyuan-note/siyuan/issues/14290#issuecomment-2849810529
+                                        cloneRange.insertNode(document.createElement("wbr"));
+                                        removeBlock(protyle, nextBlockElement, nextRange, "Delete");
+                                    }
                                 }
                             }
                             event.stopPropagation();
@@ -933,10 +935,18 @@ export const keydown = (protyle: IProtyle, editorElement: HTMLElement) => {
                         event.preventDefault();
                         return;
                     }
+                    const rangeNextElement = hasNextSibling(range.startContainer) as HTMLElement;
+                    // \n1`2` 1后按 Backspace 光标错误 https://github.com/siyuan-note/siyuan/issues/15424
+                    if (rangeNextElement && rangeNextElement.nodeType === 1 &&
+                        ["code", "tag", "kbd"].includes(rangeNextElement.dataset.type)) {
+                        if (position.start === 1 || range.startContainer.textContent.slice(-2, -1) === "\n") {
+                            range.insertNode(document.createTextNode(Constants.ZWSP));
+                            range.collapse(true);
+                        }
+                    }
                     if (range.startOffset === 1 && range.startContainer.textContent.length === 1) {
                         // 图片后为空格，在空格后删除 https://github.com/siyuan-note/siyuan/issues/13949
                         const rangePreviousElement = hasPreviousSibling(range.startContainer) as HTMLElement;
-                        const rangeNextElement = hasNextSibling(range.startContainer) as HTMLElement;
                         if (rangePreviousElement && rangePreviousElement.nodeType === 1 && rangePreviousElement.classList.contains("img") &&
                             rangeNextElement && rangeNextElement.nodeType === 1 && rangeNextElement.classList.contains("img")) {
                             const wbrElement = document.createElement("wbr");

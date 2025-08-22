@@ -277,8 +277,6 @@ func performTx(tx *Transaction) (ret *TxErr) {
 				ret = tx.doHideAttrViewName(op)
 			case "setAttrViewColDate":
 				ret = tx.doSetAttrViewColDate(op)
-			case "unbindAttrViewBlock":
-				ret = tx.doUnbindAttrViewBlock(op)
 			case "duplicateAttrViewKey":
 				ret = tx.doDuplicateAttrViewKey(op)
 			case "setAttrViewCoverFrom":
@@ -289,7 +287,7 @@ func performTx(tx *Transaction) (ret *TxErr) {
 				ret = tx.doSetAttrViewCardSize(op)
 			case "setAttrViewFitImage":
 				ret = tx.doSetAttrViewFitImage(op)
-			case "setDisplayFieldName":
+			case "setAttrViewDisplayFieldName":
 				ret = tx.doSetAttrViewDisplayFieldName(op)
 			case "setAttrViewShowIcon":
 				ret = tx.doSetAttrViewShowIcon(op)
@@ -1010,7 +1008,7 @@ func syncDelete2AttributeView(node *ast.Node) (changedAvIDs []string) {
 			}
 
 			if changedAv {
-				regenAttrViewViewGroups(attrView, "force")
+				regenAttrViewGroups(attrView, "force")
 				av.SaveAttributeView(attrView)
 				changedAvIDs = append(changedAvIDs, avID)
 			}
@@ -1571,7 +1569,7 @@ func upsertAvBlockRel(node *ast.Node) {
 		for _, avID := range affectedAvIDs {
 			attrView, _ := av.ParseAttributeView(avID)
 			if nil != attrView {
-				regenAttrViewViewGroups(attrView, "force")
+				regenAttrViewGroups(attrView, "force")
 				av.SaveAttributeView(attrView)
 			}
 

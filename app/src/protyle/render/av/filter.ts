@@ -75,7 +75,8 @@ export const setFilter = async (options: {
     protyle: IProtyle,
     data: IAV,
     target: HTMLElement,
-    blockElement: Element
+    blockElement: Element,
+    empty: boolean
 }) => {
     let rectTarget = options.target.getBoundingClientRect();
     if (rectTarget.height === 0) {
@@ -175,7 +176,7 @@ export const setFilter = async (options: {
                 return true;
             }
         });
-        if (isSame || !hasMatch) {
+        if (!options.empty && (isSame || !hasMatch)) {
             return;
         }
         transaction(options.protyle, [{
@@ -598,6 +599,7 @@ export const addFilter = (options: {
                     setPosition(options.menuElement, options.tabRect.right - options.menuElement.clientWidth, options.tabRect.bottom, options.tabRect.height);
                     const filterElement = options.menuElement.querySelector(`[data-id="${column.id}"] .b3-chip`) as HTMLElement;
                     setFilter({
+                        empty: true,
                         filter,
                         protyle: options.protyle,
                         data: options.data,
@@ -691,24 +693,25 @@ export const getFiltersHTML = (data: IAV) => {
                         filterText = ` ≤ ${filterValue.number.content}`;
                     }
                 } else if (["text", "block", "url", "phone", "email", "relation", "template"].includes(filterValue.type) && filterValue[filterValue.type as "text"]) {
-                    const content = filterValue[filterValue.type as "text"].content ||
-                        filterValue.relation?.blockIDs[0] || "";
-                    if (["=", "Contains"].includes(filter.operator)) {
-                        filterText = `: ${content}`;
-                    } else if (filter.operator === "Does not contains") {
-                        filterText = ` ${window.siyuan.languages.filterOperatorDoesNotContain} ${content}`;
-                    } else if (filter.operator === "!=") {
-                        filterText = ` ${window.siyuan.languages.filterOperatorIsNot} ${content}`;
-                    } else if ("Starts with" === filter.operator) {
-                        filterText = ` ${window.siyuan.languages.filterOperatorStartsWith} ${content}`;
-                    } else if ("Ends with" === filter.operator) {
-                        filterText = ` ${window.siyuan.languages.filterOperatorEndsWith} ${content}`;
-                    } else if ([">", "<"].includes(filter.operator)) {
-                        filterText = ` ${filter.operator} ${content}`;
-                    } else if (">=" === filter.operator) {
-                        filterText = ` ≥ ${content}`;
-                    } else if ("<=" === filter.operator) {
-                        filterText = ` ≤ ${content}`;
+                    const content = filterValue[filterValue.type as "text"].content || filterValue.relation?.blockIDs[0] || "";
+                    if (content) {
+                        if (["=", "Contains"].includes(filter.operator)) {
+                            filterText = `: ${content}`;
+                        } else if (filter.operator === "Does not contains") {
+                            filterText = ` ${window.siyuan.languages.filterOperatorDoesNotContain} ${content}`;
+                        } else if (filter.operator === "!=") {
+                            filterText = ` ${window.siyuan.languages.filterOperatorIsNot} ${content}`;
+                        } else if ("Starts with" === filter.operator) {
+                            filterText = ` ${window.siyuan.languages.filterOperatorStartsWith} ${content}`;
+                        } else if ("Ends with" === filter.operator) {
+                            filterText = ` ${window.siyuan.languages.filterOperatorEndsWith} ${content}`;
+                        } else if ([">", "<"].includes(filter.operator)) {
+                            filterText = ` ${filter.operator} ${content}`;
+                        } else if (">=" === filter.operator) {
+                            filterText = ` ≥ ${content}`;
+                        } else if ("<=" === filter.operator) {
+                            filterText = ` ≤ ${content}`;
+                        }
                     }
                 }
                 filterHTML += `<span data-type="setFilter" class="b3-chip${filterText ? " b3-chip--primary" : ""}">
@@ -743,7 +746,7 @@ ${html}
     <svg class="b3-menu__icon"><use xlink:href="#iconAdd"></use></svg>
     <span class="b3-menu__label">${window.siyuan.languages.addFilter}</span>
 </button>
-<button class="b3-menu__item${html ? "" : " fn__none"}" data-type="removeFilters">
+<button class="b3-menu__item b3-menu__item--warning${html ? "" : " fn__none"}" data-type="removeFilters">
     <svg class="b3-menu__icon"><use xlink:href="#iconTrashcan"></use></svg>
     <span class="b3-menu__label">${window.siyuan.languages.removeFilters}</span>
 </button>

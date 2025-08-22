@@ -73,15 +73,14 @@ func checkAttrView(attrView *av.AttributeView, view *av.View) {
 			if v.Type != kv.Key.Type {
 				v.Type = kv.Key.Type
 				if av.KeyTypeBlock == v.Type && nil == v.Block {
-					v.Block = &av.ValueBlock{ID: v.BlockID}
+					v.Block = &av.ValueBlock{}
 					if nil != v.Text {
 						v.Block.Content = v.Text.Content
 					}
-					if "" == v.Block.ID {
-						v.Block.ID = ast.NewNodeID()
-						v.BlockID = v.Block.ID
+					if "" == v.BlockID {
+						v.BlockID = ast.NewNodeID()
 					}
-					createdStr := v.Block.ID[:len("20060102150405")]
+					createdStr := v.BlockID[:len("20060102150405")]
 					created, parseErr := time.ParseInLocation("20060102150405", createdStr, time.Local)
 					if nil == parseErr {
 						v.Block.Created = created.UnixMilli()
@@ -95,10 +94,10 @@ func checkAttrView(attrView *av.AttributeView, view *av.View) {
 		}
 	}
 
-	// 截断超长的数据库标题 Limit the database title to 256 characters https://github.com/siyuan-note/siyuan/issues/15459
-	if 256 < utf8.RuneCountInString(attrView.Name) {
+	// 截断超长的数据库标题 Limit the database title to 512 characters https://github.com/siyuan-note/siyuan/issues/15459
+	if 512 < utf8.RuneCountInString(attrView.Name) {
 		attrView.Name = strings.ReplaceAll(attrView.Name, "\n", " ")
-		attrView.Name = gulu.Str.SubStr(attrView.Name, 256)
+		attrView.Name = gulu.Str.SubStr(attrView.Name, 512)
 		changed = true
 	}
 

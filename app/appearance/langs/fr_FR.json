@@ -1,4 +1,6 @@
 {
+  "displayFieldName": "Afficher le nom du champ",
+  "sortBySelectOption": "Trier par option",
   "groupStep": "Intervalle de regroupement",
   "groupRange": "Plage de regroupement",
   "groupMethodDateRelative": "Date relative",
@@ -553,7 +555,7 @@
   "embedBlockBreadcrumbTip": "Après avoir activé l'intégration, les blocs afficheront le fil d'Ariane, intégrer des blocs dans des super blocs ignorent cette option et n'affichent jamais le fil d'Ariane",
   "appearanceMode": "Mode d'apparence",
   "editReadonly": "Mode lecture seule",
-  "editReadonlyTip": "Lorsqu'il est activé, l'éditeur charge le document en mode lecture seule",
+  "editReadonlyTip": "Lorsqu'il est activé, le document sera en lecture seule par défaut",
   "generateConflictDoc": "Générer une documentation sur les conflits lors de la synchronisation des conflits",
   "generateConflictDocTip": "Lorsqu'il est activé, un document de conflit sera généré lorsqu'un conflit de synchronisation se produit, afin qu'il puisse être ouvert et visualisé directement. Qu'il soit activé ou non, l'historique des données enregistrera le document de conflit",
   "deleteOpConfirm": "⚠️ Supprimer la confirmation de l'opération",
@@ -1643,6 +1645,7 @@
     "263": "Les %d prochains jours",
     "264": "Le champ [%s] est vide",
     "265": "Hors de portée",
-    "266": "Tesseract OCR n'est pas installé ou configuré, veuillez consulter le Guide de l'utilisateur - Section des fichiers de ressources pour la configuration"
+    "266": "Tesseract OCR n'est pas installé ou configuré, veuillez consulter le Guide de l'utilisateur - Section des fichiers de ressources pour la configuration",
+    "267": "Base de données sans nom"
   }
 }

@@ -1,4 +1,6 @@
 {
+  "displayFieldName": "Exibir nome do campo",
+  "sortBySelectOption": "Classificar por opção",
   "groupStep": "Intervalo de agrupamento",
   "groupRange": "Intervalo de grupo",
   "groupMethodDateRelative": "Data relativa",
@@ -553,7 +555,7 @@
   "embedBlockBreadcrumbTip": "Quando ativado, blocos incorporados exibirão navegação estrutural, blocos incorporados em super blocos ignoram esta opção e nunca mostram navegação estrutural",
   "appearanceMode": "Modo de Aparência",
   "editReadonly": "Modo somente leitura",
-  "editReadonlyTip": "Quando ativado, o editor carregará o documento em modo somente leitura",
+  "editReadonlyTip": "Quando ativado, o documento ficará somente leitura por padrão",
   "generateConflictDoc": "Gerar documentação de conflito quando houver conflitos de sincronização",
   "generateConflictDocTip": "Quando ativado, um documento de conflito será gerado quando ocorrer um conflito de sincronização, para que possa ser aberto e visualizado diretamente. Independentemente de estar ativado ou não, o [Histórico de Dados] registrará o documento de conflito",
   "deleteOpConfirm": "⚠️ Confirmação de operação de exclusão",
@@ -1643,6 +1645,7 @@
     "263": "Próximos %d dias",
     "264": "O campo [%s] está vazio",
     "265": "Fora do intervalo",
-    "266": "Tesseract OCR não está instalado ou configurado, consulte o Guia do Usuário - Seção de Arquivos de Recursos para configuração"
+    "266": "Tesseract OCR não está instalado ou configurado, consulte o Guia do Usuário - Seção de Arquivos de Recursos para configuração",
+    "267": "Banco de dados sem nome"
   }
 }

@@ -95,16 +95,30 @@ export class Gutter {
                     }
                 });
                 if (avElement.querySelector('.block__icon[data-type="av-sort"]')?.classList.contains("block__icon--active")) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    return;
+                    const bodyElements = avElement.querySelectorAll(".av__body");
+                    if (bodyElements.length === 1) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        return;
+                    } else if (["template", "created", "updated"].includes(bodyElements[0].getAttribute("data-dtype"))) {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        return;
+                    }
                 }
-                const rowElement = avElement.querySelector(`.av__row[data-id="${buttonElement.dataset.rowId}"]`);
+                const rowElement = avElement.querySelector(`.av__body${buttonElement.dataset.groupId ? `[data-group-id="${buttonElement.dataset.groupId}"]` : ""} .av__row[data-id="${buttonElement.dataset.rowId}"]`);
+                if (!rowElement.classList.contains("av__row--select")) {
+                    avElement.querySelectorAll(".av__row--select:not(.av__row--header)").forEach(item => {
+                        item.classList.remove("av__row--select");
+                        item.querySelector("use").setAttribute("xlink:href", "#iconUncheck");
+                    });
+                }
                 rowElement.classList.add("av__row--select");
                 rowElement.querySelector(".av__firstcol use").setAttribute("xlink:href", "#iconCheck");
                 updateHeader(rowElement as HTMLElement);
                 avElement.querySelectorAll(".av__row--select:not(.av__row--header)").forEach(item => {
-                    selectIds.push(item.getAttribute("data-id"));
+                    const groupId = (hasClosestByClassName(item, "av__body") as HTMLElement)?.dataset.groupId || "";
+                    selectIds.push(item.getAttribute("data-id") + (groupId ? "@" + groupId : ""));
                     selectElements.push(item);
                 });
             } else {
@@ -275,6 +289,7 @@ export class Gutter {
                         avID,
                         previousID,
                         srcs: [{
+                            itemID: Lute.NewNodeID(),
                             id: srcIDs[0],
                             isDetached: true,
                             content: ""
@@ -2297,17 +2312,18 @@ export class Gutter {
                 let dataNodeId = nodeElement.getAttribute("data-node-id");
                 if (type === "NodeAttributeView" && target) {
                     const rowElement = hasClosestByClassName(target, "av__row");
-                    if (rowElement && !rowElement.classList.contains("av__row--header")) {
+                    if (rowElement && !rowElement.classList.contains("av__row--header") && rowElement.dataset.id) {
                         element = rowElement;
+                        const bodyElement = hasClosestByClassName(rowElement, "av__body") as HTMLElement;
                         let iconAriaLabel = isMac() ? window.siyuan.languages.rowTip : window.siyuan.languages.rowTip.replace("⇧", "Shift+");
                         if (protyle.disabled) {
                             iconAriaLabel = window.siyuan.languages.rowTip.substring(0, window.siyuan.languages.rowTip.indexOf("<br"));
                         } else if (rowElement.querySelector('[data-dtype="block"]')?.getAttribute("data-detached") === "true") {
                             iconAriaLabel = window.siyuan.languages.rowTip.substring(0, window.siyuan.languages.rowTip.lastIndexOf("<br"));
                         }
-                        html = `<button data-type="NodeAttributeViewRowMenu" data-node-id="${dataNodeId}" data-row-id="${rowElement.dataset.id}" class="ariaLabel" data-position="parentW" aria-label="${iconAriaLabel}"><svg><use xlink:href="#iconDrag"></use></svg><span ${protyle.disabled ? "" : 'draggable="true" class="fn__grab"'}></span></button>`;
+                        html = `<button data-type="NodeAttributeViewRowMenu" data-node-id="${dataNodeId}" data-row-id="${rowElement.dataset.id}" data-group-id="${bodyElement.dataset.groupId || ""}" class="ariaLabel" data-position="parentW" aria-label="${iconAriaLabel}"><svg><use xlink:href="#iconDrag"></use></svg><span ${protyle.disabled ? "" : 'draggable="true" class="fn__grab"'}></span></button>`;
                         if (!protyle.disabled) {
-                            html = `<button data-type="NodeAttributeViewRow" data-node-id="${dataNodeId}" data-row-id="${rowElement.dataset.id}" class="ariaLabel" data-position="parentW" aria-label="${isMac() ? window.siyuan.languages.addBelowAbove : window.siyuan.languages.addBelowAbove.replace("⌥", "Alt+")}"><svg><use xlink:href="#iconAdd"></use></svg></button>${html}`;
+                            html = `<button data-type="NodeAttributeViewRow" data-node-id="${dataNodeId}" data-row-id="${rowElement.dataset.id}" data-group-id="${bodyElement.dataset.groupId || ""}" class="ariaLabel" data-position="parentW" aria-label="${isMac() ? window.siyuan.languages.addBelowAbove : window.siyuan.languages.addBelowAbove.replace("⌥", "Alt+")}"><svg><use xlink:href="#iconAdd"></use></svg></button>${html}`;
                         }
                         break;
                     }

@@ -427,6 +427,7 @@ export class WYSIWYG {
                         if (isEndOfBlock(range)) {
                             textPlain = textPlain.replace(/\n$/, "");
                         }
+                        html = textPlain;
                     } else if (hasClosestByTag(range.startContainer, "TD") || hasClosestByTag(range.startContainer, "TH")) {
                         tempElement.innerHTML = tempElement.innerHTML.replace(/<br>/g, "\n").replace(/<br\/>/g, "\n");
                         textPlain = tempElement.textContent.endsWith("\n") ? tempElement.textContent.replace(/\n$/, "") : tempElement.textContent;
@@ -728,7 +729,7 @@ export class WYSIWYG {
                     return;
                 }
                 const originData: { [key: string]: IAVCellValue[] } = {};
-                let lastOriginCellElement;
+                let lastOriginCellElement: HTMLElement;
                 const originCellIds: string[] = [];
                 nodeElement.querySelectorAll(".av__cell--active").forEach((item: HTMLElement) => {
                     const rowElement = hasClosestByClassName(item, "av__row");
@@ -783,7 +784,7 @@ export class WYSIWYG {
                     documentSelf.onselectstart = null;
                     documentSelf.onselect = null;
                     if (lastCellElement) {
-                        dragFillCellsValue(protyle, nodeElement, originData, originCellIds);
+                        dragFillCellsValue(protyle, nodeElement, originData, originCellIds, lastOriginCellElement);
                         const allActiveCellsElement = nodeElement.querySelectorAll(".av__cell--active");
                         addDragFill(allActiveCellsElement[allActiveCellsElement.length - 1]);
                     }
@@ -810,6 +811,7 @@ export class WYSIWYG {
                 let lastCellElement: HTMLElement;
                 const nodeRect = nodeElement.getBoundingClientRect();
                 const scrollElement = nodeElement.querySelector(".av__scroll");
+                const bodyElement = hasClosestByClassName(avCellElement, "av__body") as HTMLElement;
                 documentSelf.onmousemove = (moveEvent: MouseEvent) => {
                     const tempCellElement = hasClosestByClassName(moveEvent.target as HTMLElement, "av__cell") as HTMLElement;
                     if (scrollElement.scrollWidth > scrollElement.clientWidth + 2) {
@@ -824,7 +826,8 @@ export class WYSIWYG {
                             protyle.contentElement.scrollTop += 5;
                         }
                     }
-                    if (moveSelectCellElement && tempCellElement && tempCellElement === moveSelectCellElement) {
+                    if (bodyElement !== hasClosestByClassName(tempCellElement, "av__body") ||
+                        (moveSelectCellElement && tempCellElement && tempCellElement === moveSelectCellElement)) {
                         return;
                     }
                     if (tempCellElement && tempCellElement.dataset.id && (event.clientX !== moveEvent.clientX || event.clientY !== moveEvent.clientY)) {
@@ -832,7 +835,7 @@ export class WYSIWYG {
                         nodeElement.querySelectorAll(".av__cell--active").forEach((item: HTMLElement) => {
                             item.classList.remove("av__cell--active");
                         });
-                        nodeElement.querySelectorAll(".av__row").forEach((rowElement: HTMLElement, index: number) => {
+                        bodyElement.querySelectorAll(".av__row").forEach((rowElement: HTMLElement, index: number) => {
                             if (index >= Math.min(originIndex.rowIndex, newIndex.rowIndex) && index <= Math.max(originIndex.rowIndex, newIndex.rowIndex)) {
                                 rowElement.querySelectorAll(".av__cell").forEach((cellElement: HTMLElement, cellIndex: number) => {
                                     if (cellIndex >= Math.min(originIndex.celIndex, newIndex.celIndex) && cellIndex <= Math.max(originIndex.celIndex, newIndex.celIndex)) {

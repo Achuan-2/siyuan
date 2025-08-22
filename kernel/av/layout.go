@@ -64,6 +64,7 @@ type BaseInstance struct {
 	ShowIcon         bool          `json:"showIcon"`         // 是否显示字段图标
 	WrapField        bool          `json:"wrapField"`        // 是否换行字段内容
 
+	GroupKey    *Key       `json:"groupKey,omitempty"`   // 分组字段
 	GroupValue  *Value     `json:"groupValue,omitempty"` // 分组值
 	Groups      []Viewable `json:"groups,omitempty"`     // 分组实例列表
 	GroupCalc   *GroupCalc `json:"groupCalc,omitempty"`  // 分组计算规则和结果
@@ -90,6 +91,7 @@ func NewViewBaseInstance(view *View) *BaseInstance {
 		Filters:          view.Filters,
 		Sorts:            view.Sorts,
 		Group:            view.Group,
+		GroupKey:         view.GroupKey,
 		GroupValue:       view.GroupVal,
 		GroupCalc:        view.GroupCalc,
 		GroupFolded:      view.GroupFolded,
@@ -121,6 +123,10 @@ func (baseInstance *BaseInstance) GetGroupCalc() *GroupCalc {
 
 func (baseInstance *BaseInstance) SetGroupFolded(folded bool) {
 	baseInstance.GroupFolded = folded
+}
+
+func (baseInstance *BaseInstance) GetGroupHidden() int {
+	return baseInstance.GroupHidden
 }
 
 func (baseInstance *BaseInstance) SetGroupHidden(hidden int) {
@@ -181,6 +187,9 @@ type Collection interface {
 
 	// SetItems 设置集合中的项目。
 	SetItems(items []Item)
+
+	// CountItems 返回集合中的项目数量。
+	CountItems() int
 
 	// GetFields 返回集合的所有字段。
 	GetFields() []Field
