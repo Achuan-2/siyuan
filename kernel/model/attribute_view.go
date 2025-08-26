@@ -1232,13 +1232,14 @@ func GetAttributeView(avID string) (ret *av.AttributeView) {
 }
 
 type AvSearchResult struct {
-	AvID     string            `json:"avID"`
-	AvName   string            `json:"avName"`
-	ViewName string            `json:"viewName"`
-	ViewID   string            `json:"viewID"`
-	BlockID  string            `json:"blockID"`
-	HPath    string            `json:"hPath"`
-	Children []*AvSearchResult `json:"children,omitempty"`
+	AvID       string            `json:"avID"`
+	AvName     string            `json:"avName"`
+	ViewName   string            `json:"viewName"`
+	ViewID     string            `json:"viewID"`
+	ViewLayout av.LayoutType     `json:"viewLayout"`
+	BlockID    string            `json:"blockID"`
+	HPath      string            `json:"hPath"`
+	Children   []*AvSearchResult `json:"children,omitempty"`
 }
 
 type AvSearchTempResult struct {
@@ -1262,7 +1263,12 @@ func SearchAttributeView(keyword string, excludeAvIDs []string) (ret []*AvSearch
 		logging.LogErrorf("read directory [%s] failed: %s", avDir, err)
 		return
 	}
+
 	avBlockRels := av.GetBlockRels()
+	if 1 > len(avBlockRels) {
+		return
+	}
+
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
@@ -1321,48 +1327,29 @@ func SearchAttributeView(keyword string, excludeAvIDs []string) (ret []*AvSearch
 	if 12 <= len(avSearchTmpResults) {
 		avSearchTmpResults = avSearchTmpResults[:12]
 	}
-	var avIDs []string
-	for _, a := range avSearchTmpResults {
-		avIDs = append(avIDs, a.AvID)
-	}
 
-	var blockIDs []string
-	for _, bIDs := range avBlockRels {
-		blockIDs = append(blockIDs, bIDs...)
-	}
-	blockIDs = gulu.Str.RemoveDuplicatedElem(blockIDs)
-
-	trees := filesys.LoadTrees(blockIDs)
-	hitAttrViews := map[string]bool{}
-	for _, blockID := range blockIDs {
-		tree := trees[blockID]
-		if nil == tree {
-			continue
-		}
-
-		node := treenode.GetNodeInTree(tree, blockID)
-		if nil == node || "" == node.AttributeViewID {
-			continue
-		}
-
-		avID := node.AttributeViewID
-		var existAv *AvSearchTempResult
-		for _, tmpResult := range avSearchTmpResults {
-			if tmpResult.AvID == avID {
-				existAv = tmpResult
-				break
+	for _, tmpResult := range avSearchTmpResults {
+		bIDs := avBlockRels[tmpResult.AvID]
+		var node *ast.Node
+		for _, bID := range bIDs {
+			tree, _ := LoadTreeByBlockID(bID)
+			if nil == tree {
+				continue
 			}
+
+			node = treenode.GetNodeInTree(tree, bID)
+			if nil == node || "" == node.AttributeViewID {
+				continue
+			}
+
+			break
 		}
-		if nil == existAv || gulu.Str.Contains(avID, excludeAvIDs) {
+
+		if nil == node {
 			continue
 		}
 
-		if hitAttrViews[avID] {
-			continue
-		}
-		hitAttrViews[avID] = true
-
-		attrView, _ := av.ParseAttributeView(avID)
+		attrView, _ := av.ParseAttributeView(tmpResult.AvID)
 		if nil == attrView {
 			continue
 		}
@@ -1377,27 +1364,28 @@ func SearchAttributeView(keyword string, excludeAvIDs []string) (ret []*AvSearch
 			hPath = box.Name + hPath
 		}
 
-		name := existAv.AvName
+		name := tmpResult.AvName
 		if "" == name {
 			name = Conf.language(267)
 		}
 
 		parent := &AvSearchResult{
-			AvID:    avID,
-			AvName:  existAv.AvName,
-			BlockID: blockID,
+			AvID:    tmpResult.AvID,
+			AvName:  tmpResult.AvName,
+			BlockID: node.ID,
 			HPath:   hPath,
 		}
 		ret = append(ret, parent)
 
 		for _, view := range attrView.Views {
 			child := &AvSearchResult{
-				AvID:     avID,
-				AvName:   existAv.AvName,
-				ViewName: view.Name,
-				ViewID:   view.ID,
-				BlockID:  blockID,
-				HPath:    hPath,
+				AvID:       tmpResult.AvID,
+				AvName:     tmpResult.AvName,
+				ViewName:   view.Name,
+				ViewID:     view.ID,
+				ViewLayout: view.LayoutType,
+				BlockID:    node.ID,
+				HPath:      hPath,
 			}
 			parent.Children = append(parent.Children, child)
 		}
@@ -2962,14 +2950,14 @@ func (tx *Transaction) doInsertAttrViewBlock(operation *Operation) (ret *TxErr) 
 		operation.Context = map[string]interface{}{}
 	}
 
-	err := AddAttributeViewBlock(tx, operation.Srcs, operation.AvID, operation.BlockID, operation.GroupID, operation.PreviousID, operation.IgnoreDefaultFill, operation.Context)
+	err := AddAttributeViewBlock(tx, operation.Srcs, operation.AvID, operation.BlockID, operation.ViewID, operation.GroupID, operation.PreviousID, operation.IgnoreDefaultFill, operation.Context)
 	if err != nil {
 		return &TxErr{code: TxErrHandleAttributeView, id: operation.AvID, msg: err.Error()}
 	}
 	return
 }
 
-func AddAttributeViewBlock(tx *Transaction, srcs []map[string]interface{}, avID, dbBlockID, groupID, previousItemID string, ignoreDefaultFill bool, context map[string]interface{}) (err error) {
+func AddAttributeViewBlock(tx *Transaction, srcs []map[string]interface{}, avID, dbBlockID, viewID, groupID, previousItemID string, ignoreDefaultFill bool, context map[string]interface{}) (err error) {
 	slices.Reverse(srcs) // https://github.com/siyuan-note/siyuan/issues/11286
 
 	now := time.Now().UnixMilli()
@@ -3004,14 +2992,14 @@ func AddAttributeViewBlock(tx *Transaction, srcs []map[string]interface{}, avID,
 		if nil != src["content"] {
 			srcContent = src["content"].(string)
 		}
-		if avErr := addAttributeViewBlock(now, avID, dbBlockID, groupID, previousItemID, srcItemID, boundBlockID, srcContent, isDetached, ignoreDefaultFill, tree, tx, context); nil != avErr {
+		if avErr := addAttributeViewBlock(now, avID, dbBlockID, viewID, groupID, previousItemID, srcItemID, boundBlockID, srcContent, isDetached, ignoreDefaultFill, tree, tx, context); nil != avErr {
 			return avErr
 		}
 	}
 	return
 }
 
-func addAttributeViewBlock(now int64, avID, dbBlockID, groupID, previousItemID, addingItemID, addingBoundBlockID, addingBlockContent string, isDetached, ignoreDefaultFill bool, tree *parse.Tree, tx *Transaction, context map[string]interface{}) (err error) {
+func addAttributeViewBlock(now int64, avID, dbBlockID, viewID, groupID, previousItemID, addingItemID, addingBoundBlockID, addingBlockContent string, isDetached, ignoreDefaultFill bool, tree *parse.Tree, tx *Transaction, context map[string]interface{}) (err error) {
 	var node *ast.Node
 	if !isDetached {
 		node = treenode.GetNodeInTree(tree, addingBoundBlockID)
@@ -3081,6 +3069,14 @@ func addAttributeViewBlock(now int64, avID, dbBlockID, groupID, previousItemID, 
 	if nil != err {
 		logging.LogErrorf("get view by block ID [%s] failed: %s", dbBlockID, err)
 		return
+	}
+
+	if "" != viewID {
+		view = attrView.GetView(viewID)
+		if nil == view {
+			logging.LogErrorf("get view by view ID [%s] failed", viewID)
+			return av.ErrViewNotFound
+		}
 	}
 
 	groupView := view

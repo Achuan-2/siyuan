@@ -9,7 +9,7 @@ import {updateAttrViewCellAnimation} from "./action";
 import {focusBlock} from "../../util/selection";
 import {setPosition} from "../../../util/setPosition";
 import * as dayjs from "dayjs";
-import {getFieldsByData} from "./view";
+import {getFieldsByData, getViewName} from "./view";
 import {getColId} from "./col";
 import {getFieldIdByCellElement} from "./row";
 import {isMobile} from "../../../util/functions";
@@ -21,6 +21,7 @@ interface IAVItem {
     hPath: string;
     viewName: string;
     viewID: string;
+    viewLayout: string;
 }
 
 const genSearchList = (element: Element, keyword: string, avId?: string, excludes = true, cb?: () => void) => {
@@ -32,10 +33,10 @@ const genSearchList = (element: Element, keyword: string, avId?: string, exclude
         response.data.results.forEach((item: IAVItem & { children: IAVItem[] }, index: number) => {
             const hasChildren = item.children && item.children.length > 0 && excludes;
             html += `<div class="b3-list-item b3-list-item--narrow${index === 0 ? " b3-list-item--focus" : ""}" data-av-id="${item.avID}" data-block-id="${item.blockID}">
-    <span class="b3-list-item__toggle b3-list-item__toggle--hl${excludes ? "" : " fn__none"}" style="align-self: flex-start;margin-top: 4px;">
+    <span class="b3-list-item__toggle b3-list-item__toggle--hl${excludes ? "" : " fn__none"}" style="height:auto;align-self: stretch;margin: 4px 0;">
         <svg class="b3-list-item__arrow">${hasChildren ? '<use xlink:href="#iconRight"></use>' : ""}</svg>
     </span>
-    <span class="fn__space"></span>
+    <span class="fn__space--small"></span>
     <div class="b3-list-item--two fn__flex-1">
         <div class="b3-list-item__first">
             <span class="b3-list-item__text">${escapeHtml(item.avName || window.siyuan.languages._kernel[267])}</span>
@@ -47,9 +48,10 @@ const genSearchList = (element: Element, keyword: string, avId?: string, exclude
             if (hasChildren) {
                 html += '<div class="fn__none">';
                 item.children.forEach((subItem) => {
+                    const viewDefaultName = getViewName(subItem.viewLayout);
                     html += `<div style="padding-left: 48px;" class="b3-list-item b3-list-item--narrow" data-av-id="${subItem.avID}" data-view-id="${subItem.viewID}">
 <span class="b3-list-item__text">${escapeHtml(subItem.avName || window.siyuan.languages._kernel[267])}</span> 
-<span class="b3-list-item__meta">${escapeHtml(subItem.viewName)}</span>
+<span class="b3-list-item__meta">${escapeHtml(subItem.viewName)}${viewDefaultName === subItem.viewName ? "" : " - " + viewDefaultName}</span>
 </div>`;
                 });
                 html += "</div>";
