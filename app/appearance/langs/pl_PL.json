@@ -1,4 +1,8 @@
 {
+  "vacuumDataIndex": "Optymalizuj indeks",
+  "vacuumDataIndexTip": "Sprawdź indeks danych, zwolnij miejsce i popraw wydajność indeksu",
+  "rebuildDataIndex": "Odbuduj indeks",
+  "rebuildDataIndexTip": "Pełna odbudowa indeksu danych, może to potrwać, proszę czekać",
   "displayFieldName": "Wyświetl nazwę pola",
   "sortBySelectOption": "Sortuj według opcji",
   "groupStep": "Odstęp grupowania",
@@ -29,7 +33,7 @@
   "small": "Mały",
   "fitImage": "Automatyczne dopasowanie rozmiaru obrazu",
   "showIcon": "Pokaż ikonę",
-  "showAllFieldsIcon": "Pokaż ikony pól",
+  "showAllEntriesIcons": "Pokaż ikony wpisów",
   "wrapAllFields": "Automatyczne zawijanie pól",
   "gallery": "Karta",
   "newTag": "Nowy tag",
@@ -431,7 +435,7 @@
   "apiKey": "Klucz API",
   "apiKeyTip": "Zaleca się przypisanie klucza API do SiYuan oddzielnie do późniejszego zarządzania. Jeśli ten element jest pusty, funkcje związane z AI będą wyłączone",
   "apiTimeout": "Limit czasu",
-  "apiTimeoutTip": "Okres timeoutu dla inicjowania zapytania, jednostka: sekunda",
+  "apiTimeoutTip": "Okres timeoutu dla inicjowania zapytania",
   "apiProxy": "Proxy sieciowe",
   "apiProxyTip": "Proxy sieciowe, które inicjuje zapytanie, np. <code class='fn__code'>socks://user:pass@127.0.0.1:1080</code>",
   "apiModel": "Model",
@@ -1130,6 +1134,8 @@
   "fileTree19": "Niektóre systemy operacyjne mają ograniczenia techniczne, które mogą uniemożliwić ręczne kopiowanie danych obszaru roboczego po utworzeniu poddokumentów głębszych niż 7 poziomów",
   "fileTree20": "Zapisz w pojedynczej linii",
   "fileTree21": "Po włączeniu, format JSON w pojedynczej linii będzie używany przy zapisywaniu .sy dokumentów i plików .json bazy danych, co może zmniejszyć rozmiar pliku o około 30% i poprawić wydajność odczytu i zapisu o 50%",
+  "fileTree22": "Powiadomienie o dużym pliku",
+  "fileTree23": "Powiadom, gdy plik .sy lub baza danych .json przekroczy ten rozmiar",
   "export10": "Na przykład <code class='fn__code'>&lt;span style=\"color: #fff;background-color: black;padding: 4px;border-radius: 5px;float:right;\"&gt;SiYuan&lt;/span&gt;</code>, jeśli jest puste, użyj tekstu znaków wodnych lub ścieżki pliku znaku wodnego.",
   "export11": "Sposób obsługi treści bloku odniesienia podczas eksportu",
   "export12": "Sposób obsługi treści bloku osadzonego podczas eksportu",
@@ -1646,6 +1652,10 @@
     "264": "Pole [%s] jest puste",
     "265": "Poza zakresem",
     "266": "Tesseract OCR nie jest zainstalowany lub skonfigurowany, zapoznaj się z Podręcznikiem użytkownika - Sekcja plików zasobów, aby skonfigurować",
-    "267": "Nienazwana baza danych"
+    "267": "Nienazwana baza danych",
+    "268": "Uwaga: plik [%s] przekroczył już [%d MB], co może spowodować spadek wydajności",
+    "269": "Ten blok został już dodany do bazy danych [%s]",
+    "270": "Optymalizacja indeksu danych, proszę czekać...",
+    "271": "Optymalizacja indeksu danych zakończona, zwolniono [%s] miejsca na dysku"
   }
 }

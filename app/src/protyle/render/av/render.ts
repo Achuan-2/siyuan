@@ -238,6 +238,8 @@ export const getGroupTitleHTML = (group: IAVView, counter: number) => {
         group.groupValue.mSelect.forEach((item) => {
             nameHTML += `<span class="b3-chip" style="background-color:var(--b3-font-background${item.color});color:var(--b3-font-color${item.color})">${escapeHtml(item.content)}</span>`;
         });
+    } else if (group.groupValue.type === "checkbox") {
+        nameHTML = `<svg style="width:calc(1.625em - 12px);height:calc(1.625em - 12px)"><use xlink:href="#icon${group.groupValue.checkbox.checked ? "Check" : "Uncheck"}"></use></svg>`;
     } else {
         nameHTML = group.name;
     }
@@ -342,10 +344,7 @@ const afterRenderTable = (options: ITableOptions) => {
         }
     });
     Object.keys(options.resetData.pageSizes).forEach((groupId) => {
-        if (groupId === "unGroup") {
-            groupId = "";
-        }
-        const bodyElement = options.blockElement.querySelector(`.av__body[data-group-id="${groupId}"]`) as HTMLElement;
+        const bodyElement = options.blockElement.querySelector(`.av__body[data-group-id="${groupId === "unGroup" ? "" : groupId}"]`) as HTMLElement;
         if (bodyElement) {
             bodyElement.dataset.pageSize = options.resetData.pageSizes[groupId];
         }
@@ -757,39 +756,45 @@ export const refreshAV = (protyle: IProtyle, operation: IOperation) => {
                 }
             }
             avRender(item, protyle, () => {
-                const attrElement = document.querySelector(`.b3-dialog--open[data-key="${Constants.DIALOG_ATTR}"] .av[data-av-id="${avID}"]`) as HTMLElement;
+                const attrElement = document.querySelector(`.b3-dialog--open[data-key="${Constants.DIALOG_ATTR}"] .custom-attr > [data-av-id="${avID}"]`) as HTMLElement;
                 if (attrElement) {
                     // 更新属性面板
                     renderAVAttribute(attrElement.parentElement, attrElement.dataset.nodeId, protyle);
                 } else {
-                    if (operation.action === "insertAttrViewBlock") {
-                        const groupQuery = operation.groupID ? `[data-group-id="${operation.groupID}"]` : "";
-                        if (item.getAttribute("data-av-type") === "gallery") {
-                            operation.srcs.forEach(srcItem => {
-                                const filesElement = item.querySelector(`.av__body${groupQuery} .av__gallery-item[data-id="${srcItem.itemID}"]`)?.querySelector(".av__gallery-fields");
-                                if (filesElement && filesElement.querySelector('[data-dtype="block"]')?.parentElement.getAttribute("data-empty") === "true") {
-                                    filesElement.classList.add("av__gallery-fields--edit");
+                    if (operation.action === "insertAttrViewBlock" && operation.context?.ignoreTip !== "true") {
+                        if (operation.context?.message) {
+                            showMessage(operation.context.message);
+                        } else {
+                            const groupQuery = operation.groupID ? `[data-group-id="${operation.groupID}"]` : "";
+                            if (item.getAttribute("data-av-type") === "gallery") {
+                                operation.srcs.forEach(srcItem => {
+                                    const filesElement = item.querySelector(`.av__body${groupQuery} .av__gallery-item[data-id="${srcItem.itemID}"]`)?.querySelector(".av__gallery-fields");
+                                    if (filesElement && filesElement.querySelector('[data-dtype="block"]')?.parentElement.getAttribute("data-empty") === "true") {
+                                        filesElement.classList.add("av__gallery-fields--edit");
+                                    }
+                                });
+                            }
+                            if (operation.srcs.length === 1) {
+                                let popCellElement = item.querySelector(`.av__body${groupQuery} [data-id="${operation.srcs[0].itemID}"] .av__cell[data-dtype="block"]`) as HTMLElement;
+                                if (!popCellElement) {
+                                    const popCellElements = item.querySelectorAll(`.av__body [data-id="${operation.srcs[0].itemID}"] .av__cell[data-dtype="block"]`);
+                                    if (popCellElements.length === 1) {
+                                        popCellElement = popCellElements[0] as HTMLElement;
+                                    }
+                                }
+                                if (popCellElement && popCellElement.getAttribute("data-detached") === "true" &&
+                                    popCellElement.querySelector(".av__celltext").textContent === "") {
+                                    popTextCell(protyle, [popCellElement], "block");
+                                }
+                            }
+                            operation.srcs.find((srcItem) => {
+                                if (!item.querySelector(`.av__body [data-id="${srcItem.itemID}"]`) &&
+                                    !item.querySelector(`.av__body [data-dtype="block"] .av__celltext--ref[data-id="${srcItem.id}"]`)) {
+                                    showMessage(window.siyuan.languages.insertRowTip);
+                                    return true;
                                 }
                             });
                         }
-                        if (operation.srcs.length === 1) {
-                            let popCellElement = item.querySelector(`.av__body${groupQuery} [data-id="${operation.srcs[0].itemID}"] .av__cell[data-dtype="block"]`) as HTMLElement;
-                            if (!popCellElement) {
-                                const popCellElements = item.querySelectorAll(`.av__body [data-id="${operation.srcs[0].itemID}"] .av__cell[data-dtype="block"]`);
-                                if (popCellElements.length === 1) {
-                                    popCellElement = popCellElements[0] as HTMLElement;
-                                }
-                            }
-                            if (popCellElement && popCellElement.getAttribute("data-detached") === "true") {
-                                popTextCell(protyle, [popCellElement], "block");
-                            }
-                        }
-                        operation.srcs.find((srcItem) => {
-                            if (!item.querySelector(`.av__body [data-id="${srcItem.itemID}"]`)) {
-                                showMessage(window.siyuan.languages.insertRowTip);
-                                return true;
-                            }
-                        });
                     } else if (operation.action === "addAttrViewView") {
                         if (item.getAttribute("data-node-id") === operation.blockID) {
                             openMenuPanel({protyle, blockElement: item, type: "config"});

@@ -1008,7 +1008,7 @@ func syncDelete2AttributeView(node *ast.Node) (changedAvIDs []string) {
 			}
 
 			if changedAv {
-				regenAttrViewGroups(attrView, "force")
+				regenAttrViewGroups(attrView)
 				av.SaveAttributeView(attrView)
 				changedAvIDs = append(changedAvIDs, avID)
 			}
@@ -1099,7 +1099,7 @@ func (tx *Transaction) doLargeInsert(previousID string) (ret *TxErr) {
 			AddAttributeViewBlock(tx, []map[string]interface{}{{
 				"id":         insertedNode.ID,
 				"isDetached": false,
-			}}, avID, "", "", previousID)
+			}}, avID, "", "", previousID, false, map[string]interface{}{})
 			ReloadAttrView(avID)
 		}
 
@@ -1284,7 +1284,7 @@ func (tx *Transaction) doInsert(operation *Operation) (ret *TxErr) {
 		AddAttributeViewBlock(tx, []map[string]interface{}{{
 			"id":         insertedNode.ID,
 			"isDetached": false,
-		}}, avID, "", "", previousID)
+		}}, avID, "", "", previousID, false, map[string]interface{}{})
 		ReloadAttrView(avID)
 	}
 
@@ -1569,7 +1569,7 @@ func upsertAvBlockRel(node *ast.Node) {
 		for _, avID := range affectedAvIDs {
 			attrView, _ := av.ParseAttributeView(avID)
 			if nil != attrView {
-				regenAttrViewGroups(attrView, "force")
+				regenAttrViewGroups(attrView)
 				av.SaveAttributeView(attrView)
 			}
 
@@ -1727,6 +1727,9 @@ type Operation struct {
 	Layout            av.LayoutType            `json:"layout"`            // 属性视图布局类型
 	GroupID           string                   `json:"groupID"`           // 属性视图分组视图 ID
 	TargetGroupID     string                   `json:"targetGroupID"`     // 属性视图目标分组视图 ID
+	IgnoreDefaultFill bool                     `json:"ignoreDefaultFill"` // 是否忽略默认填充
+
+	Context map[string]interface{} `json:"context"` // 上下文信息
 }
 
 type Transaction struct {

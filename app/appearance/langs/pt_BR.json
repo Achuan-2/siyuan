@@ -1,4 +1,8 @@
 {
+  "vacuumDataIndex": "Otimizar índice",
+  "vacuumDataIndexTip": "Verifique o índice de dados, libere espaço e melhore o desempenho do índice",
+  "rebuildDataIndex": "Reconstruir índice",
+  "rebuildDataIndexTip": "Reconstrução completa do índice de dados, pode demorar, por favor aguarde",
   "displayFieldName": "Exibir nome do campo",
   "sortBySelectOption": "Classificar por opção",
   "groupStep": "Intervalo de agrupamento",
@@ -29,7 +33,7 @@
   "small": "Pequeno",
   "fitImage": "Ajustar automaticamente o tamanho da imagem",
   "showIcon": "Mostrar ícone",
-  "showAllFieldsIcon": "Mostrar ícones de campos",
+  "showAllEntriesIcons": "Mostrar ícones de entradas",
   "wrapAllFields": "Quebrar automaticamente os campos",
   "gallery": "Cartão",
   "newTag": "Nova tag",
@@ -431,7 +435,7 @@
   "apiKey": "Chave API",
   "apiKeyTip": "Recomenda-se atribuir uma Chave API separada ao SiYuan para gerenciamento subsequente. Se este item estiver em branco, as funções relacionadas à IA serão desativadas",
   "apiTimeout": "Tempo limite",
-  "apiTimeoutTip": "O período de tempo limite para iniciar uma solicitação, unidade: segundo",
+  "apiTimeoutTip": "O período de tempo limite para iniciar uma solicitação",
   "apiProxy": "Proxy de rede",
   "apiProxyTip": "O proxy de rede que inicia a solicitação, como <code class='fn__code'>socks://user:pass@127.0.0.1:1080</code>",
   "apiModel": "Modelo",
@@ -1130,6 +1134,8 @@
   "fileTree19": "Alguns sistemas operacionais têm limitações técnicas que podem impedir a cópia manual de dados do espaço de trabalho após a criação de subdocumentos maiores que 7 níveis",
   "fileTree20": "Salvar com uma única linha",
   "fileTree21": "Quando ativado, o formato JSON de linha única será usado ao salvar documentos .sy e arquivos .json de banco de dados, o que pode reduzir o tamanho do arquivo em cerca de 30% e melhorar a eficiência de leitura/gravação em 50%",
+  "fileTree22": "Aviso de arquivo grande",
+  "fileTree23": "Notificar quando arquivos .sy e banco de dados .json excederem este tamanho",
   "export10": "Por exemplo <code class='fn__code'>&lt;span style=\"color: #fff;background-color: black;padding: 4px;border-radius: 5px;float:right;\"&gt;SiYuan&lt;/span&gt;</code>, se vazio, use texto de marca d'água ou caminho do arquivo de marca d'água.",
   "export11": "Método de manipulação de conteúdo do bloco de referência ao exportar",
   "export12": "Método de manipulação de conteúdo do bloco incorporado ao exportar",
@@ -1646,6 +1652,10 @@
     "264": "O campo [%s] está vazio",
     "265": "Fora do intervalo",
     "266": "Tesseract OCR não está instalado ou configurado, consulte o Guia do Usuário - Seção de Arquivos de Recursos para configuração",
-    "267": "Banco de dados sem nome"
+    "267": "Banco de dados sem nome",
+    "268": "Atenção: o arquivo [%s] já excedeu [%d MB], o que pode causar queda de desempenho",
+    "269": "Este bloco já foi adicionado ao banco de dados [%s]",
+    "270": "Otimizando o índice de dados, por favor aguarde...",
+    "271": "Otimização do índice de dados concluída, [%s] de espaço liberado"
   }
 }

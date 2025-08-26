@@ -1,4 +1,8 @@
 {
+  "vacuumDataIndex": "Optimiser l’index",
+  "vacuumDataIndexTip": "Vérifiez l’index des données, libérez de l’espace et améliorez les performances de l’index",
+  "rebuildDataIndex": "Reconstruire l’index",
+  "rebuildDataIndexTip": "Reconstruction complète de l’index des données, cela peut prendre du temps, veuillez patienter",
   "displayFieldName": "Afficher le nom du champ",
   "sortBySelectOption": "Trier par option",
   "groupStep": "Intervalle de regroupement",
@@ -29,7 +33,7 @@
   "small": "Petit",
   "fitImage": "Ajuster automatiquement la taille de l'image",
   "showIcon": "Afficher l'icône",
-  "showAllFieldsIcon": "Afficher les icônes des champs",
+  "showAllEntriesIcons": "Afficher les icônes des entrées",
   "wrapAllFields": "Retour automatique des champs",
   "gallery": "Carte",
   "newTag": "Nouvelle étiquette",
@@ -431,7 +435,7 @@
   "apiKey": "Clé API",
   "apiKeyTip": "Il est recommandé d'attribuer une clé API à SiYuan séparément pour une gestion ultérieure. Si cet élément est laissé vide, les fonctions liées à l'IA seront désactivées",
   "apiTimeout": "Délai d'expiration",
-  "apiTimeoutTip": "Le délai d'attente pour lancer une requête, unité : seconde",
+  "apiTimeoutTip": "Le délai d'attente pour lancer une requête",
   "apiProxy": "Proxy Web",
   "apiProxyTip": "Le proxy réseau qui lance la requête, tel que <code class='fn__code'>socks://user:pass@127.0.0.1:1080</code>",
   "apiModel": "Modelo",
@@ -1130,6 +1134,8 @@
   "fileTree19": "Certains systèmes d'exploitation ont des limitations techniques qui peuvent empêcher la copie manuelle des données de l'espace de travail après la création de sous-documents supérieurs à 7 niveaux",
   "fileTree20": "Enregistrer avec une seule ligne",
   "fileTree21": "Après activation, le format JSON sur une seule ligne sera utilisé lors de l'enregistrement des documents .sy et des fichiers .json de base de données, ce qui peut réduire la taille du fichier d'environ 30 % et améliorer l'efficacité de lecture et d'écriture de 50 %",
+  "fileTree22": "Alerte de fichier volumineux",
+  "fileTree23": "Notifier lorsque les fichiers .sy ou la base de données .json dépassent cette taille",
   "export10": "Par exemple <code class='fn__code'>&lt;span style=\"color: #fff;background-color: black;padding: 4px;border-radius: 5px;float:right;\"&gt;SiYuan&lt;/span&gt;</code>, s'il est vide, utilisez le texte du filigrane ou le chemin du fichier du filigrane.",
   "export11": "Traitement du contenu des blocs de référence lors de l'exportation",
   "export12": "Gestion du contenu des blocs intégrés lors de l'exportation",
@@ -1646,6 +1652,10 @@
     "264": "Le champ [%s] est vide",
     "265": "Hors de portée",
     "266": "Tesseract OCR n'est pas installé ou configuré, veuillez consulter le Guide de l'utilisateur - Section des fichiers de ressources pour la configuration",
-    "267": "Base de données sans nom"
+    "267": "Base de données sans nom",
+    "268": "Attention : le fichier [%s] a déjà dépassé [%d MB], ce qui peut entraîner une baisse des performances",
+    "269": "Ce bloc a déjà été ajouté à la base de données [%s]",
+    "270": "Optimisation de l’index des données en cours, veuillez patienter...",
+    "271": "Optimisation de l’index des données terminée, [%s] d’espace disque libéré"
   }
 }

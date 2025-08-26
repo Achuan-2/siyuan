@@ -1,4 +1,8 @@
 {
+  "vacuumDataIndex": "Index optimieren",
+  "vacuumDataIndexTip": "Datenindex prüfen, Speicherplatz freigeben und Indexleistung verbessern",
+  "rebuildDataIndex": "Index neu erstellen",
+  "rebuildDataIndexTip": "Kompletter Neuaufbau des Datenindex, dies kann einige Zeit dauern. Bitte warten",
   "displayFieldName": "Feldnamen anzeigen",
   "sortBySelectOption": "Nach Option sortieren",
   "groupStep": "Gruppierungsintervall",
@@ -29,7 +33,7 @@
   "small": "Klein",
   "fitImage": "Bildgröße automatisch anpassen",
   "showIcon": "Symbol anzeigen",
-  "showAllFieldsIcon": "Feldsymbole anzeigen",
+  "showAllEntriesIcons": "Eintragssymbole anzeigen",
   "wrapAllFields": "Felder automatisch umbrechen",
   "gallery": "Karte",
   "newTag": "Neuer Tag",
@@ -431,7 +435,7 @@
   "apiKey": "API-Schlüssel",
   "apiKeyTip": "Es wird empfohlen, einen API-Schlüssel getrennt für SiYuan zuzuweisen, um eine spätere Verwaltung zu ermöglichen. Wenn dieses Feld leer bleibt, werden AI-bezogene Funktionen deaktiviert.",
   "apiTimeout": "Timeout",
-  "apiTimeoutTip": "Der Timeout-Zeitraum für die Initiierung einer Anfrage, Einheit: Sekunde",
+  "apiTimeoutTip": "Der Timeout-Zeitraum für die Initiierung einer Anfrage",
   "apiProxy": "Netzwerk-Proxy",
   "apiProxyTip": "Der Netzwerkproxy, der die Anfrage initiiert, z. B. <code class='fn__code'>socks://user:pass@127.0.0.1:1080</code>",
   "apiModel": "Modell",
@@ -1130,6 +1134,8 @@
   "fileTree19": "Einige Betriebssysteme haben technische Einschränkungen, die das manuelle Kopieren von Arbeitsbereichsdaten nach der Erstellung von Unterdokumenten mit mehr als 7 Ebenen verhindern können",
   "fileTree20": "Speichern mit einer einzigen Zeile",
   "fileTree21": "Nach der Aktivierung wird beim Speichern von .sy-Dokumenten und Datenbank-.json-Dateien das Einzeilige JSON-Format verwendet, was die Dateigröße um etwa 30 % reduzieren und die Lese- und Schreibgeschwindigkeit um 50 % verbessern kann",
+  "fileTree22": "Großdatei-Warnung",
+  "fileTree23": "Benachrichtigen, wenn .sy-Dateien oder die Datenbank .json diese Größe überschreiten",
   "export10": "Beispiel <code class='fn__code'>&lt;span style=\"color: #fff;background-color: black;padding: 4px;border-radius: 5px;float:right;\"&gt;SiYuan&lt;/span&gt;</code>, wenn leer, verwenden Sie Wasserzeichentext oder den Pfad zur Wasserzeichen-Datei.",
   "export11": "Inhaltsbehandlungsverfahren des Inhaltsreferenzblocks beim Exportieren",
   "export12": "Inhaltsbehandlungsverfahren des Inhalteinbettungsblocks beim Exportieren",
@@ -1646,6 +1652,10 @@
     "264": "Das Feld [%s] ist leer",
     "265": "Außerhalb des Bereichs",
     "266": "Tesseract OCR ist nicht installiert oder konfiguriert, bitte lesen Sie das Benutzerhandbuch - Abschnitt Ressourcen-Dateien zur Konfiguration",
-    "267": "Unbenannte Datenbank"
+    "267": "Unbenannte Datenbank",
+    "268": "Bitte beachten Sie, dass die Datei [%s] bereits [%d MB] überschritten hat, was die Leistung beeinträchtigen kann",
+    "269": "Dieser Block wurde bereits zur Datenbank [%s] hinzugefügt",
+    "270": "Datenindex wird optimiert, bitte warten...",
+    "271": "Datenindex-Optimierung abgeschlossen, [%s] Speicherplatz freigegeben"
   }
 }

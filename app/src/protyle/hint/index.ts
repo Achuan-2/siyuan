@@ -727,7 +727,7 @@ ${genHintItemHTML(item)}
                 focusByRange(range);
                 this.genEmojiHTML(protyle);
                 return;
-            } else if (value.indexOf("style") > -1) {
+            } else if (value.startsWith("style")) {
                 range.deleteContents();
                 this.fixImageCursor(range);
                 nodeElement.setAttribute("style", value.split(Constants.ZWSP)[1] || "");
@@ -858,7 +858,11 @@ ${genHintItemHTML(item)}
                     focusBlock(nodeElement);
                 } else if (nodeElement.classList.contains("av")) {
                     avRender(nodeElement, protyle, () => {
-                        (nodeElement.querySelector(".av__title") as HTMLInputElement).focus();
+                        const titleHTMLElement = nodeElement.querySelector(".av__title") as HTMLInputElement;
+                        titleHTMLElement.focus();
+                        range.setStart(titleHTMLElement, 0);
+                        range.collapse(true);
+                        focusByRange(range);
                     });
                 } else {
                     focusByWbr(nodeElement, range);

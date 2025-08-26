@@ -19,6 +19,7 @@ package av
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -74,6 +75,20 @@ func GetKeyBlockValue(blockKeyValues []*KeyValues) (ret *Value) {
 		if KeyTypeBlock == kv.Key.Type && 0 < len(kv.Values) {
 			ret = kv.Values[0]
 			break
+		}
+	}
+	return
+}
+
+func GetValue(keyValues []*KeyValues, keyID, itemID string) (ret *Value) {
+	for _, kv := range keyValues {
+		if kv.Key.ID == keyID {
+			for _, v := range kv.Values {
+				if v.BlockID == itemID {
+					ret = v
+					return
+				}
+			}
 		}
 	}
 	return
@@ -529,6 +544,11 @@ func SaveAttributeView(av *AttributeView) (err error) {
 		logging.LogErrorf("save attribute view [%s] failed: %s", av.ID, err)
 		return
 	}
+
+	if util.ExceedLargeFileWarningSize(len(data)) {
+		msg := fmt.Sprintf(util.Langs[util.Lang][268], av.Name+" "+filepath.Base(avJSONPath), util.LargeFileWarningSize)
+		util.PushErrMsg(msg, 7000)
+	}
 	return
 }
 
@@ -563,15 +583,6 @@ func (av *AttributeView) GetCurrentView(viewID string) (ret *View, err error) {
 	}
 	ret = av.Views[0]
 	return
-}
-
-func (av *AttributeView) ExistItem(itemID string) bool {
-	for _, blockVal := range av.GetBlockKeyValues().Values {
-		if blockVal.BlockID == itemID {
-			return true
-		}
-	}
-	return false
 }
 
 func (av *AttributeView) ExistBoundBlock(nodeID string) bool {

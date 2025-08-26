@@ -199,7 +199,7 @@ export const avClick = (protyle: IProtyle, event: MouseEvent & { target: HTMLEle
             return true;
         } else if (target.classList.contains("b3-menu__avemoji") && !protyle.disabled) {
             const rect = target.getBoundingClientRect();
-            openEmojiPanel(target.parentElement.getAttribute("data-block-id"), "doc", {
+            openEmojiPanel(target.nextElementSibling.getAttribute("data-id"), "doc", {
                 x: rect.left,
                 y: rect.bottom,
                 h: rect.height,
@@ -356,7 +356,7 @@ export const avContextmenu = (protyle: IProtyle, rowElement: HTMLElement, positi
     const menu = new Menu();
     const rowElements = blockElement.querySelectorAll(".av__row--select:not(.av__row--header), .av__gallery-item--select");
     const keyCellElement = rowElements[0].querySelector('.av__cell[data-dtype="block"]') as HTMLElement;
-    const ids = Array.from(rowElements).map(item => item.getAttribute("data-id"));
+    const ids = Array.from(rowElements).map(item => item.querySelector('[data-dtype="block"] .av__celltext').getAttribute("data-id"));
     if (rowElements.length === 1 && keyCellElement.getAttribute("data-detached") !== "true") {
         /// #if !MOBILE
         const blockId = ids[0];
@@ -573,16 +573,20 @@ export const avContextmenu = (protyle: IProtyle, rowElement: HTMLElement, positi
                         srcs.push({
                             itemID: Lute.NewNodeID(),
                             content: blockValue.block.content,
-                            id: rowId,
+                            id: blockValue.block.id || "",
                             isDetached: blockValue.isDetached,
                         });
                         sourceIds.push(rowId);
                     });
                     const avID = listItemElement.dataset.avId;
+                    const viewID = listItemElement.dataset.viewId;
                     transaction(protyle, [{
                         action: "insertAttrViewBlock",
+                        ignoreDefaultFill: viewID ? false : true,
+                        viewID,
                         avID,
                         srcs,
+                        context: {ignoreTip: "true"},
                         blockID: listItemElement.dataset.blockId,
                         groupID: rowElement.parentElement.getAttribute("data-group-id")
                     }, {

@@ -422,7 +422,7 @@
       }
 
       &--edit .av__gallery-field[data-empty="true"] .av__gallery-tip {
-        display: flex;
+        display: block;
       }
 
       &:not(.av__gallery-fields--edit) [data-empty="true"] {
@@ -435,19 +435,16 @@
     }
 
     &-name {
-      display: flex;
-      align-items: center;
       opacity: 0.38;
       padding: 2px 4px;
       width: 100%;
-      flex-wrap: wrap;
       white-space: normal;
-      word-break: break-all;
+      box-sizing: border-box;
     }
 
     &-tip {
+      box-sizing: border-box;
       display: none;
-      align-items: center;
       opacity: 0.38;
       padding: 2px 4px;
       width: 100%;
@@ -457,11 +454,18 @@
 
     &-tip,
     &-name {
-      img:first-child, svg:first-child {
-        height: calc(1.625em - 10px);
+      img:first-child, svg:first-child, svg.ariaLabel {
+        height: 1.625em;
         width: calc(1.625em - 10px);
         margin: 0 5px 0 0;
         font-size: 1em;
+        vertical-align: bottom;
+      }
+
+      img:first-child {
+        height: calc(1.625em - 10px);
+        float: left;
+        margin-top: 5px;
       }
 
       span:first-child {
@@ -585,23 +589,6 @@
       color: var(--b3-protyle-inline-blockref-color);
     }
 
-    .b3-menu__avemoji {
-      display: inline-block;
-      font-size: 1em;
-      line-height: 1.625;
-      height: auto;
-      margin: 0 5px 0 -4px;
-      vertical-align: top;
-
-      img {
-        height: calc(1.625em - 8px);
-        font-size: 1em;
-        width: calc(1.625em - 8px);
-        float: left;
-        margin: 4px 0;
-      }
-    }
-
     &[data-wrap="true"] {
       white-space: pre-wrap;
     }
@@ -690,10 +677,10 @@
     }
 
     &--relation {
-      margin-left: 12px;
+      margin-right: 12px;
 
-      &:first-child {
-        margin-left: 0;
+      &:last-child {
+        margin-right: 0;
       }
     }
 
@@ -846,6 +833,7 @@
 
       &__label {
         overflow: hidden;
+        min-height: 30px;
       }
 
       &__icon.fn__grab {
@@ -994,4 +982,22 @@ img.av__cellassetimg {
   vertical-align: top;
   font-size: inherit;
   cursor: zoom-in;
+}
+
+.av__cell,
+.custom-attr__avvalue {
+  .b3-menu__avemoji {
+    font-size: 1em;
+    line-height: 1.625;
+    height: auto;
+    margin: 0 5px 0 -4px;
+    vertical-align: top;
+
+    img {
+      height: calc(1.625em - 8px);
+      font-size: 1em;
+      width: calc(1.625em - 8px);
+      margin: 4px 0;
+    }
+  }
 }
