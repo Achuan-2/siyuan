@@ -68,15 +68,26 @@ func ISOYear(date time.Time) int {
 	return year
 }
 
-// ISOMonth returns the month in which the first day of the ISO 8601 week of date occurs.
-func ISOMonth(date time.Time) int {
-	year, week := date.ISOWeek()
-	// ISO 8601 week starts from Monday
-	isoWeekStart := time.Date(year, 0, (week-1)*7+
-		1-(int(time.Date(year, 0, (week-1)*7+1, 0, 0, 0, 0, time.Local).Weekday())+6)%7, 0, 0, 0, 0, time.Local)
-	return int(isoWeekStart.Month())
-}
+// ISOMonth 返回指定时间所在 ISO 周的月份数字
+// 以每周的第一天（周一）落在的月份作为整周的月份
+func ISOMonth(t time.Time) int {
+	// 获取当前时间是周几 (Go中: 周日=0, 周一=1, ..., 周六=6)
+	weekday := int(t.Weekday())
 
+	// 转换为 ISO 标准 (周一=1, 周二=2, ..., 周日=7)
+	if weekday == 0 {
+		weekday = 7
+	}
+
+	// 计算距离本周一的天数
+	daysToMonday := weekday - 1
+
+	// 计算本周一的日期
+	monday := t.AddDate(0, 0, -daysToMonday)
+
+	// 返回周一所在的月份
+	return int(monday.Month())
+}
 func Millisecond2Time(t int64) time.Time {
 	sec := t / 1000
 	msec := t % 1000
