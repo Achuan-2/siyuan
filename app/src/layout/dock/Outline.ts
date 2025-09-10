@@ -25,7 +25,6 @@ export class Outline extends Model {
     public type: "pin" | "local";
     public blockId: string;
     public isPreview: boolean;
-    private openNodes: { [key: string]: string[] } = {};
 
     constructor(options: {
         app: App,
@@ -142,6 +141,17 @@ export class Outline extends Model {
                     action: [Constants.CB_GET_FOCUS, Constants.CB_GET_ALL, Constants.CB_GET_HTML],
                     zoomIn: true,
                 });
+            },
+            onToggleChange: () => {
+                // 实时保存折叠状态变化
+                if (!this.isPreview) {
+                    const expandIds = this.tree.getExpandIds();
+                    if (!window.siyuan.storage[Constants.LOCAL_OUTLINE].expand) {
+                        window.siyuan.storage[Constants.LOCAL_OUTLINE].expand = {};
+                    }
+                    window.siyuan.storage[Constants.LOCAL_OUTLINE].expand[this.blockId] = expandIds;
+                    setStorageVal(Constants.LOCAL_OUTLINE, window.siyuan.storage[Constants.LOCAL_OUTLINE]);
+                }
             }
         });
         // 为了快捷键的 dispatch
@@ -212,6 +222,13 @@ export class Outline extends Model {
             preview: this.isPreview
         }, response => {
             this.update(response);
+            // 初始化时恢复折叠状态
+            if (!this.isPreview) {
+                const storedExpandIds = window.siyuan.storage[Constants.LOCAL_OUTLINE].expand?.[this.blockId];
+                if (storedExpandIds && !this.headerElement.querySelector('[data-type="expand"]').classList.contains("block__icon--active")) {
+                    this.tree.setExpandIds(storedExpandIds);
+                }
+            }
         });
     }
 
@@ -332,6 +349,10 @@ export class Outline extends Model {
                     }
                     if (hasChange) {
                         this.element.setAttribute("data-loading", "true");
+                        
+                        // 保存拖拽前的折叠状态
+                        const expandIdsBeforeDrag = this.tree.getExpandIds();
+                        
                         transaction(editor, [{
                             action: "moveOutlineHeading",
                             id: item.dataset.nodeId,
@@ -343,6 +364,16 @@ export class Outline extends Model {
                             previousID: undoPreviousID,
                             parentID: undoParentID,
                         }]);
+                        
+                        // 拖拽操作完成后恢复折叠状态
+                        setTimeout(() => {
+                            if (!window.siyuan.storage[Constants.LOCAL_OUTLINE].expand) {
+                                window.siyuan.storage[Constants.LOCAL_OUTLINE].expand = {};
+                            }
+                            window.siyuan.storage[Constants.LOCAL_OUTLINE].expand[this.blockId] = expandIdsBeforeDrag;
+                            setStorageVal(Constants.LOCAL_OUTLINE, window.siyuan.storage[Constants.LOCAL_OUTLINE]);
+                        }, 300);
+                        
                         // https://github.com/siyuan-note/siyuan/issues/10828#issuecomment-2044099675
                         editor.wysiwyg.element.querySelectorAll('[data-type="NodeHeading"] [contenteditable="true"][spellcheck]').forEach(item => {
                             item.setAttribute("contenteditable", "false");
@@ -497,21 +528,37 @@ export class Outline extends Model {
             currentId = currentElement.getAttribute("data-node-id");
         }
 
-        if (!this.isPreview && this.openNodes[this.blockId]) {
-            this.openNodes[this.blockId] = this.tree.getExpandIds();
+        // 保存当前文档的折叠状态到持久化存储
+        if (!this.isPreview) {
+            const currentExpandIds = this.tree.getExpandIds();
+            if (!window.siyuan.storage[Constants.LOCAL_OUTLINE].expand) {
+                window.siyuan.storage[Constants.LOCAL_OUTLINE].expand = {};
+            }
+            window.siyuan.storage[Constants.LOCAL_OUTLINE].expand[this.blockId] = currentExpandIds;
+            setStorageVal(Constants.LOCAL_OUTLINE, window.siyuan.storage[Constants.LOCAL_OUTLINE]);
         }
+        
         if (typeof callbackId !== "undefined") {
             this.blockId = callbackId;
         }
         this.tree.updateData(data.data);
-        if (!this.isPreview && this.openNodes[this.blockId] && !this.headerElement.querySelector('[data-type="expand"]').classList.contains("block__icon--active")) {
-            this.tree.setExpandIds(this.openNodes[this.blockId]);
-        } else {
-            this.tree.expandAll();
-            if (!this.isPreview) {
-                this.openNodes[this.blockId] = this.tree.getExpandIds();
+        
+        // 从持久化存储恢复折叠状态
+        if (!this.isPreview) {
+            const storedExpandIds = window.siyuan.storage[Constants.LOCAL_OUTLINE].expand?.[this.blockId];
+            if (storedExpandIds && !this.headerElement.querySelector('[data-type="expand"]').classList.contains("block__icon--active")) {
+                this.tree.setExpandIds(storedExpandIds);
+            } else {
+                this.tree.expandAll();
+                // 保存展开全部的状态
+                if (!window.siyuan.storage[Constants.LOCAL_OUTLINE].expand) {
+                    window.siyuan.storage[Constants.LOCAL_OUTLINE].expand = {};
+                }
+                window.siyuan.storage[Constants.LOCAL_OUTLINE].expand[this.blockId] = this.tree.getExpandIds();
+                setStorageVal(Constants.LOCAL_OUTLINE, window.siyuan.storage[Constants.LOCAL_OUTLINE]);
             }
         }
+        
         if (this.isPreview) {
             this.tree.element.querySelectorAll(".popover__block").forEach(item => {
                 item.classList.remove("popover__block");
