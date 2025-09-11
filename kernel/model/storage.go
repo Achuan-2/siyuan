@@ -625,7 +625,7 @@ func SetOutlineStorage(docID string, val interface{}) (err error) {
 
 	allOutlines[docID] = val
 
-	data, err := gulu.JSON.MarshalIndentJSON(allOutlines, "", "  ")
+	data, err := gulu.JSON.MarshalJSON(allOutlines)
 	if err != nil {
 		logging.LogErrorf("marshal storage [outline] failed: %s", err)
 		return
@@ -662,7 +662,7 @@ func RemoveOutlineStorage(docID string) (err error) {
 
 	delete(allOutlines, docID)
 
-	data, err = gulu.JSON.MarshalIndentJSON(allOutlines, "", "  ")
+	data, err = gulu.JSON.MarshalJSON(allOutlines)
 	if err != nil {
 		logging.LogErrorf("marshal storage [outline] failed: %s", err)
 		return
