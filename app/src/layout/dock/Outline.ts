@@ -214,18 +214,6 @@ export class Outline extends Model {
         options.tab.panelElement.addEventListener("click", (event: MouseEvent & { target: HTMLElement }) => {
             let target = event.target as HTMLElement;
             let isFocus = true;
-
-            // 检查是否是 Alt+点击标题图标
-            if (event.altKey && target.closest(".b3-list-item__graphic.popover__block")) {
-                const listItem = target.closest(".b3-list-item") as HTMLElement;
-                if (listItem) {
-                    this.collapseSameLevel(listItem);
-                    event.preventDefault();
-                    event.stopPropagation();
-                    return;
-                }
-            }
-
             while (target && !target.isEqualNode(options.tab.panelElement)) {
                 if (target.classList.contains("block__icon")) {
                     const type = target.getAttribute("data-type");
@@ -862,46 +850,5 @@ export class Outline extends Model {
             }
         }
         this.element.removeAttribute("data-loading");
-    }
-
-    /**
-     * Alt+点击标题图标时，折叠所有同层级且有子节点的标题
-     */
-    private collapseSameLevel(element: HTMLElement) {
-        // 获取当前点击元素的层级
-        const currentStyle = window.getComputedStyle(element);
-        const currentToggleWidth = currentStyle.getPropertyValue("--file-toggle-width") || "0px";
-        const currentDepth = parseInt(currentToggleWidth.replace("px", "")) || 0;
-
-        // 查找所有同层级的元素（在同一父容器下的直接子元素）
-        const allListItems = this.element.querySelectorAll(".b3-list-item");
-
-        allListItems.forEach((item) => {
-            const itemElement = item as HTMLElement;
-
-            // 跳过当前点击的元素
-            if (itemElement === element) {
-                return;
-            }
-
-            // 获取元素的层级
-            const itemStyle = window.getComputedStyle(itemElement);
-            const itemToggleWidth = itemStyle.getPropertyValue("--file-toggle-width") || "0px";
-            const itemDepth = parseInt(itemToggleWidth.replace("px", "")) || 0;
-
-            // 只处理同层级的元素（相同的 --file-toggle-width 值）
-            if (itemDepth === currentDepth) {
-                // 检查是否有子节点（通过查看是否有展开箭头且当前是展开状态）
-                const arrowElement = itemElement.querySelector(".b3-list-item__arrow");
-
-                if (arrowElement && arrowElement.classList.contains("b3-list-item__arrow--open")) {
-                    // 折叠这个元素
-                    const toggleElement = itemElement.querySelector(".b3-list-item__toggle") as HTMLElement;
-                    if (toggleElement) {
-                        this.tree.toggleBlocks(toggleElement);
-                    }
-                }
-            }
-        });
     }
 }
