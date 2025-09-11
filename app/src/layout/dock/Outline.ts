@@ -142,30 +142,16 @@ export class Outline extends Model {
                     zoomIn: true,
                 });
             },
-<<<<<<< HEAD
-            altClick: (element: HTMLElement) => {
-                this.collapseSameLevel(element);
-            },
-=======
->>>>>>> outlinePersist
             onToggleChange: () => {
                 // 实时保存折叠状态变化
                 if (!this.isPreview) {
                     const expandIds = this.tree.getExpandIds();
-<<<<<<< HEAD
-                    if (!window.siyuan.storage[Constants.LOCAL_OUTLINE].expand) {
-                        window.siyuan.storage[Constants.LOCAL_OUTLINE].expand = {};
-                    }
-                    window.siyuan.storage[Constants.LOCAL_OUTLINE].expand[this.blockId] = expandIds;
-                    setStorageVal(Constants.LOCAL_OUTLINE, window.siyuan.storage[Constants.LOCAL_OUTLINE]);
-=======
                     fetchPost("/api/storage/setOutlineStorage", {
                         docID: this.blockId,
                         val: {
                             expandIds: expandIds
                         }
                     });
->>>>>>> outlinePersist
                 }
             }
         });
@@ -258,14 +244,6 @@ export class Outline extends Model {
             preview: this.isPreview
         }, response => {
             this.update(response);
-<<<<<<< HEAD
-            // 初始化时恢复折叠状态
-            if (!this.isPreview) {
-                const storedExpandIds = window.siyuan.storage[Constants.LOCAL_OUTLINE].expand?.[this.blockId];
-                if (storedExpandIds && !this.headerElement.querySelector('[data-type="expand"]').classList.contains("block__icon--active")) {
-                    this.tree.setExpandIds(storedExpandIds);
-                }
-=======
             // 初始化时从新的存储恢复折叠状态
             if (!this.isPreview) {
                 fetchPost("/api/storage/getOutlineStorage", {
@@ -276,7 +254,6 @@ export class Outline extends Model {
                         this.tree.setExpandIds(storageData.expandIds);
                     }
                 });
->>>>>>> outlinePersist
             }
         });
     }
@@ -398,17 +375,10 @@ export class Outline extends Model {
                     }
                     if (hasChange) {
                         this.element.setAttribute("data-loading", "true");
-<<<<<<< HEAD
-
-                        // 保存拖拽前的折叠状态
-                        const expandIdsBeforeDrag = this.tree.getExpandIds();
-
-=======
                         
                         // 保存拖拽前的折叠状态
                         const expandIdsBeforeDrag = this.tree.getExpandIds();
                         
->>>>>>> outlinePersist
                         transaction(editor, [{
                             action: "moveOutlineHeading",
                             id: item.dataset.nodeId,
@@ -420,18 +390,6 @@ export class Outline extends Model {
                             previousID: undoPreviousID,
                             parentID: undoParentID,
                         }]);
-<<<<<<< HEAD
-
-                        // 拖拽操作完成后恢复折叠状态
-                        setTimeout(() => {
-                            if (!window.siyuan.storage[Constants.LOCAL_OUTLINE].expand) {
-                                window.siyuan.storage[Constants.LOCAL_OUTLINE].expand = {};
-                            }
-                            window.siyuan.storage[Constants.LOCAL_OUTLINE].expand[this.blockId] = expandIdsBeforeDrag;
-                            setStorageVal(Constants.LOCAL_OUTLINE, window.siyuan.storage[Constants.LOCAL_OUTLINE]);
-                        }, 300);
-
-=======
                         
                         // 拖拽操作完成后恢复折叠状态
                         setTimeout(() => {
@@ -443,7 +401,6 @@ export class Outline extends Model {
                             });
                         }, 300);
                         
->>>>>>> outlinePersist
                         // https://github.com/siyuan-note/siyuan/issues/10828#issuecomment-2044099675
                         editor.wysiwyg.element.querySelectorAll('[data-type="NodeHeading"] [contenteditable="true"][spellcheck]').forEach(item => {
                             item.setAttribute("contenteditable", "false");
@@ -598,18 +555,6 @@ export class Outline extends Model {
             currentId = currentElement.getAttribute("data-node-id");
         }
 
-<<<<<<< HEAD
-        // 保存当前文档的折叠状态到持久化存储
-        if (!this.isPreview) {
-            const currentExpandIds = this.tree.getExpandIds();
-            if (!window.siyuan.storage[Constants.LOCAL_OUTLINE].expand) {
-                window.siyuan.storage[Constants.LOCAL_OUTLINE].expand = {};
-            }
-            window.siyuan.storage[Constants.LOCAL_OUTLINE].expand[this.blockId] = currentExpandIds;
-            setStorageVal(Constants.LOCAL_OUTLINE, window.siyuan.storage[Constants.LOCAL_OUTLINE]);
-        }
-
-=======
         // 保存当前文档的折叠状态到新的持久化存储
         if (!this.isPreview) {
             const currentExpandIds = this.tree.getExpandIds();
@@ -621,30 +566,10 @@ export class Outline extends Model {
             });
         }
         
->>>>>>> outlinePersist
         if (typeof callbackId !== "undefined") {
             this.blockId = callbackId;
         }
         this.tree.updateData(data.data);
-<<<<<<< HEAD
-
-        // 从持久化存储恢复折叠状态
-        if (!this.isPreview) {
-            const storedExpandIds = window.siyuan.storage[Constants.LOCAL_OUTLINE].expand?.[this.blockId];
-            if (storedExpandIds && !this.headerElement.querySelector('[data-type="expand"]').classList.contains("block__icon--active")) {
-                this.tree.setExpandIds(storedExpandIds);
-            } else {
-                this.tree.expandAll();
-                // 保存展开全部的状态
-                if (!window.siyuan.storage[Constants.LOCAL_OUTLINE].expand) {
-                    window.siyuan.storage[Constants.LOCAL_OUTLINE].expand = {};
-                }
-                window.siyuan.storage[Constants.LOCAL_OUTLINE].expand[this.blockId] = this.tree.getExpandIds();
-                setStorageVal(Constants.LOCAL_OUTLINE, window.siyuan.storage[Constants.LOCAL_OUTLINE]);
-            }
-        }
-
-=======
         
         // 从新的持久化存储恢复折叠状态
         if (!this.isPreview) {
@@ -667,7 +592,6 @@ export class Outline extends Model {
             });
         }
         
->>>>>>> outlinePersist
         if (this.isPreview) {
             this.tree.element.querySelectorAll(".popover__block").forEach(item => {
                 item.classList.remove("popover__block");
