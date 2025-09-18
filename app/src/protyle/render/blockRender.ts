@@ -59,7 +59,7 @@ export const blockRender = (protyle: IProtyle, element: Element, top?: number) =
                             fetchPost("/api/search/getEmbedBlock", {
                                 embedBlockID: item.getAttribute("data-node-id"),
                                 includeIDs: promiseIds,
-                                headingMode: item.getAttribute("custom-heading-mode") === "1" ? 1 : 0,
+                                headingMode: item.getAttribute("custom-heading-mode") === "1" ? 1 : (item.getAttribute("custom-heading-mode") === "0" ? 0 : 2),
                                 breadcrumb
                             }, (response) => {
                                 renderEmbed(response.data.blocks || [], protyle, item, top);
@@ -74,7 +74,7 @@ export const blockRender = (protyle: IProtyle, element: Element, top?: number) =
                     fetchPost("/api/search/getEmbedBlock", {
                         embedBlockID: item.getAttribute("data-node-id"),
                         includeIDs,
-                        headingMode: item.getAttribute("custom-heading-mode") === "1" ? 1 : 0,
+                        headingMode: item.getAttribute("custom-heading-mode") === "1" ? 1 : (item.getAttribute("custom-heading-mode") === "0" ? 0 : 2),
                         breadcrumb
                     }, (response) => {
                         renderEmbed(response.data.blocks || [], protyle, item, top);
@@ -89,7 +89,7 @@ export const blockRender = (protyle: IProtyle, element: Element, top?: number) =
             fetchPost("/api/search/searchEmbedBlock", {
                 embedBlockID: item.getAttribute("data-node-id"),
                 stmt: content,
-                headingMode: item.getAttribute("custom-heading-mode") === "1" ? 1 : 0,
+                headingMode: item.getAttribute("custom-heading-mode") === "1" ? 1 : (item.getAttribute("custom-heading-mode") === "0" ? 0 : 2),
                 excludeIDs: [item.getAttribute("data-node-id"), protyle.block.rootID],
                 breadcrumb
             }, (response) => {
