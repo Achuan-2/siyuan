@@ -1682,7 +1682,7 @@ export class Gutter {
                 icon: "iconCopy",
                 label: `${window.siyuan.languages.copy} ${window.siyuan.languages.headings1}`,
                 click() {
-                    fetchPost("/api/block/getHeadingChildrenDOM", {id, removeFoldAttr: true}, (response) => {
+                    fetchPost("/api/block/getHeadingChildrenDOM", {id, removeFoldAttr: false}, (response) => {
                         if (isInAndroid()) {
                             window.JSAndroid.writeHTMLClipboard(protyle.lute.BlockDOM2StdMd(response.data).trimEnd(), response.data + Constants.ZWSP);
                         } else if (isInHarmony()) {
@@ -1698,7 +1698,7 @@ export class Gutter {
                 icon: "iconCut",
                 label: `${window.siyuan.languages.cut} ${window.siyuan.languages.headings1}`,
                 click() {
-                    fetchPost("/api/block/getHeadingChildrenDOM", {id, removeFoldAttr: true}, (response) => {
+                    fetchPost("/api/block/getHeadingChildrenDOM", {id, removeFoldAttr: false}, (response) => {
                         if (isInAndroid()) {
                             window.JSAndroid.writeHTMLClipboard(protyle.lute.BlockDOM2StdMd(response.data).trimEnd(), response.data + Constants.ZWSP);
                         } else if (isInHarmony()) {
@@ -1803,21 +1803,21 @@ export class Gutter {
             }
         }
         window.siyuan.menus.menu.append(new MenuItem({
-            id: "jumpToParentNext",
-            label: window.siyuan.languages.jumpToParentNext,
-            accelerator: window.siyuan.config.keymap.editor.general.jumpToParentNext.custom,
-            click() {
-                hideElements(["select"], protyle);
-                jumpToParent(protyle, nodeElement, "next");
-            }
-        }).element);
-        window.siyuan.menus.menu.append(new MenuItem({
             id: "jumpToParentPrev",
             label: window.siyuan.languages.jumpToParentPrev,
             accelerator: window.siyuan.config.keymap.editor.general.jumpToParentPrev.custom,
             click() {
                 hideElements(["select"], protyle);
                 jumpToParent(protyle, nodeElement, "previous");
+            }
+        }).element);
+        window.siyuan.menus.menu.append(new MenuItem({
+            id: "jumpToParentNext",
+            label: window.siyuan.languages.jumpToParentNext,
+            accelerator: window.siyuan.config.keymap.editor.general.jumpToParentNext.custom,
+            click() {
+                hideElements(["select"], protyle);
+                jumpToParent(protyle, nodeElement, "next");
             }
         }).element);
         window.siyuan.menus.menu.append(new MenuItem({
