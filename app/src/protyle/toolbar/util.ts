@@ -1,7 +1,7 @@
-import {fetchPost, fetchSyncPost} from "../../util/fetch";
-import {Constants} from "../../constants";
-import {focusByRange, focusByWbr} from "../util/selection";
-import {writeText} from "../util/compatibility";
+import { fetchPost, fetchSyncPost } from "../../util/fetch";
+import { Constants } from "../../constants";
+import { focusByRange, focusByWbr } from "../util/selection";
+import { writeText } from "../util/compatibility";
 
 export const previewTemplate = (pathString: string, element: Element, parentId: string) => {
     if (!pathString) {
@@ -98,7 +98,7 @@ export const removeInlineType = (inlineElement: HTMLElement, type: string, range
 };
 
 export const toolbarKeyToMenu = (toolbar: Array<string | IMenuItem>) => {
-    const toolbarItem: IMenuItem [] = [{
+    const toolbarItem: IMenuItem[] = [{
         name: "block-ref",
         hotkey: window.siyuan.config.keymap.editor.insert.ref.custom,
         lang: "ref",
@@ -216,25 +216,25 @@ export const toolbarKeyToMenu = (toolbar: Array<string | IMenuItem>) => {
 };
 
 export const copyTextByType = async (ids: string[],
-                                     type: "ref" | "blockEmbed" | "protocol" | "protocolMd" | "hPath" | "id") => {
+    type: "ref" | "blockEmbed" | "protocol" | "protocolMd" | "hPath" | "id") => {
     let text = "";
     for (let i = 0; i < ids.length; i++) {
         const id = ids[i];
         if (ids.length > 1) {
-            text += "* ";
+            text += "- ";
         }
         if (type === "ref") {
-            const response = await fetchSyncPost("/api/block/getRefText", {id});
+            const response = await fetchSyncPost("/api/block/getRefText", { id });
             text += `((${id} '${response.data}'))`;
         } else if (type === "blockEmbed") {
             text += `{{select * from blocks where id='${id}'}}`;
         } else if (type === "protocol") {
             text += `siyuan://blocks/${id}`;
         } else if (type === "protocolMd") {
-            const response = await fetchSyncPost("/api/block/getRefText", {id});
+            const response = await fetchSyncPost("/api/block/getRefText", { id });
             text += `[${response.data}](siyuan://blocks/${id})`;
         } else if (type === "hPath") {
-            const response = await fetchSyncPost("/api/filetree/getHPathByID", {id});
+            const response = await fetchSyncPost("/api/filetree/getHPathByID", { id });
             text += response.data;
         } else if (type === "id") {
             text += id;
