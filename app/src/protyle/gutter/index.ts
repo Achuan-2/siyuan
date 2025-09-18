@@ -1628,19 +1628,24 @@ export class Gutter {
                         });
                     }
                 }, {
-                    id: "hideHeadingBelowBlocks",
-                    label: `<div class="fn__flex" style="margin-bottom: 4px"><span>${window.siyuan.languages.hideHeadingBelowBlocks}</span><span class="fn__space fn__flex-1"></span>
-<input type="checkbox" class="b3-switch fn__flex-center"${nodeElement.getAttribute("custom-heading-mode") === "1" ? " checked" : ""}></div>`,
+                    id: "headingEmbedMode",
+                    label: `<div class="fn__flex" style="margin-bottom: 4px">
+                        <span>${window.siyuan.languages.headingEmbedMode || "标题嵌入设置"}</span>
+                        <span class="fn__space fn__flex-1"></span>
+                        <select class="b3-select fn__flex-center" style="margin-left: 8px;">
+                            <option value="0"${nodeElement.getAttribute("custom-heading-mode") === "0" ? " selected" : ""}>${window.siyuan.languages.showHeadingWithBlocks || "显示标题与下方的块"}</option>
+                            <option value="1"${nodeElement.getAttribute("custom-heading-mode") === "1" ? " selected" : ""}>${window.siyuan.languages.showHeadingOnly || "仅显示标题"}</option>
+                            <option value="2"${!nodeElement.getAttribute("custom-heading-mode") || nodeElement.getAttribute("custom-heading-mode") === "2" ? " selected" : ""}>${window.siyuan.languages.showBlocksOnly || "仅显示标题下方的块"}</option>
+                        </select>
+                    </div>`,
                     bind(element) {
-                        element.addEventListener("click", (event: MouseEvent & { target: HTMLElement }) => {
-                            const inputElement = element.querySelector("input");
-                            if (event.target.tagName !== "INPUT") {
-                                inputElement.checked = !inputElement.checked;
-                            }
-                            nodeElement.setAttribute("custom-heading-mode", inputElement.checked ? "1" : "0");
+                        element.addEventListener("change", () => {
+                            const selectElement = element.querySelector("select") as HTMLSelectElement;
+                            const value = selectElement.value;
+                            nodeElement.setAttribute("custom-heading-mode", value);
                             fetchPost("/api/attr/setBlockAttrs", {
                                 id,
-                                attrs: {"custom-heading-mode": inputElement.checked ? "1" : "0"}
+                                attrs: {"custom-heading-mode": value}
                             });
                             nodeElement.removeAttribute("data-render");
                             blockRender(protyle, nodeElement);
