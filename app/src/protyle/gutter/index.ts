@@ -1634,8 +1634,8 @@ export class Gutter {
                         <span class="fn__space fn__flex-1"></span>
                         <select class="b3-select fn__flex-center" style="margin-left: 8px;">
                             <option value="0"${nodeElement.getAttribute("custom-heading-mode") === "0" ? " selected" : ""}>${window.siyuan.languages.showHeadingWithBlocks || "显示标题与下方的块"}</option>
-                            <option value="1"${nodeElement.getAttribute("custom-heading-mode") === "1" ? " selected" : ""}>${window.siyuan.languages.showHeadingOnly || "仅显示标题"}</option>
-                            <option value="2"${!nodeElement.getAttribute("custom-heading-mode") || nodeElement.getAttribute("custom-heading-mode") === "2" ? " selected" : ""}>${window.siyuan.languages.showBlocksOnly || "仅显示标题下方的块"}</option>
+                            <option value="1"${nodeElement.getAttribute("custom-heading-mode") === "1" ? " selected" : ""}>${window.siyuan.languages.showHeadingOnlyTitle || "仅显示标题"}</option>
+                            <option value="2"${!nodeElement.getAttribute("custom-heading-mode") || nodeElement.getAttribute("custom-heading-mode") === "2" ? " selected" : ""}>${window.siyuan.languages.showHeadingOnlyBlocks || "仅显示标题下方的块"}</option>
                         </select>
                     </div>`,
                     bind(element) {
