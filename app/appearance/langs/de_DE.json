@@ -672,6 +672,7 @@
   "turnToDynamic": "Dynamischer Ankertext",
   "sizeLimit": "Limit",
   "trafficStat": "Verkehrsstatistiken",
+  "headingEmbedMode": "Überschrift-Block-Einbettungseinstellungen",
   "showHeadingWithBlocks": "Überschrift mit Blöcken darunter anzeigen",
   "showHeadingOnlyTitle": "Nur Überschrift anzeigen",
   "showHeadingOnlyBlocks": "Nur Blöcke unter der Überschrift anzeigen",

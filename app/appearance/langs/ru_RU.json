@@ -672,6 +672,7 @@
   "turnToDynamic": "Динамический анкорный текст",
   "sizeLimit": "Лимит",
   "trafficStat": "Статистика трафика",
+  "headingEmbedMode": "Настройки встраивания блока заголовка",
   "showHeadingWithBlocks": "Показать заголовок с блоками ниже",
   "showHeadingOnlyTitle": "Показать только заголовок",
   "showHeadingOnlyBlocks": "Показать только блоки ниже заголовка",

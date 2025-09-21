@@ -672,6 +672,7 @@
   "turnToDynamic": "動的アンカーテキスト",
   "sizeLimit": "制限",
   "trafficStat": "トラフィック統計",
+  "headingEmbedMode": "見出しブロック埋め込み設定",
   "showHeadingWithBlocks": "見出しと下のブロックを表示",
   "showHeadingOnlyTitle": "見出しのみ表示",
   "showHeadingOnlyBlocks": "見出し下のブロックのみ表示",

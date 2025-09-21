@@ -672,6 +672,7 @@
   "turnToDynamic": "Texto de anclaje dinámico",
   "sizeLimit": "Límite",
   "trafficStat": "Estadísticas de tráfico",
+  "headingEmbedMode": "Configuración de incrustación de bloque de encabezado",
   "showHeadingWithBlocks": "Mostrar encabezado con bloques debajo",
   "showHeadingOnlyTitle": "Mostrar solo el encabezado",
   "showHeadingOnlyBlocks": "Mostrar solo bloques debajo del encabezado",

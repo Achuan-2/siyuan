@@ -672,6 +672,7 @@
   "turnToDynamic": "Texte d'ancrage dynamique",
   "sizeLimit": "Limite",
   "trafficStat": "Statistiques de trafic",
+  "headingEmbedMode": "Paramètres d'intégration de bloc de titre",
   "showHeadingWithBlocks": "Afficher l'en-tête avec les blocs en dessous",
   "showHeadingOnlyTitle": "Afficher uniquement l'en-tête",
   "showHeadingOnlyBlocks": "Afficher uniquement les blocs sous l'en-tête",

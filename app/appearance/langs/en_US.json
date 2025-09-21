@@ -672,6 +672,7 @@
   "turnToDynamic": "Dynamic anchor text",
   "sizeLimit": "Limit",
   "trafficStat": "Traffic statistics",
+  "headingEmbedMode": "Heading block embed settings",
   "showHeadingWithBlocks": "Show heading with blocks below",
   "showHeadingOnlyTitle": "Show heading only",
   "showHeadingOnlyBlocks": "Show only blocks below heading",
