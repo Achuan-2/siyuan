@@ -505,8 +505,8 @@ func buildBlockBreadcrumb(node *ast.Node, excludeTypes []string, isEmbedBlock bo
 		return
 	}
 
-	// 默认 headingMode 为 0
-	mode := 0
+	// 默认 headingMode 为 2
+	mode := 2
 	if len(headingMode) > 0 {
 		mode = headingMode[0]
 	}
