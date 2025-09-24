@@ -1628,20 +1628,35 @@ export class Gutter {
                         });
                     }
                 }, {
-                    id: "hideHeadingBelowBlocks",
-                    label: `<div class="fn__flex" style="margin-bottom: 4px"><span>${window.siyuan.languages.hideHeadingBelowBlocks}</span><span class="fn__space fn__flex-1"></span>
-<input type="checkbox" class="b3-switch fn__flex-center"${nodeElement.getAttribute("custom-heading-mode") === "1" ? " checked" : ""}></div>`,
+                    id: "headingEmbedMode",
+                    label: `<div class="fn__flex" style="margin-bottom: 4px">
+                        <span>${window.siyuan.languages.headingEmbedMode}</span>
+                        <span class="fn__space fn__flex-1"></span>
+                        <select class="b3-select fn__flex-center" style="margin-left: 8px;">
+                            <option value=""${!nodeElement.getAttribute("custom-heading-mode") ? " selected" : ""}>${window.siyuan.languages.default}</option>
+                            <option value="0"${nodeElement.getAttribute("custom-heading-mode") === "0" ? " selected" : ""}>${window.siyuan.languages.showHeadingWithBlocks}</option>
+                            <option value="1"${nodeElement.getAttribute("custom-heading-mode") === "1" ? " selected" : ""}>${window.siyuan.languages.showHeadingOnlyTitle}</option>
+                            <option value="2"${nodeElement.getAttribute("custom-heading-mode") === "2" ? " selected" : ""}>${window.siyuan.languages.showHeadingOnlyBlocks}</option>
+                        </select>
+                    </div>`,
                     bind(element) {
-                        element.addEventListener("click", (event: MouseEvent & { target: HTMLElement }) => {
-                            const inputElement = element.querySelector("input");
-                            if (event.target.tagName !== "INPUT") {
-                                inputElement.checked = !inputElement.checked;
+                        element.addEventListener("change", () => {
+                            const selectElement = element.querySelector("select") as HTMLSelectElement;
+                            const value = selectElement.value;
+                            if (value === "") {
+                                // 默认设置，清空 custom-heading-mode 属性
+                                nodeElement.removeAttribute("custom-heading-mode");
+                                fetchPost("/api/attr/setBlockAttrs", {
+                                    id,
+                                    attrs: {"custom-heading-mode": ""}
+                                });
+                            } else {
+                                nodeElement.setAttribute("custom-heading-mode", value);
+                                fetchPost("/api/attr/setBlockAttrs", {
+                                    id,
+                                    attrs: {"custom-heading-mode": value}
+                                });
                             }
-                            nodeElement.setAttribute("custom-heading-mode", inputElement.checked ? "1" : "0");
-                            fetchPost("/api/attr/setBlockAttrs", {
-                                id,
-                                attrs: {"custom-heading-mode": inputElement.checked ? "1" : "0"}
-                            });
                             nodeElement.removeAttribute("data-render");
                             blockRender(protyle, nodeElement);
                             window.siyuan.menus.menu.remove();
@@ -1682,10 +1697,7 @@ export class Gutter {
                 icon: "iconCopy",
                 label: `${window.siyuan.languages.copy} ${window.siyuan.languages.headings1}`,
                 click() {
-                    fetchPost("/api/block/getHeadingChildrenDOM", {
-                        id,
-                        removeFoldAttr: nodeElement.getAttribute("fold") !== "1"
-                    }, (response) => {
+                    fetchPost("/api/block/getHeadingChildrenDOM", {id, removeFoldAttr: false}, (response) => {
                         if (isInAndroid()) {
                             window.JSAndroid.writeHTMLClipboard(protyle.lute.BlockDOM2StdMd(response.data).trimEnd(), response.data + Constants.ZWSP);
                         } else if (isInHarmony()) {
@@ -1701,10 +1713,7 @@ export class Gutter {
                 icon: "iconCut",
                 label: `${window.siyuan.languages.cut} ${window.siyuan.languages.headings1}`,
                 click() {
-                    fetchPost("/api/block/getHeadingChildrenDOM", {
-                        id,
-                        removeFoldAttr: nodeElement.getAttribute("fold") !== "1"
-                    }, (response) => {
+                    fetchPost("/api/block/getHeadingChildrenDOM", {id, removeFoldAttr: false}, (response) => {
                         if (isInAndroid()) {
                             window.JSAndroid.writeHTMLClipboard(protyle.lute.BlockDOM2StdMd(response.data).trimEnd(), response.data + Constants.ZWSP);
                         } else if (isInHarmony()) {
@@ -1720,22 +1729,6 @@ export class Gutter {
                                     itemElement.remove();
                                 });
                             });
-                            if (protyle.wysiwyg.element.childElementCount === 0) {
-                                const newID = Lute.NewNodeID();
-                                const emptyElement = genEmptyElement(false, false, newID);
-                                protyle.wysiwyg.element.insertAdjacentElement("afterbegin", emptyElement);
-                                response.data.doOperations.push({
-                                    action: "insert",
-                                    data: emptyElement.outerHTML,
-                                    id: newID,
-                                    parentID: protyle.block.parentID
-                                });
-                                response.data.undoOperations.push({
-                                    action: "delete",
-                                    id: newID,
-                                });
-                                focusBlock(emptyElement);
-                            }
                             transaction(protyle, response.data.doOperations, response.data.undoOperations);
                         });
                     });
@@ -1754,22 +1747,6 @@ export class Gutter {
                                 itemElement.remove();
                             });
                         });
-                        if (protyle.wysiwyg.element.childElementCount === 0) {
-                            const newID = Lute.NewNodeID();
-                            const emptyElement = genEmptyElement(false, false, newID);
-                            protyle.wysiwyg.element.insertAdjacentElement("afterbegin", emptyElement);
-                            response.data.doOperations.push({
-                                action: "insert",
-                                data: emptyElement.outerHTML,
-                                id: newID,
-                                parentID: protyle.block.parentID
-                            });
-                            response.data.undoOperations.push({
-                                action: "delete",
-                                id: newID,
-                            });
-                            focusBlock(emptyElement);
-                        }
                         transaction(protyle, response.data.doOperations, response.data.undoOperations);
                     });
                 }
