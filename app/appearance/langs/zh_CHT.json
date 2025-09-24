@@ -676,6 +676,8 @@
   "turnToDynamic": "動態錨文字",
   "sizeLimit": "上限",
   "trafficStat": "流量統計",
+  "headingEmbedMode": "標題塊嵌入設定",
+  "headingEmbedModeTip": "設定標題塊在嵌入塊中的顯示樣式",
   "showHeadingWithBlocks": "顯示標題與下方的區塊",
   "showHeadingOnlyTitle": "僅顯示標題",
   "showHeadingOnlyBlocks": "僅顯示標題下方的區塊",

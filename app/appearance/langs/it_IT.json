@@ -676,6 +676,8 @@
   "turnToDynamic": "Testo ancora dinamico",
   "sizeLimit": "Limite",
   "trafficStat": "Statistiche traffico",
+  "headingEmbedMode": "Impostazioni incorporamento blocco intestazione",
+  "headingEmbedModeTip": "Imposta lo stile di visualizzazione dei blocchi di intestazione nei blocchi incorporati",
   "showHeadingWithBlocks": "Mostra intestazione con blocchi sottostanti",
   "showHeadingOnlyTitle": "Mostra solo intestazione",
   "showHeadingOnlyBlocks": "Mostra solo blocchi sotto l'intestazione",
