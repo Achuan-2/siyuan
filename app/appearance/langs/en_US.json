@@ -676,6 +676,7 @@
   "showHeadingWithBlocks": "Show heading with blocks below",
   "showHeadingOnlyTitle": "Show heading only",
   "showHeadingOnlyBlocks": "Show only blocks below heading",
+  "headingEmbedModeTip": "Set the display style of heading blocks in embed blocks",
   "matchDiacritics": "Match Diacritics",
   "copyHPath": "Copy readable path",
   "justify": "Justify",

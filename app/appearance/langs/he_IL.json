@@ -673,6 +673,7 @@
   "sizeLimit": "מגבלה",
   "trafficStat": "סטטיסטיקות תעבורה",
   "headingEmbedMode": "הגדרות הטמעת בלוק כותרת",
+  "headingEmbedModeTip": "הגדר את סגנון התצוגה של בלוקי כותרת בבלוקים מוטמעים",
   "showHeadingWithBlocks": "הצג כותרת עם בלוקים מתחתיה",
   "showHeadingOnlyTitle": "הצג כותרת בלבד",
   "showHeadingOnlyBlocks": "הצג רק בלוקים מתחת לכותרת",

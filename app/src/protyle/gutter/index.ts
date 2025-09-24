@@ -1633,20 +1633,30 @@ export class Gutter {
                         <span>${window.siyuan.languages.headingEmbedMode}</span>
                         <span class="fn__space fn__flex-1"></span>
                         <select class="b3-select fn__flex-center" style="margin-left: 8px;">
+                            <option value=""${!nodeElement.getAttribute("custom-heading-mode") ? " selected" : ""}>${window.siyuan.languages.default}</option>
                             <option value="0"${nodeElement.getAttribute("custom-heading-mode") === "0" ? " selected" : ""}>${window.siyuan.languages.showHeadingWithBlocks}</option>
                             <option value="1"${nodeElement.getAttribute("custom-heading-mode") === "1" ? " selected" : ""}>${window.siyuan.languages.showHeadingOnlyTitle}</option>
-                            <option value="2"${!nodeElement.getAttribute("custom-heading-mode") || nodeElement.getAttribute("custom-heading-mode") === "2" ? " selected" : ""}>${window.siyuan.languages.showHeadingOnlyBlocks}</option>
+                            <option value="2"${nodeElement.getAttribute("custom-heading-mode") === "2" ? " selected" : ""}>${window.siyuan.languages.showHeadingOnlyBlocks}</option>
                         </select>
                     </div>`,
                     bind(element) {
                         element.addEventListener("change", () => {
                             const selectElement = element.querySelector("select") as HTMLSelectElement;
                             const value = selectElement.value;
-                            nodeElement.setAttribute("custom-heading-mode", value);
-                            fetchPost("/api/attr/setBlockAttrs", {
-                                id,
-                                attrs: {"custom-heading-mode": value}
-                            });
+                            if (value === "") {
+                                // 默认设置，清空 custom-heading-mode 属性
+                                nodeElement.removeAttribute("custom-heading-mode");
+                                fetchPost("/api/attr/setBlockAttrs", {
+                                    id,
+                                    attrs: {"custom-heading-mode": ""}
+                                });
+                            } else {
+                                nodeElement.setAttribute("custom-heading-mode", value);
+                                fetchPost("/api/attr/setBlockAttrs", {
+                                    id,
+                                    attrs: {"custom-heading-mode": value}
+                                });
+                            }
                             nodeElement.removeAttribute("data-render");
                             blockRender(protyle, nodeElement);
                             window.siyuan.menus.menu.remove();

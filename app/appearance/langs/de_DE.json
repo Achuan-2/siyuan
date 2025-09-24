@@ -673,6 +673,7 @@
   "sizeLimit": "Limit",
   "trafficStat": "Verkehrsstatistiken",
   "headingEmbedMode": "Überschrift-Block-Einbettungseinstellungen",
+  "headingEmbedModeTip": "Stellen Sie den Anzeigestil von Überschrift-Blöcken in eingebetteten Blöcken ein",
   "showHeadingWithBlocks": "Überschrift mit Blöcken darunter anzeigen",
   "showHeadingOnlyTitle": "Nur Überschrift anzeigen",
   "showHeadingOnlyBlocks": "Nur Blöcke unter der Überschrift anzeigen",

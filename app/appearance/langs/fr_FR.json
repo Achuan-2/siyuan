@@ -676,6 +676,7 @@
   "showHeadingWithBlocks": "Afficher l'en-tête avec les blocs en dessous",
   "showHeadingOnlyTitle": "Afficher uniquement l'en-tête",
   "showHeadingOnlyBlocks": "Afficher uniquement les blocs sous l'en-tête",
+  "headingEmbedModeTip": "Définir le style d'affichage des blocs de titre dans les blocs intégrés",
   "matchDiacritics": "Respecter les accents et diacritiques",
   "copyHPath": "Copier le chemin lisible",
   "justify": "Justifier",

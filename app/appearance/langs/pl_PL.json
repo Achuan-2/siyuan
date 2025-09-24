@@ -673,6 +673,7 @@
   "sizeLimit": "Limit",
   "trafficStat": "Statystyki ruchu",
   "headingEmbedMode": "Ustawienia osadzania bloku nagłówka",
+  "headingEmbedModeTip": "Ustaw styl wyświetlania bloków nagłówkowych w blokach osadzonych",
   "showHeadingWithBlocks": "Pokaż nagłówek z blokami poniżej",
   "showHeadingOnlyTitle": "Pokaż tylko nagłówek",
   "showHeadingOnlyBlocks": "Pokaż tylko bloki poniżej nagłówka",
