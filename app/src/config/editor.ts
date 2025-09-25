@@ -72,7 +72,7 @@ export const editor = {
 <div class="fn__flex b3-label config__item">
     <div class="fn__flex-1">
         ${window.siyuan.languages.headingEmbedMode}
-        <div class="b3-label__text">设置嵌入块中标题的显示方式</div>
+        <div class="b3-label__text">${window.siyuan.languages.headingEmbedModeTip}</div>
     </div>
     <span class="fn__space"></span>
     <select class="b3-select fn__flex-center fn__size200" id="headingEmbedMode">
