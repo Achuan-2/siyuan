@@ -1556,9 +1556,11 @@ func GetBlockAttributeViewKeys(nodeID string) (ret []*BlockAttributeViewKeys) {
 	for _, avID := range avIDs {
 		attrView := cachedAttrViews[avID]
 		if nil == attrView {
-			attrView, _ = av.ParseAttributeView(avID)
+			var err error
+			attrView, err = av.ParseAttributeView(avID)
 			if nil == attrView {
-				return
+				logging.LogErrorf("parse attribute view [%s] failed: %s", avID, err)
+				continue
 			}
 			cachedAttrViews[avID] = attrView
 		}
@@ -2147,15 +2149,15 @@ func GetCurrentAttributeViewImages(avID, viewID, query string) (ret []string, er
 	return
 }
 
-func (tx *Transaction) doSetAttrViewColDate(operation *Operation) (ret *TxErr) {
-	err := setAttributeViewColDate(operation)
+func (tx *Transaction) doSetAttrViewColDateFillCreated(operation *Operation) (ret *TxErr) {
+	err := setAttributeViewColDateFillCreated(operation)
 	if err != nil {
 		return &TxErr{code: TxErrHandleAttributeView, id: operation.AvID, msg: err.Error()}
 	}
 	return
 }
 
-func setAttributeViewColDate(operation *Operation) (err error) {
+func setAttributeViewColDateFillCreated(operation *Operation) (err error) {
 	attrView, err := av.ParseAttributeView(operation.AvID)
 	if err != nil {
 		return
@@ -2172,7 +2174,35 @@ func setAttributeViewColDate(operation *Operation) (err error) {
 	}
 
 	key.Date.AutoFillNow = operation.Data.(bool)
+	err = av.SaveAttributeView(attrView)
+	return
+}
 
+func (tx *Transaction) doSetAttrViewColDateFillSpecificTime(operation *Operation) (ret *TxErr) {
+	err := setAttrViewColDateFillSpecificTime(operation)
+	if err != nil {
+		return &TxErr{code: TxErrHandleAttributeView, id: operation.AvID, msg: err.Error()}
+	}
+	return
+}
+
+func setAttrViewColDateFillSpecificTime(operation *Operation) (err error) {
+	attrView, err := av.ParseAttributeView(operation.AvID)
+	if err != nil {
+		return
+	}
+
+	keyID := operation.ID
+	key, _ := attrView.GetKey(keyID)
+	if nil == key || av.KeyTypeDate != key.Type {
+		return
+	}
+
+	if nil == key.Date {
+		key.Date = &av.Date{}
+	}
+
+	key.Date.FillSpecificTime = operation.Data.(bool)
 	err = av.SaveAttributeView(attrView)
 	return
 }
@@ -3275,7 +3305,7 @@ func addAttributeViewBlock(now int64, avID, dbBlockID, viewID, groupID, previous
 			if nil == val { // 避免覆盖已有值（可能前面已经通过过滤或者分组条件填充了值）
 				dateVal := &av.Value{
 					ID: ast.NewNodeID(), KeyID: keyValues.Key.ID, BlockID: addingItemID, Type: av.KeyTypeDate, IsDetached: isDetached, CreatedAt: now, UpdatedAt: now + 1000,
-					Date: &av.ValueDate{Content: now, IsNotEmpty: true},
+					Date: &av.ValueDate{Content: now, IsNotEmpty: true, IsNotTime: !keyValues.Key.Date.FillSpecificTime},
 				}
 				keyValues.Values = append(keyValues.Values, dateVal)
 			} else {
@@ -4765,6 +4795,7 @@ func updateAttributeViewValue(tx *Transaction, attrView *av.AttributeView, keyID
 			val.Date.Content = 0
 			val.Date.FormattedContent = ""
 		}
+		val.Date.IsNotTime = !key.Date.FillSpecificTime
 	} else if av.KeyTypeSelect == val.Type || av.KeyTypeMSelect == val.Type {
 		if nil != key && 0 < len(val.MSelect) {
 			var tmp []*av.ValueSelect

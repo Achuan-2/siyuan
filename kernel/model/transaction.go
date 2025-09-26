@@ -275,8 +275,10 @@ func performTx(tx *Transaction) (ret *TxErr) {
 				ret = tx.doUpdateAttrViewColRollup(op)
 			case "hideAttrViewName":
 				ret = tx.doHideAttrViewName(op)
-			case "setAttrViewColDate":
-				ret = tx.doSetAttrViewColDate(op)
+			case "setAttrViewColDateFillCreated":
+				ret = tx.doSetAttrViewColDateFillCreated(op)
+			case "setAttrViewColDateFillSpecificTime":
+				ret = tx.doSetAttrViewColDateFillSpecificTime(op)
 			case "duplicateAttrViewKey":
 				ret = tx.doDuplicateAttrViewKey(op)
 			case "setAttrViewCoverFrom":
@@ -1255,10 +1257,16 @@ func (tx *Transaction) doInsert(operation *Operation) (ret *TxErr) {
 		}
 		node.InsertAfter(insertedNode)
 
-		if treenode.IsUnderFoldedHeading(insertedNode) {
-			// 保持在标题下的折叠状态
-			insertedNode.SetIALAttr("fold", "1")
-			insertedNode.SetIALAttr("heading-fold", "1")
+		if parentFoldedHeading := treenode.GetParentFoldedHeading(insertedNode); nil != parentFoldedHeading {
+			ast.Walk(insertedNode, func(n *ast.Node, entering bool) ast.WalkStatus {
+				if !entering || !n.IsBlock() {
+					return ast.WalkContinue
+				}
+
+				n.SetIALAttr("fold", "1")
+				n.SetIALAttr("heading-fold", "1")
+				return ast.WalkContinue
+			})
 		}
 	} else {
 		node = treenode.GetNodeInTree(tree, operation.ParentID)
@@ -1510,14 +1518,23 @@ func (tx *Transaction) doUpdate(operation *Operation) (ret *TxErr) {
 	oldNode.InsertAfter(updatedNode)
 	oldNode.Unlink()
 
-	if treenode.IsUnderFoldedHeading(updatedNode) {
-		// 保持在标题下的折叠状态
-		updatedNode.SetIALAttr("fold", "1")
-		updatedNode.SetIALAttr("heading-fold", "1")
+	parentFoldedHeading := treenode.GetParentFoldedHeading(updatedNode)
+	if nil != parentFoldedHeading {
+		children := treenode.HeadingChildren(parentFoldedHeading)
+		for _, child := range children {
+			ast.Walk(child, func(n *ast.Node, entering bool) ast.WalkStatus {
+				if !entering || !n.IsBlock() {
+					return ast.WalkContinue
+				}
+
+				n.SetIALAttr("fold", "1")
+				n.SetIALAttr("heading-fold", "1")
+				return ast.WalkContinue
+			})
+		}
 	}
 
 	createdUpdated(updatedNode)
-
 	tx.nodes[updatedNode.ID] = updatedNode
 	if err = tx.writeTree(tree); err != nil {
 		return &TxErr{code: TxErrCodeWriteTree, msg: err.Error(), id: id}

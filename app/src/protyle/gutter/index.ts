@@ -827,14 +827,13 @@ export class Gutter {
                 });
             }
         }).element);
-        const range = getSelection().rangeCount > 0 ? getSelection().getRangeAt(0) : undefined;
         window.siyuan.menus.menu.append(new MenuItem({
             id: "addToDatabase",
             label: window.siyuan.languages.addToDatabase,
             accelerator: window.siyuan.config.keymap.general.addToDatabase.custom,
             icon: "iconDatabase",
             click: () => {
-                addEditorToDatabase(protyle, range);
+                addEditorToDatabase(protyle, getEditorRange(selectsElement[0]));
             }
         }).element);
         window.siyuan.menus.menu.append(new MenuItem({
@@ -884,7 +883,6 @@ export class Gutter {
                 id: "quickMakeCard",
                 label: window.siyuan.languages.quickMakeCard,
                 accelerator: window.siyuan.config.keymap.editor.general.quickMakeCard.custom,
-                iconHTML: '<svg class="b3-menu__icon" style="color:var(--b3-theme-primary)"><use xlink:href="#iconRiffCard"></use></svg>',
                 icon: "iconRiffCard",
                 click() {
                     quickMakeCard(protyle, selectsElement);
@@ -1355,14 +1353,13 @@ export class Gutter {
                     });
                 }
             }).element);
-            const range = getSelection().rangeCount > 0 ? getSelection().getRangeAt(0) : undefined;
             window.siyuan.menus.menu.append(new MenuItem({
                 id: "addToDatabase",
                 icon: "iconDatabase",
                 label: window.siyuan.languages.addToDatabase,
                 accelerator: window.siyuan.config.keymap.general.addToDatabase.custom,
                 click: () => {
-                    addEditorToDatabase(protyle, range);
+                    addEditorToDatabase(protyle, getEditorRange(nodeElement));
                 }
             }).element);
             window.siyuan.menus.menu.append(new MenuItem({
@@ -1793,7 +1790,7 @@ export class Gutter {
             window.siyuan.menus.menu.append(new MenuItem({
                 id: "insertBefore",
                 icon: "iconBefore",
-                label: window.siyuan.languages["insert-before"],
+                label: window.siyuan.languages.insertBefore,
                 accelerator: window.siyuan.config.keymap.editor.general.insertBefore.custom,
                 click() {
                     hideElements(["select"], protyle);
@@ -1804,7 +1801,7 @@ export class Gutter {
             window.siyuan.menus.menu.append(new MenuItem({
                 id: "insertAfter",
                 icon: "iconAfter",
-                label: window.siyuan.languages["insert-after"],
+                label: window.siyuan.languages.insertAfter,
                 accelerator: window.siyuan.config.keymap.editor.general.insertAfter.custom,
                 click() {
                     hideElements(["select"], protyle);
@@ -1818,31 +1815,36 @@ export class Gutter {
             }
         }
         window.siyuan.menus.menu.append(new MenuItem({
-            id: "jumpToParentPrev",
-            label: window.siyuan.languages.jumpToParentPrev,
-            accelerator: window.siyuan.config.keymap.editor.general.jumpToParentPrev.custom,
-            click() {
-                hideElements(["select"], protyle);
-                jumpToParent(protyle, nodeElement, "previous");
-            }
-        }).element);
-        window.siyuan.menus.menu.append(new MenuItem({
-            id: "jumpToParentNext",
-            label: window.siyuan.languages.jumpToParentNext,
-            accelerator: window.siyuan.config.keymap.editor.general.jumpToParentNext.custom,
-            click() {
-                hideElements(["select"], protyle);
-                jumpToParent(protyle, nodeElement, "next");
-            }
-        }).element);
-        window.siyuan.menus.menu.append(new MenuItem({
-            id: "jumpToParent",
-            label: window.siyuan.languages.jumpToParent,
-            accelerator: window.siyuan.config.keymap.editor.general.jumpToParent.custom,
-            click() {
-                hideElements(["select"], protyle);
-                jumpToParent(protyle, nodeElement, "parent");
-            }
+            type: "submenu",
+            label: window.siyuan.languages.jumpTo,
+            submenu: [{
+                id: "jumpToParentPrev",
+                iconHTML: "",
+                label: window.siyuan.languages.jumpToParentPrev,
+                accelerator: window.siyuan.config.keymap.editor.general.jumpToParentPrev.custom,
+                click() {
+                    hideElements(["select"], protyle);
+                    jumpToParent(protyle, nodeElement, "previous");
+                }
+            }, {
+                iconHTML: "",
+                id: "jumpToParentNext",
+                label: window.siyuan.languages.jumpToParentNext,
+                accelerator: window.siyuan.config.keymap.editor.general.jumpToParentNext.custom,
+                click() {
+                    hideElements(["select"], protyle);
+                    jumpToParent(protyle, nodeElement, "next");
+                }
+            }, {
+                iconHTML: "",
+                id: "jumpToParent",
+                label: window.siyuan.languages.jumpToParent,
+                accelerator: window.siyuan.config.keymap.editor.general.jumpToParent.custom,
+                click() {
+                    hideElements(["select"], protyle);
+                    jumpToParent(protyle, nodeElement, "parent");
+                }
+            }]
         }).element);
 
         window.siyuan.menus.menu.append(new MenuItem({id: "separator_3", type: "separator"}).element);
@@ -1921,7 +1923,6 @@ export class Gutter {
                 icon: "iconRiffCard",
                 label: window.siyuan.languages.quickMakeCard,
                 accelerator: window.siyuan.config.keymap.editor.general.quickMakeCard.custom,
-                iconHTML: '<svg class="b3-menu__icon" style="color:var(--b3-theme-primary)"><use xlink:href="#iconRiffCard"></use></svg>',
                 click() {
                     quickMakeCard(protyle, [nodeElement]);
                 }
