@@ -772,29 +772,21 @@ export class Gutter {
                 }
                 document.execCommand("copy");
             }
-        }, {
-            id: "duplicate",
-            iconHTML: "",
-            label: window.siyuan.languages.duplicate,
-            accelerator: window.siyuan.config.keymap.editor.general.duplicate.custom,
-            disabled: protyle.disabled,
-            click() {
-                duplicateBlock(selectsElement, protyle);
-            }
         }]);
-        copyMenu.splice(4, 1, {
-            id: "copyHPath",
-            iconHTML: "",
-            label: window.siyuan.languages.copyHPath,
-            accelerator: window.siyuan.config.keymap.editor.general.copyHPath.custom,
-            click: () => {
-                copyTextByType([selectsElement[0].getAttribute("data-node-id")], "hPath");
-                focusBlock(selectsElement[0]);
-            }
-        });
         const copyTextRefMenu = this.genCopyTextRef(selectsElement);
         if (copyTextRefMenu) {
             copyMenu.splice(7, 0, copyTextRefMenu);
+        }
+        if (!protyle.disabled) {
+            copyMenu.push({
+                id: "duplicate",
+                iconHTML: "",
+                label: window.siyuan.languages.duplicate,
+                accelerator: window.siyuan.config.keymap.editor.general.duplicate.custom,
+                click() {
+                    duplicateBlock(selectsElement, protyle);
+                }
+            });
         }
         window.siyuan.menus.menu.append(new MenuItem({
             id: "copy",
@@ -1291,16 +1283,11 @@ export class Gutter {
                 }
                 document.execCommand("copy");
             }
-        }, {
-            id: type === "NodeAttributeView" ? "duplicateMirror" : "duplicate",
-            iconHTML: "",
-            label: type === "NodeAttributeView" ? window.siyuan.languages.duplicateMirror : window.siyuan.languages.duplicate,
-            accelerator: window.siyuan.config.keymap.editor.general.duplicate.custom,
-            disabled: protyle.disabled,
-            click() {
-                duplicateBlock([nodeElement], protyle);
-            }
         }]);
+        const copyTextRefMenu = this.genCopyTextRef([nodeElement]);
+        if (copyTextRefMenu) {
+            copyMenu.splice(7, 0, copyTextRefMenu);
+        }
         if (type === "NodeAttributeView") {
             copyMenu.splice(6, 0, {
                 iconHTML: "",
@@ -1309,20 +1296,36 @@ export class Gutter {
                     writeText(nodeElement.getAttribute("data-av-id"));
                 }
             });
+            if (!protyle.disabled) {
+                copyMenu.push({
+                    id: "duplicateMirror",
+                    iconHTML: "",
+                    label: window.siyuan.languages.duplicateMirror,
+                    accelerator: window.siyuan.config.keymap.editor.general.duplicate.custom,
+                    click() {
+                        duplicateBlock([nodeElement], protyle);
+                    }
+                });
+                copyMenu.push({
+                    id: "duplicateCompletely",
+                    iconHTML: "",
+                    label: window.siyuan.languages.duplicateCompletely,
+                    accelerator: window.siyuan.config.keymap.editor.general.duplicateCompletely.custom,
+                    click() {
+                        duplicateCompletely(protyle, nodeElement as HTMLElement);
+                    }
+                });
+            }
+        } else if (!protyle.disabled) {
             copyMenu.push({
-                id: "duplicateCompletely",
+                id: "duplicate",
                 iconHTML: "",
-                label: window.siyuan.languages.duplicateCompletely,
-                accelerator: window.siyuan.config.keymap.editor.general.duplicateCompletely.custom,
-                disabled: protyle.disabled,
+                label: window.siyuan.languages.duplicate,
+                accelerator: window.siyuan.config.keymap.editor.general.duplicate.custom,
                 click() {
-                    duplicateCompletely(protyle, nodeElement as HTMLElement);
+                    duplicateBlock([nodeElement], protyle);
                 }
             });
-        }
-        const copyTextRefMenu = this.genCopyTextRef([nodeElement]);
-        if (copyTextRefMenu) {
-            copyMenu.splice(7, 0, copyTextRefMenu);
         }
         window.siyuan.menus.menu.append(new MenuItem({
             id: "copy",
@@ -1500,13 +1503,16 @@ export class Gutter {
                         element.querySelector("input").addEventListener("change", (event) => {
                             const newHeight = ((event.target as HTMLInputElement).value || "420") + "px";
                             (nodeElement as HTMLElement).style.height = newHeight;
-                            (nodeElement.firstElementChild.nextElementSibling as HTMLElement).style.height = newHeight;
                             updateTransaction(protyle, id, nodeElement.outerHTML, html);
                             html = nodeElement.outerHTML;
                             event.stopPropagation();
-                            const chartInstance = window.echarts.getInstanceById(nodeElement.firstElementChild.nextElementSibling.getAttribute("_echarts_instance_"));
-                            if (chartInstance) {
-                                chartInstance.resize();
+                            const renderElement = nodeElement.querySelector('[contenteditable="false"]') as HTMLElement;
+                            if (renderElement) {
+                                renderElement.style.height = newHeight;
+                                const chartInstance = window.echarts.getInstanceById(renderElement.getAttribute("_echarts_instance_"));
+                                if (chartInstance) {
+                                    chartInstance.resize();
+                                }
                             }
                         });
                     }
@@ -1626,39 +1632,65 @@ export class Gutter {
                     }
                 }, {
                     id: "headingEmbedMode",
-                    label: `<div class="fn__flex" style="margin-bottom: 4px">
-                        <span>${window.siyuan.languages.headingEmbedMode}</span>
-                        <span class="fn__space fn__flex-1"></span>
-                        <select class="b3-select fn__flex-center" style="margin-left: 8px;">
-                            <option value="0"${nodeElement.getAttribute("custom-heading-mode") === "0" ? " selected" : ""}>${window.siyuan.languages.showHeadingWithBlocks}</option>
-                            <option value="1"${nodeElement.getAttribute("custom-heading-mode") === "1" ? " selected" : ""}>${window.siyuan.languages.showHeadingOnlyTitle}</option>
-                            <option value="2"${nodeElement.getAttribute("custom-heading-mode") === "2" ? " selected" : ""}>${window.siyuan.languages.showHeadingOnlyBlocks}</option>
-                            <option value=""${!nodeElement.getAttribute("custom-heading-mode") ? " selected" : ""}>${window.siyuan.languages.default}</option>
-                        </select>
-                    </div>`,
-                    bind(element) {
-                        element.addEventListener("change", () => {
-                            const selectElement = element.querySelector("select") as HTMLSelectElement;
-                            const value = selectElement.value;
-                            if (value === "") {
-                                // 默认设置，清空 custom-heading-mode 属性
-                                nodeElement.removeAttribute("custom-heading-mode");
-                                fetchPost("/api/attr/setBlockAttrs", {
-                                    id,
-                                    attrs: {"custom-heading-mode": ""}
-                                });
-                            } else {
-                                nodeElement.setAttribute("custom-heading-mode", value);
-                                fetchPost("/api/attr/setBlockAttrs", {
-                                    id,
-                                    attrs: {"custom-heading-mode": value}
-                                });
-                            }
+                    label: window.siyuan.languages.headingEmbedMode,
+                    type: "submenu",
+                    submenu: [{
+                        id: "showHeadingWithBlocks",
+                        label: window.siyuan.languages.showHeadingWithBlocks,
+                        iconHTML: "",
+                        checked: nodeElement.getAttribute("custom-heading-mode") === "0",
+                        click() {
+                            nodeElement.setAttribute("custom-heading-mode", "0");
+                            fetchPost("/api/attr/setBlockAttrs", {
+                                id,
+                                attrs: {"custom-heading-mode": "0"}
+                            });
                             nodeElement.removeAttribute("data-render");
                             blockRender(protyle, nodeElement);
-                            window.siyuan.menus.menu.remove();
-                        });
-                    }
+                        }
+                    }, {
+                        id: "showHeadingOnlyTitle",
+                        label: window.siyuan.languages.showHeadingOnlyTitle,
+                        iconHTML: "",
+                        checked: nodeElement.getAttribute("custom-heading-mode") === "1",
+                        click() {
+                            nodeElement.setAttribute("custom-heading-mode", "1");
+                            fetchPost("/api/attr/setBlockAttrs", {
+                                id,
+                                attrs: {"custom-heading-mode": "1"}
+                            });
+                            nodeElement.removeAttribute("data-render");
+                            blockRender(protyle, nodeElement);
+                        }
+                    }, {
+                        id: "showHeadingWithBlocks",
+                        label: window.siyuan.languages.showHeadingWithBlocks,
+                        iconHTML: "",
+                        checked: nodeElement.getAttribute("custom-heading-mode") === "2",
+                        click() {
+                            nodeElement.setAttribute("custom-heading-mode", "2");
+                            fetchPost("/api/attr/setBlockAttrs", {
+                                id,
+                                attrs: {"custom-heading-mode": "2"}
+                            });
+                            nodeElement.removeAttribute("data-render");
+                            blockRender(protyle, nodeElement);
+                        }
+                    }, {
+                        id: "default",
+                        label: window.siyuan.languages.default,
+                        iconHTML: "",
+                        checked: !nodeElement.getAttribute("custom-heading-mode"),
+                        click() {
+                            nodeElement.setAttribute("custom-heading-mode", "0");
+                            fetchPost("/api/attr/setBlockAttrs", {
+                                id,
+                                attrs: {"custom-heading-mode": ""}
+                            });
+                            nodeElement.removeAttribute("data-render");
+                            blockRender(protyle, nodeElement);
+                        }
+                    }]
                 }]
             }).element);
         } else if (type === "NodeHeading" && !protyle.disabled) {
@@ -1815,6 +1847,7 @@ export class Gutter {
             }
         }
         window.siyuan.menus.menu.append(new MenuItem({
+            id: "jumpTo",
             type: "submenu",
             label: window.siyuan.languages.jumpTo,
             submenu: [{

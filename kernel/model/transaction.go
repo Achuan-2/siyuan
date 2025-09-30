@@ -439,6 +439,25 @@ func (tx *Transaction) doMove(operation *Operation) (ret *TxErr) {
 			return
 		}
 
+		if 0 < len(headingChildren) {
+			// 折叠标题再编辑形成外层列表（前面加上 * ）时，前端给的 tx 序列会形成死循环，在这里解开
+			// Nested lists cause hang after collapsing headings https://github.com/siyuan-note/siyuan/issues/15943
+			lastChild := headingChildren[len(headingChildren)-1]
+			if "1" == lastChild.IALAttr("heading-fold") && ast.NodeList == lastChild.Type &&
+				nil != lastChild.FirstChild && nil != lastChild.FirstChild.FirstChild && lastChild.FirstChild.FirstChild.ID == targetPreviousID {
+				ast.Walk(lastChild, func(n *ast.Node, entering bool) ast.WalkStatus {
+					if !entering || !n.IsBlock() {
+						return ast.WalkContinue
+					}
+
+					n.RemoveIALAttr("heading-fold")
+					n.RemoveIALAttr("fold")
+					return ast.WalkContinue
+				})
+				headingChildren = headingChildren[:len(headingChildren)-1]
+			}
+		}
+
 		for i := len(headingChildren) - 1; -1 < i; i-- {
 			c := headingChildren[i]
 			targetNode.InsertAfter(c)
@@ -893,7 +912,10 @@ func (tx *Transaction) doDelete(operation *Operation) (ret *TxErr) {
 		node.Next.Unlink()
 	}
 
+	next := node.Next
 	node.Unlink()
+	unfoldParentFoldedHeading(next)
+
 	if nil != parent && ast.NodeListItem == parent.Type && nil == parent.FirstChild {
 		needAppendEmptyListItem := true
 		for _, op := range tx.DoOperations {
@@ -1257,17 +1279,7 @@ func (tx *Transaction) doInsert(operation *Operation) (ret *TxErr) {
 		}
 		node.InsertAfter(insertedNode)
 
-		if parentFoldedHeading := treenode.GetParentFoldedHeading(insertedNode); nil != parentFoldedHeading {
-			ast.Walk(insertedNode, func(n *ast.Node, entering bool) ast.WalkStatus {
-				if !entering || !n.IsBlock() {
-					return ast.WalkContinue
-				}
-
-				n.SetIALAttr("fold", "1")
-				n.SetIALAttr("heading-fold", "1")
-				return ast.WalkContinue
-			})
-		}
+		unfoldParentFoldedHeading(insertedNode)
 	} else {
 		node = treenode.GetNodeInTree(tree, operation.ParentID)
 		if nil == node {
@@ -1518,22 +1530,7 @@ func (tx *Transaction) doUpdate(operation *Operation) (ret *TxErr) {
 	oldNode.InsertAfter(updatedNode)
 	oldNode.Unlink()
 
-	parentFoldedHeading := treenode.GetParentFoldedHeading(updatedNode)
-	if nil != parentFoldedHeading {
-		children := treenode.HeadingChildren(parentFoldedHeading)
-		for _, child := range children {
-			ast.Walk(child, func(n *ast.Node, entering bool) ast.WalkStatus {
-				if !entering || !n.IsBlock() {
-					return ast.WalkContinue
-				}
-
-				n.SetIALAttr("fold", "1")
-				n.SetIALAttr("heading-fold", "1")
-				return ast.WalkContinue
-			})
-		}
-	}
-
+	unfoldParentFoldedHeading(updatedNode)
 	createdUpdated(updatedNode)
 	tx.nodes[updatedNode.ID] = updatedNode
 	if err = tx.writeTree(tree); err != nil {
@@ -1562,6 +1559,32 @@ func (tx *Transaction) doUpdate(operation *Operation) (ret *TxErr) {
 		}
 	}
 	return
+}
+
+func unfoldParentFoldedHeading(node *ast.Node) {
+	if parentFoldedHeading := treenode.GetParentFoldedHeading(node); nil != parentFoldedHeading {
+		children := treenode.HeadingChildren(parentFoldedHeading)
+		for _, child := range children {
+			ast.Walk(child, func(n *ast.Node, entering bool) ast.WalkStatus {
+				if !entering || !n.IsBlock() {
+					return ast.WalkContinue
+				}
+
+				n.RemoveIALAttr("fold")
+				n.RemoveIALAttr("heading-fold")
+				return ast.WalkContinue
+			})
+		}
+		parentFoldedHeading.RemoveIALAttr("fold")
+		parentFoldedHeading.RemoveIALAttr("heading-fold")
+
+		evt := util.NewCmdResult("transactions", 0, util.PushModeBroadcast)
+		evt.Data = []*Transaction{{
+			DoOperations:   []*Operation{{Action: "unfoldHeading", ID: parentFoldedHeading.ID}},
+			UndoOperations: []*Operation{{Action: "foldHeading", ID: parentFoldedHeading.ID}},
+		}}
+		util.PushEvent(evt)
+	}
 }
 
 func getRefDefIDs(node *ast.Node) (refDefIDs []string) {
