@@ -306,12 +306,12 @@ const initMainWindow = () => {
         writeLog("reset window to center cause x or y < 0");
     }
 
-    if (windowState.width < 493) {
-        windowState.width = 493;
+    if (windowState.width < 193) {
+        windowState.width = 193;
         writeLog("reset window width [493]");
     }
-    if (windowState.height < 376) {
-        windowState.height = 376;
+    if (windowState.height < 176) {
+        windowState.height = 176;
         writeLog("reset window height [376]");
     }
 
@@ -1057,8 +1057,8 @@ app.whenReady().then(() => {
             trafficLightPosition: {x: 8, y: 13},
             width: Math.floor(data.width || mainScreen.size.width * 0.7),
             height: Math.floor(data.height || mainScreen.size.height * 0.9),
-            minWidth: 493,
-            minHeight: 376,
+            minWidth: 193,
+            minHeight: 176,
             fullscreenable: true,
             frame: "darwin" === process.platform,
             icon: path.join(appDir, "stage", "icon-large.png"),
