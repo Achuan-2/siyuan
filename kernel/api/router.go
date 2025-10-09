@@ -468,6 +468,7 @@ func ServeAPI(ginServer *gin.Engine) {
 	ginServer.Handle("POST", "/api/av/setDatabaseBlockView", model.CheckAuth, model.CheckAdminRole, model.CheckReadonly, setDatabaseBlockView)
 	ginServer.Handle("POST", "/api/av/getMirrorDatabaseBlocks", model.CheckAuth, model.CheckAdminRole, model.CheckReadonly, getMirrorDatabaseBlocks)
 	ginServer.Handle("POST", "/api/av/getAttributeViewKeysByAvID", model.CheckAuth, model.CheckAdminRole, model.CheckReadonly, getAttributeViewKeysByAvID)
+	ginServer.Handle("POST", "/api/av/getAttributeViewKeysByID", model.CheckAuth, getAttributeViewKeysByID)
 	ginServer.Handle("POST", "/api/av/duplicateAttributeViewBlock", model.CheckAuth, model.CheckAdminRole, model.CheckReadonly, duplicateAttributeViewBlock)
 	ginServer.Handle("POST", "/api/av/appendAttributeViewDetachedBlocksWithValues", model.CheckAuth, model.CheckAdminRole, model.CheckReadonly, appendAttributeViewDetachedBlocksWithValues)
 	ginServer.Handle("POST", "/api/av/getCurrentAttrViewImages", model.CheckAuth, getCurrentAttrViewImages)
@@ -499,6 +500,7 @@ func ServeAPI(ginServer *gin.Engine) {
 	ginServer.Handle("POST", "/api/archive/unzip", model.CheckAuth, model.CheckAdminRole, model.CheckReadonly, unzip)
 
 	ginServer.Handle("POST", "/api/ui/reloadUI", model.CheckAuth, model.CheckAdminRole, model.CheckReadonly, reloadUI)
+	ginServer.Handle("POST", "/api/ui/reloadIcon", model.CheckAuth, model.CheckAdminRole, model.CheckReadonly, reloadIcon)
 	ginServer.Handle("POST", "/api/ui/reloadAttributeView", model.CheckAuth, model.CheckAdminRole, model.CheckReadonly, reloadAttributeView)
 	ginServer.Handle("POST", "/api/ui/reloadProtyle", model.CheckAuth, model.CheckAdminRole, model.CheckReadonly, reloadProtyle)
 	ginServer.Handle("POST", "/api/ui/reloadFiletree", model.CheckAuth, model.CheckAdminRole, model.CheckReadonly, reloadFiletree)

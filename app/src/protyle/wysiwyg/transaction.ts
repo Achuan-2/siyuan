@@ -540,7 +540,7 @@ export const onTransaction = (protyle: IProtyle, operation: IOperation, isUndo: 
             } else if (key === "alias") {
                 aliasHTML = `<div class="protyle-attr--alias"><svg><use xlink:href="#iconA"></use></svg>${escapeHTML}</div>`;
             } else if (key === "memo") {
-                memoHTML = `<div class="protyle-attr--memo b3-tooltips b3-tooltips__sw" aria-label="${escapeHTML}"><svg><use xlink:href="#iconM"></use></svg></div>`;
+                memoHTML = `<div class="protyle-attr--memo ariaLabel" aria-label="${escapeHTML}" data-position="north"><svg><use xlink:href="#iconM"></use></svg></div>`;
             } else if (key === "custom-avs" && data.new["av-names"]) {
                 avHTML = `<div class="protyle-attr--av"><svg><use xlink:href="#iconDatabase"></use></svg>${data.new["av-names"]}</div>`;
             }
@@ -698,7 +698,7 @@ export const onTransaction = (protyle: IProtyle, operation: IOperation, isUndo: 
             }
         } else if (updateElements.length > 0) {
             const parentElement = protyle.wysiwyg.element.querySelectorAll(`[data-node-id="${operation.parentID}"]`);
-            if (!protyle.options.backlinkData && operation.parentID === protyle.block.parentID) {
+            if (!protyle.options.backlinkData && operation.parentID === protyle.block.parentID && !protyle.block.showAll) {
                 protyle.wysiwyg.element.prepend(processClonePHElement(updateElements[0].cloneNode(true) as Element));
                 hasFind = true;
             } else if (parentElement.length === 0 && protyle.options.backlinkData && isUndo && getSelection().rangeCount > 0) {
@@ -800,7 +800,7 @@ export const onTransaction = (protyle: IProtyle, operation: IOperation, isUndo: 
             });
         } else {
             const parentElement = protyle.wysiwyg.element.querySelectorAll(`[data-node-id="${operation.parentID}"]`);
-            if (!protyle.options.backlinkData && operation.parentID === protyle.block.parentID) {
+            if (!protyle.options.backlinkData && operation.parentID === protyle.block.parentID && !protyle.block.showAll) {
                 protyle.wysiwyg.element.insertAdjacentHTML("afterbegin", operation.data);
                 cursorElements.push(protyle.wysiwyg.element.firstElementChild);
             } else if (parentElement.length === 0 && protyle.options.backlinkData && isUndo && getSelection().rangeCount > 0) {
@@ -1015,6 +1015,8 @@ export const turnsIntoTransaction = (options: {
     isContinue?: boolean,
     range?: Range
 }) => {
+    // https://github.com/siyuan-note/siyuan/issues/14505
+    options.protyle.observerLoad.disconnect();
     let selectsElement: Element[] = options.selectsElement;
     let range: Range;
     // 通过快捷键触发
@@ -1057,10 +1059,6 @@ export const turnsIntoTransaction = (options: {
     const undoOperations: IOperation[] = [];
     let previousId: string;
     selectsElement.forEach((item, index) => {
-        if ((options.type === "Blocks2Ps" || options.type === "Blocks2Hs") &&
-            item.getAttribute("data-type") === "NodeHeading" && item.getAttribute("fold") === "1") {
-            setFold(options.protyle, item, undefined, undefined, false);
-        }
         item.classList.remove("protyle-wysiwyg--select");
         item.removeAttribute("select-start");
         item.removeAttribute("select-end");

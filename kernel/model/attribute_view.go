@@ -95,7 +95,7 @@ func GetAttrViewAddingBlockDefaultValues(avID, viewID, groupID, previousBlockID,
 		return
 	}
 
-	view := attrView.GetView(viewID)
+	view, _ := attrView.GetCurrentView(viewID)
 	if nil == view {
 		logging.LogErrorf("view [%s] not found in attribute view [%s]", viewID, avID)
 		return
@@ -567,6 +567,7 @@ func (tx *Transaction) doSetAttrViewGroup(operation *Operation) (ret *TxErr) {
 		logging.LogErrorf("marshal operation data failed: %s", err)
 		return &TxErr{code: TxErrHandleAttributeView, id: operation.AvID, msg: err.Error()}
 	}
+
 	group := &av.ViewGroup{}
 	if err = gulu.JSON.UnmarshalJSON(data, &group); nil != err {
 		logging.LogErrorf("unmarshal operation data failed: %s", err)
@@ -590,6 +591,14 @@ func SetAttributeViewGroup(avID, blockID string, group *av.ViewGroup) (err error
 		return err
 	}
 
+	setAttributeViewGroup(attrView, view, group)
+
+	err = av.SaveAttributeView(attrView)
+	ReloadAttrView(avID)
+	return
+}
+
+func setAttributeViewGroup(attrView *av.AttributeView, view *av.View, group *av.ViewGroup) {
 	var oldHideEmpty, firstInit, changeGroupField bool
 	if nil != view.Group {
 		oldHideEmpty = view.Group.HideEmpty
@@ -646,10 +655,6 @@ func SetAttributeViewGroup(avID, blockID string, group *av.ViewGroup) (err error
 			g.GroupSort = i
 		}
 	}
-
-	err = av.SaveAttributeView(attrView)
-	ReloadAttrView(avID)
-	return
 }
 
 func (tx *Transaction) doSetAttrViewCardAspectRatio(operation *Operation) (ret *TxErr) {
@@ -777,6 +782,10 @@ func ChangeAttrViewLayout(blockID, avID string, layout av.LayoutType) (err error
 				view.Kanban.Fields = append(view.Kanban.Fields, &av.ViewKanbanField{BaseField: &av.BaseField{ID: field.ID}})
 			}
 		}
+
+		preferredGroupKey := getKanbanPreferredGroupKey(attrView)
+		group := &av.ViewGroup{Field: preferredGroupKey.ID}
+		setAttributeViewGroup(attrView, view, group)
 	}
 
 	view.LayoutType = newLayout
@@ -1116,6 +1125,7 @@ func AppendAttributeViewDetachedBlocksWithValues(avID string, blocksValues [][]*
 		}
 	}
 
+	regenAttrViewGroups(attrView)
 	if err = av.SaveAttributeView(attrView); err != nil {
 		logging.LogErrorf("save attribute view [%s] failed: %s", avID, err)
 		return
@@ -1178,7 +1188,7 @@ func DuplicateDatabaseBlock(avID string) (newAvID, newBlockID string, err error)
 	return
 }
 
-func GetAttributeViewKeysByAvID(avID string) (ret []*av.Key) {
+func GetAttributeViewKeysByID(avID string, keyIDs ...string) (ret []*av.Key) {
 	ret = []*av.Key{}
 
 	attrView, err := av.ParseAttributeView(avID)
@@ -1187,9 +1197,21 @@ func GetAttributeViewKeysByAvID(avID string) (ret []*av.Key) {
 		return
 	}
 
+	if 1 > len(keyIDs) {
+		for _, keyValues := range attrView.KeyValues {
+			key := keyValues.Key
+			ret = append(ret, key)
+		}
+		return
+	}
+
 	for _, keyValues := range attrView.KeyValues {
 		key := keyValues.Key
-		ret = append(ret, key)
+		for _, keyID := range keyIDs {
+			if key.ID == keyID {
+				ret = append(ret, key)
+			}
+		}
 	}
 	return ret
 }
@@ -2193,16 +2215,26 @@ func setAttrViewColDateFillSpecificTime(operation *Operation) (err error) {
 	}
 
 	keyID := operation.ID
-	key, _ := attrView.GetKey(keyID)
-	if nil == key || av.KeyTypeDate != key.Type {
+	dateValues, _ := attrView.GetKeyValues(keyID)
+	if nil == dateValues || av.KeyTypeDate != dateValues.Key.Type {
 		return
 	}
 
-	if nil == key.Date {
-		key.Date = &av.Date{}
+	if nil == dateValues.Key.Date {
+		dateValues.Key.Date = &av.Date{}
 	}
 
-	key.Date.FillSpecificTime = operation.Data.(bool)
+	dateValues.Key.Date.FillSpecificTime = operation.Data.(bool)
+	for _, v := range dateValues.Values {
+		if !v.IsEmpty() {
+			continue
+		}
+		if nil == v.Date {
+			v.Date = &av.ValueDate{}
+		}
+		v.Date.IsNotTime = !dateValues.Key.Date.FillSpecificTime
+	}
+
 	err = av.SaveAttributeView(attrView)
 	return
 }
@@ -2819,11 +2851,19 @@ func addAttrViewView(avID, viewID, blockID string, layout av.LayoutType) (err er
 			for _, col := range firstView.Table.Columns {
 				view.Kanban.Fields = append(view.Kanban.Fields, &av.ViewKanbanField{BaseField: &av.BaseField{ID: col.ID}})
 			}
+		case av.LayoutTypeGallery:
+			for _, field := range firstView.Gallery.CardFields {
+				view.Kanban.Fields = append(view.Kanban.Fields, &av.ViewKanbanField{BaseField: &av.BaseField{ID: field.ID}})
+			}
 		case av.LayoutTypeKanban:
 			for _, field := range firstView.Kanban.Fields {
 				view.Kanban.Fields = append(view.Kanban.Fields, &av.ViewKanbanField{BaseField: &av.BaseField{ID: field.ID}})
 			}
 		}
+
+		preferredGroupKey := getKanbanPreferredGroupKey(attrView)
+		group := &av.ViewGroup{Field: preferredGroupKey.ID}
+		setAttributeViewGroup(attrView, view, group)
 	default:
 		err = av.ErrWrongLayoutType
 		logging.LogErrorf("wrong layout type [%s] for attribute view [%s]", layout, avID)
@@ -2853,6 +2893,19 @@ func addAttrViewView(avID, viewID, blockID string, layout av.LayoutType) (err er
 	if err = av.SaveAttributeView(attrView); err != nil {
 		logging.LogErrorf("save attribute view [%s] failed: %s", avID, err)
 		return
+	}
+	return
+}
+
+func getKanbanPreferredGroupKey(attrView *av.AttributeView) (ret *av.Key) {
+	for _, kv := range attrView.KeyValues {
+		if av.KeyTypeSelect == kv.Key.Type {
+			ret = kv.Key
+			break
+		}
+	}
+	if nil == ret {
+		ret = attrView.GetBlockKey()
 	}
 	return
 }

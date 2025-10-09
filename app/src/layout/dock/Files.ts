@@ -1,14 +1,13 @@
 import {escapeAriaLabel, escapeGreat, escapeHtml} from "../../util/escape";
 import {Tab} from "../Tab";
 import {Model} from "../Model";
-import {getInstanceById, setPanelFocus} from "../util";
+import {setPanelFocus} from "../util";
 import {getDockByType} from "../tabUtil";
 import {Constants} from "../../constants";
 import {getDisplayName, pathPosix, setNoteBook} from "../../util/pathName";
 import {newFile} from "../../util/newFile";
 import {initFileMenu, initNavigationMenu, sortMenu} from "../../menus/navigation";
 import {MenuItem} from "../../menus/Menu";
-import {Editor} from "../../editor";
 import {showMessage} from "../../dialog/message";
 import {fetchPost, fetchSyncPost} from "../../util/fetch";
 import {openEmojiPanel, unicode2Emoji} from "../../emoji";
@@ -752,6 +751,7 @@ export class Files extends Model {
                             fetchPost("/api/filetree/listDocsByPath", {
                                 notebook: toURL,
                                 path: toDir === "/" ? "/" : toDir + ".sy",
+                                app: Constants.SIYUAN_APPID,
                             }, response => {
                                 if (response.data.path === "/" && response.data.files.length === 0) {
                                     showMessage(window.siyuan.languages.emptyContent);
@@ -1104,6 +1104,9 @@ data-type="navigation-root" data-path="/">
             return;
         }
         const liElement = this.element.querySelector(`ul[data-url="${data.box}"] li[data-path="${data.path}"]`);
+        if (!liElement) {
+            return;
+        }
         if (liElement.nextElementSibling && liElement.nextElementSibling.tagName === "UL") {
             // 文件展开时，刷新
             liElement.nextElementSibling.remove();
@@ -1124,7 +1127,8 @@ data-type="navigation-root" data-path="/">
             } else if (filePath.startsWith(item.path.replace(".sy", ""))) {
                 const response = await fetchSyncPost("/api/filetree/listDocsByPath", {
                     notebook: data.box,
-                    path: item.path
+                    path: item.path,
+                    app: Constants.SIYUAN_APPID,
                 });
                 newLiElement = await this.selectItem(response.data.box, filePath, response.data, setStorage, isSetCurrent);
             }
@@ -1161,6 +1165,7 @@ data-type="navigation-root" data-path="/">
         fetchPost("/api/filetree/listDocsByPath", {
             notebook: notebookId,
             path: liElement.getAttribute("data-path"),
+            app: Constants.SIYUAN_APPID,
         }, response => {
             if (response.data.path === "/" && response.data.files.length === 0) {
                 newFile({
@@ -1216,7 +1221,8 @@ data-type="navigation-root" data-path="/">
         } else {
             const response = await fetchSyncPost("/api/filetree/listDocsByPath", {
                 notebook: notebookId,
-                path: currentPath
+                path: currentPath,
+                app: Constants.SIYUAN_APPID,
             });
             liElement = await this.onLsSelect(response.data, filePath, setStorage, isSetCurrent);
         }
