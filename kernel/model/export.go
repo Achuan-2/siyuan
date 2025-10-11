@@ -1110,10 +1110,6 @@ func processPDFWatermark(pdfCtx *model.Context, watermark bool) {
 		return
 	}
 
-	if !IsPaidUser() {
-		return
-	}
-
 	mode := "text"
 	if gulu.File.IsExist(str) {
 		if ".pdf" == strings.ToLower(filepath.Ext(str)) {
@@ -2039,15 +2035,18 @@ func exportMarkdownContent(id, ext string, exportRefMode int, defBlockIDs []stri
 		return
 	}
 
-	for c := tree.Root.FirstChild; nil != c; c = c.Next {
-		if ast.NodeParagraph == c.Type {
-			isEmpty = nil == c.FirstChild
-			if !isEmpty {
+	refCount := sql.QueryRootChildrenRefCount(tree.ID)
+	if !Conf.Export.MarkdownYFM && treenode.ContainOnlyDefaultIAL(tree) && 1 > len(refCount) {
+		for c := tree.Root.FirstChild; nil != c; c = c.Next {
+			if ast.NodeParagraph == c.Type {
+				isEmpty = nil == c.FirstChild
+				if !isEmpty {
+					break
+				}
+			} else {
+				isEmpty = false
 				break
 			}
-		} else {
-			isEmpty = false
-			break
 		}
 	}
 
@@ -2163,9 +2162,11 @@ func exportMarkdownContent0(id string, tree *parse.Tree, cloudAssetsBase string,
 							href = "#" + defID
 						}
 					}
-					href = strings.TrimPrefix(href, currentDocDir)
+					newHref := strings.TrimPrefix(href, currentDocDir)
+					if !strings.HasPrefix(newHref, ".md") {
+						href = newHref
+					}
 					href = util.FilterFilePath(href)
-					href = strings.TrimPrefix(href, "/")
 					blockRefLink := &ast.Node{Type: ast.NodeTextMark, TextMarkType: "a", TextMarkTextContent: linkText, TextMarkAHref: href}
 					blockRefLink.KramdownIAL = n.KramdownIAL
 					n.InsertBefore(blockRefLink)

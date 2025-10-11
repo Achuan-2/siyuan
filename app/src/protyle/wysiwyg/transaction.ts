@@ -20,6 +20,7 @@ import {countBlockWord} from "../../layout/status";
 import {isPaidUser, needSubscribe} from "../../util/needSubscribe";
 import {resize} from "../util/resize";
 import {processClonePHElement} from "../render/util";
+import {scrollCenter} from "../../util/highlightById";
 
 const removeTopElement = (updateElement: Element, protyle: IProtyle) => {
     // 移动到其他文档中，该块需移除
@@ -241,6 +242,9 @@ const promiseTransaction = () => {
                 //         blockRender(protyle, item);
                 //     }
                 // });
+                protyle.wysiwyg.element.querySelectorAll("[parent-heading]").forEach(item => {
+                    item.remove();
+                });
             }
         });
 
@@ -851,6 +855,9 @@ export const onTransaction = (protyle: IProtyle, operation: IOperation, isUndo: 
                 wbrElement.remove();
             }
         });
+        protyle.wysiwyg.element.querySelectorAll("[parent-heading]").forEach(item => {
+            item.remove();
+        });
         return;
     }
     if (operation.action === "append") {
@@ -1058,7 +1065,7 @@ export const turnsIntoTransaction = (options: {
     const doOperations: IOperation[] = [];
     const undoOperations: IOperation[] = [];
     let previousId: string;
-    selectsElement.forEach((item, index) => {
+    selectsElement.forEach((item: HTMLElement, index) => {
         item.classList.remove("protyle-wysiwyg--select");
         item.removeAttribute("select-start");
         item.removeAttribute("select-end");
@@ -1068,7 +1075,7 @@ export const turnsIntoTransaction = (options: {
         const tempElement = document.createElement("template");
         if (!options.isContinue) {
             // @ts-ignore
-            const newHTML = options.protyle.lute[options.type](item.outerHTML, options.level);
+            let newHTML = options.protyle.lute[options.type](item.outerHTML, options.level);
             tempElement.innerHTML = newHTML;
 
             if (!tempElement.content.querySelector(`[data-node-id="${id}"]`)) {
@@ -1103,6 +1110,15 @@ export const turnsIntoTransaction = (options: {
                     previousId = undefined;
                 }
             } else {
+                let foldData;
+                if (item.getAttribute("data-type") === "NodeHeading" && item.getAttribute("fold") === "1" &&
+                    tempElement.content.firstElementChild.getAttribute("data-subtype") !== item.dataset.subtype) {
+                    foldData = setFold(options.protyle, item, undefined, undefined, false, true);
+                    newHTML = newHTML.replace(' fold="1"', "");
+                }
+                if (foldData && foldData.doOperations?.length > 0) {
+                    doOperations.push(...foldData.doOperations);
+                }
                 undoOperations.push({
                     action: "update",
                     id,
@@ -1113,6 +1129,9 @@ export const turnsIntoTransaction = (options: {
                     id,
                     data: newHTML
                 });
+                if (foldData && foldData.undoOperations?.length > 0) {
+                    undoOperations.push(...foldData.undoOperations);
+                }
             }
             item.outerHTML = newHTML;
         } else {
@@ -1395,8 +1414,14 @@ const processFold = (operation: IOperation, protyle: IProtyle) => {
             highlightRender(protyle.wysiwyg.element);
             avRender(protyle.wysiwyg.element, protyle);
             blockRender(protyle, protyle.wysiwyg.element);
-            protyle.contentElement.scrollTop = scrollTop;
-            protyle.scroll.lastScrollTop = scrollTop;
+            if (operation.context?.focusId) {
+                const focusElement = protyle.wysiwyg.element.querySelector(`[data-node-id="${operation.context.focusId}"]`);
+                focusBlock(focusElement);
+                scrollCenter(protyle, focusElement, false);
+            } else {
+                protyle.contentElement.scrollTop = scrollTop;
+                protyle.scroll.lastScrollTop = scrollTop;
+            }
             return;
         }
         protyle.wysiwyg.element.querySelectorAll(`[data-node-id="${operation.id}"]`).forEach(item => {

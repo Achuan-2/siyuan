@@ -1,20 +1,20 @@
-import {closePanel} from "../util/closePanel";
-import {getCurrentEditor, openMobileFileById} from "../editor";
-import {Constants} from "../../constants";
-import {fetchPost} from "../../util/fetch";
-import {getIconByType} from "../../editor/getIcon";
-import {preventScroll} from "../../protyle/scroll/preventScroll";
-import {openModel} from "./model";
-import {getDisplayName, getNotebookIcon, getNotebookName, movePathTo, pathPosix} from "../../util/pathName";
-import {getKeyByLiElement, initCriteriaMenu, moreMenu} from "../../search/menu";
-import {setStorageVal} from "../../protyle/util/compatibility";
-import {escapeGreat, escapeHtml} from "../../util/escape";
-import {unicode2Emoji} from "../../emoji";
-import {newFileByName} from "../../util/newFile";
-import {showMessage} from "../../dialog/message";
-import {reloadProtyle} from "../../protyle/util/reload";
-import {activeBlur} from "../util/keyboardToolbar";
-import {App} from "../../index";
+import { closePanel } from "../util/closePanel";
+import { getCurrentEditor, openMobileFileById } from "../editor";
+import { Constants } from "../../constants";
+import { fetchPost } from "../../util/fetch";
+import { getIconByType } from "../../editor/getIcon";
+import { preventScroll } from "../../protyle/scroll/preventScroll";
+import { openModel } from "./model";
+import { getDisplayName, getNotebookIcon, getNotebookName, movePathTo, pathPosix } from "../../util/pathName";
+import { getKeyByLiElement, initCriteriaMenu, moreMenu } from "../../search/menu";
+import { setStorageVal } from "../../protyle/util/compatibility";
+import { escapeGreat, escapeHtml } from "../../util/escape";
+import { unicode2Emoji } from "../../emoji";
+import { newFileByName } from "../../util/newFile";
+import { showMessage } from "../../dialog/message";
+import { reloadProtyle } from "../../protyle/util/reload";
+import { activeBlur } from "../util/keyboardToolbar";
+import { App } from "../../index";
 import {
     assetFilterMenu,
     assetInputEvent,
@@ -23,9 +23,9 @@ import {
     renderNextAssetMark,
     renderPreview,
 } from "../../search/assets";
-import {addClearButton} from "../../util/addClearButton";
-import {checkFold} from "../../util/noRelyPCFunction";
-import {getDefaultType} from "../../search/getDefault";
+import { addClearButton } from "../../util/addClearButton";
+import { checkFold } from "../../util/noRelyPCFunction";
+import { getDefaultType } from "../../search/getDefault";
 import {
     saveAssetKeyList,
     saveKeyList,
@@ -155,7 +155,7 @@ const updateConfig = (element: Element, newConfig: Config.IUILayoutTabSearchConf
 };
 
 const onRecentBlocks = (data: IBlock[], config: Config.IUILayoutTabSearchConfig,
-                        response?: IWebSocketData, focusId?: {
+    response?: IWebSocketData, focusId?: {
         currentId?: string,
         newId?: string
     }) => {
@@ -252,10 +252,10 @@ ${childItem.tag ? `<span class="b3-list-item__meta b3-list-item__meta--ellipsis"
 
 let toolbarSearchTimeout = 0;
 export const updateSearchResult = (config: Config.IUILayoutTabSearchConfig, element: Element, rmCurrentCriteria = false,
-                                   focusId?: {
-                                       currentId?: string,
-                                       newId?: string
-                                   }) => {
+    focusId?: {
+        currentId?: string,
+        newId?: string
+    }) => {
     clearTimeout(toolbarSearchTimeout);
     toolbarSearchTimeout = window.setTimeout(() => {
         if (rmCurrentCriteria) {
@@ -395,7 +395,7 @@ const initSearchEvent = (app: App, element: Element, config: Config.IUILayoutTab
                 break;
             } else if (type === "remove-criteria") {
                 const name = target.parentElement.innerText.trim();
-                fetchPost("/api/storage/removeCriterion", {name});
+                fetchPost("/api/storage/removeCriterion", { name });
                 criteriaData.find((item, index) => {
                     if (item.name === name) {
                         criteriaData.splice(index, 1);
@@ -459,7 +459,7 @@ const initSearchEvent = (app: App, element: Element, config: Config.IUILayoutTab
                 break;
             } else if (type === "currentPath" && !target.hasAttribute("disabled")) {
                 const editProtyle = getCurrentEditor().protyle;
-                fetchPost("/api/filetree/getHPathsByPaths", {paths: [editProtyle.path]}, (response) => {
+                fetchPost("/api/filetree/getHPathsByPaths", { paths: [editProtyle.path] }, (response) => {
                     config.idPath = [pathPosix().join(editProtyle.notebookId, editProtyle.path)];
                     config.hPath = response.data[0];
                     const searchPathElement = element.querySelector("#searchPath");
@@ -477,7 +477,7 @@ const initSearchEvent = (app: App, element: Element, config: Config.IUILayoutTab
                 break;
             } else if (type === "path") {
                 movePathTo((toPath, toNotebook) => {
-                    fetchPost("/api/filetree/getHPathsByPaths", {paths: toPath}, (response) => {
+                    fetchPost("/api/filetree/getHPathsByPaths", { paths: toPath }, (response) => {
                         config.idPath = [];
                         const hPathList: string[] = [];
                         let enableIncludeChild = false;
@@ -717,7 +717,7 @@ export const popSearch = (app: App, searchConfig?: any) => {
         <svg class="svg--mid"><use xlink:href="#iconSearch"></use></svg>
         <svg class="svg--smaller"><use xlink:href="#iconDown"></use></svg>
     </span>
-    <input id="toolbarSearch" placeholder="${window.siyuan.languages.showRecentUpdatedBlocks}" class="toolbar__title fn__block" autocomplete="off" spellcheck="false">
+    <input id="toolbarSearch" placeholder="${window.siyuan.languages.showRecentUpdatedBlocks}" class="toolbar__title fn__block" autocomplete="off" autocorrect="off" spellcheck="false">
     <svg id="toolbarSearchNew" class="toolbar__icon"><use xlink:href="#iconFile"></use></svg>
 </div>`,
         html: `<div class="fn__flex-column" style="height: 100%">
