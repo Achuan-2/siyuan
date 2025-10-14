@@ -912,11 +912,7 @@ func (tx *Transaction) doDelete(operation *Operation) (ret *TxErr) {
 		node.Next.Unlink()
 	}
 
-	next := node.Next
 	node.Unlink()
-
-	parentFoldedHeading := treenode.GetParentFoldedHeading(next)
-	unfoldHeading(parentFoldedHeading)
 
 	if nil != parent && ast.NodeListItem == parent.Type && nil == parent.FirstChild {
 		needAppendEmptyListItem := true
@@ -1280,9 +1276,6 @@ func (tx *Transaction) doInsert(operation *Operation) (ret *TxErr) {
 			node.InsertAfter(remain)
 		}
 		node.InsertAfter(insertedNode)
-
-		parentFoldedHeading := treenode.GetParentFoldedHeading(insertedNode)
-		unfoldHeading(parentFoldedHeading)
 	} else {
 		node = treenode.GetNodeInTree(tree, operation.ParentID)
 		if nil == node {
@@ -1534,14 +1527,7 @@ func (tx *Transaction) doUpdate(operation *Operation) (ret *TxErr) {
 
 	oldParentFoldedHeading := treenode.GetParentFoldedHeading(oldNode)
 	// 将原先折叠标题下的块提升为与折叠标题同级或更高一级的标题时，需要在折叠标题后插入该提升后的标题块（只需要推送界面插入）
-	if needInsertAfterParentHeading := nil != oldParentFoldedHeading && 0 != updatedNode.HeadingLevel && updatedNode.HeadingLevel <= oldParentFoldedHeading.HeadingLevel; needInsertAfterParentHeading {
-		evt := util.NewCmdResult("transactions", 0, util.PushModeBroadcast)
-		evt.Data = []*Transaction{{
-			DoOperations:   []*Operation{{Action: "insert", ID: updatedNode.ID, PreviousID: oldParentFoldedHeading.ID, Data: data}},
-			UndoOperations: []*Operation{{Action: "delete", ID: updatedNode.ID}},
-		}}
-		util.PushEvent(evt)
-	}
+	needInsertAfterParentHeading := nil != oldParentFoldedHeading && 0 != updatedNode.HeadingLevel && updatedNode.HeadingLevel <= oldParentFoldedHeading.HeadingLevel
 
 	oldNode.InsertAfter(updatedNode)
 	oldNode.Unlink()
@@ -1549,8 +1535,35 @@ func (tx *Transaction) doUpdate(operation *Operation) (ret *TxErr) {
 	if needUnfoldParentHeading {
 		newParentFoldedHeading := treenode.GetParentFoldedHeading(updatedNode)
 		if nil == oldParentFoldedHeading || (nil != newParentFoldedHeading && oldParentFoldedHeading.ID != newParentFoldedHeading.ID) {
-			unfoldHeading(newParentFoldedHeading)
+			unfoldHeading(newParentFoldedHeading, updatedNode)
 		}
+	}
+
+	if needInsertAfterParentHeading {
+		insertDom := data
+		if 2 == len(tx.DoOperations) && "foldHeading" == tx.DoOperations[1].Action {
+			children := treenode.HeadingChildren(updatedNode)
+			for _, child := range children {
+				ast.Walk(child, func(n *ast.Node, entering bool) ast.WalkStatus {
+					if !entering || !n.IsBlock() {
+						return ast.WalkContinue
+					}
+
+					n.SetIALAttr("fold", "1")
+					n.SetIALAttr("heading-fold", "1")
+					return ast.WalkContinue
+				})
+			}
+			updatedNode.SetIALAttr("fold", "1")
+			insertDom = tx.luteEngine.RenderNodeBlockDOM(updatedNode)
+		}
+
+		evt := util.NewCmdResult("transactions", 0, util.PushModeBroadcast)
+		evt.Data = []*Transaction{{
+			DoOperations:   []*Operation{{Action: "insert", ID: updatedNode.ID, PreviousID: oldParentFoldedHeading.ID, Data: insertDom}},
+			UndoOperations: []*Operation{{Action: "delete", ID: updatedNode.ID}},
+		}}
+		util.PushEvent(evt)
 	}
 
 	createdUpdated(updatedNode)
@@ -1583,7 +1596,7 @@ func (tx *Transaction) doUpdate(operation *Operation) (ret *TxErr) {
 	return
 }
 
-func unfoldHeading(heading *ast.Node) {
+func unfoldHeading(heading, currentNode *ast.Node) {
 	if nil == heading {
 		return
 	}
@@ -1603,14 +1616,7 @@ func unfoldHeading(heading *ast.Node) {
 	heading.RemoveIALAttr("fold")
 	heading.RemoveIALAttr("heading-fold")
 
-	evt := util.NewCmdResult("transactions", 0, util.PushModeBroadcast)
-	fillBlockRefCount(children)
-	evt.Data = []*Transaction{{
-		DoOperations:   []*Operation{{Action: "unfoldHeading", ID: heading.ID, RetData: renderBlockDOMByNodes(children, NewLute())}},
-		UndoOperations: []*Operation{{Action: "foldHeading", ID: heading.ID}},
-	}}
-
-	util.PushEvent(evt)
+	util.BroadcastByType("protyle", "unfoldHeading", 0, "", map[string]interface{}{"id": heading.ID, "currentNodeID": currentNode.ID})
 }
 
 func getRefDefIDs(node *ast.Node) (refDefIDs []string) {

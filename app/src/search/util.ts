@@ -1095,7 +1095,9 @@ export const getArticle = (options: {
             if (articleId !== options.id) {
                 return;
             }
-            options.edit.protyle.wysiwyg.renderCustom(response.data.ial);
+            if (options.edit.protyle.options.render.title) {
+                options.edit.protyle.title.render(options.edit.protyle, response);
+            }
             fetchPost("/api/filetree/getDoc", {
                 id: options.id,
                 query: options.value || null,
@@ -1123,6 +1125,7 @@ export const getArticle = (options: {
 
                 const contentRect = options.edit.protyle.contentElement.getBoundingClientRect();
                 if (isSupportCSSHL()) {
+                    let observer:ResizeObserver;
                     searchMarkRender(options.edit.protyle, getResponse.data.keywords, options.id, () => {
                         const highlightKeys = () => {
                             const currentRange = options.edit.protyle.highlight.ranges[options.edit.protyle.highlight.rangeIndex];
@@ -1136,8 +1139,11 @@ export const getArticle = (options: {
                                 highlightById(options.edit.protyle, options.id);
                             }
                         };
+                        if (observer) {
+                            observer.disconnect();
+                        }
                         highlightKeys();
-                        const observer = new ResizeObserver(() => {
+                        observer = new ResizeObserver(() => {
                             highlightKeys();
                         });
                         observer.observe(options.edit.protyle.wysiwyg.element);

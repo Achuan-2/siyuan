@@ -8,7 +8,7 @@ require (
 	github.com/88250/epub v0.0.0-20230830085737-c19055cd1f48
 	github.com/88250/go-humanize v0.0.0-20240424102817-4f78fac47ea7
 	github.com/88250/gulu v1.2.3-0.20250227144607-7f4570b0d689
-	github.com/88250/lute v1.7.7-0.20251008091500-69441b957ffe
+	github.com/88250/lute v1.7.7-0.20251013040153-3679971223e2
 	github.com/88250/vitess-sqlparser v0.0.0-20210205111146-56a2ded2aba1
 	github.com/ClarkThan/ahocorasick v0.0.0-20231011042242-30d1ef1347f4
 	github.com/ConradIrwin/font v0.2.1
@@ -58,7 +58,7 @@ require (
 	github.com/sashabaranov/go-openai v1.41.2
 	github.com/shirou/gopsutil/v4 v4.25.9
 	github.com/siyuan-note/dataparser v0.0.0-20250804100744-b41253b236f3
-	github.com/siyuan-note/dejavu v0.0.0-20251010020807-e50148909b03
+	github.com/siyuan-note/dejavu v0.0.0-20251011030034-d7e5aa18aadd
 	github.com/siyuan-note/encryption v0.0.0-20250326023622-24a67e6956ec
 	github.com/siyuan-note/eventbus v0.0.0-20240627125516-396fdb0f0f97
 	github.com/siyuan-note/filelock v0.0.0-20251010020544-2603449ff16d
