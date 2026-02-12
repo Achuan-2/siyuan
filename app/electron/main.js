@@ -48,7 +48,9 @@ let kernelPort = 6806;
 let resetWindowStateOnRestart = false;
 
 remote.initialize();
-
+if (process.platform === 'win32') {
+    app.setAppUserModelId(app.name); // Windows 需要设置 AppUserModelId 才能正确显示应用名称
+}
 app.setPath("userData", app.getPath("userData") + "-Electron"); // `~/.config` 下 Electron 相关文件夹名称改为 `SiYuan-Electron` https://github.com/siyuan-note/siyuan/issues/3349
 fs.rmSync(app.getPath("appData") + "/" + app.name, {recursive: true}); // 删除自动创建的应用目录 https://github.com/siyuan-note/siyuan/issues/13150
 
